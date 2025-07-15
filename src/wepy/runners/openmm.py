@@ -274,9 +274,9 @@ class OpenMMRunner(Runner):
         """
 
         if platform is not None:
-            assert isinstance(
-                platform, str
-            ), f"platform should be a string, not {type(platform)}"
+            assert isinstance(platform, str), (
+                f"platform should be a string, not {type(platform)}"
+            )
 
         # we save the different components. However, if we are to make
         # this runner picklable we have to convert the SWIG objects to
@@ -302,8 +302,6 @@ class OpenMMRunner(Runner):
 
         else:
             self.getState_kwargs = dict(GET_STATE_KWARG_DEFAULTS)
-
-
         self._cycle_platform = None
         self._cycle_platform_kwargs = None
 
@@ -661,9 +659,7 @@ class OpenMMState(WalkerState):
                 warn(
                     "Key {} in kwargs is already taken by this class, renaming to {}".format(
                         self.OTHER_KEY_TEMPLATE
-                    ).format(
-                        key
-                    )
+                    ).format(key)
                 )
 
                 # make a new key
@@ -874,9 +870,9 @@ class OpenMMState(WalkerState):
         if kinetic_energy is None:
             return None
         else:
-            return np.array(
-                [self.kinetic_energy.value_in_unit(self.kinetic_energy_unit)]
-            )
+            return np.array([
+                self.kinetic_energy.value_in_unit(self.kinetic_energy_unit)
+            ])
 
     # Potential Energy
     @property
@@ -907,9 +903,9 @@ class OpenMMState(WalkerState):
         if potential_energy is None:
             return None
         else:
-            return np.array(
-                [self.potential_energy.value_in_unit(self.potential_energy_unit)]
-            )
+            return np.array([
+                self.potential_energy.value_in_unit(self.potential_energy_unit)
+            ])
 
     # Time
     @property
@@ -1322,9 +1318,9 @@ class OpenMMWalker(Walker):
     def __init__(self, state, weight):
         # documented in superclass
 
-        assert isinstance(
-            state, OpenMMState
-        ), "state must be an instance of class OpenMMState not {}".format(type(state))
+        assert isinstance(state, OpenMMState), (
+            "state must be an instance of class OpenMMState not {}".format(type(state))
+        )
 
         super().__init__(state, weight)
 

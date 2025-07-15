@@ -255,10 +255,10 @@ class RegionTree(nx.DiGraph):
         self._max_num_walkers = False
         self._min_num_walkers = False
 
-        assert (
-            merge_method in self.MERGE_METHODS
-        ), "the merge method given, '{}', must be one of the methods available {}".format(
-            merge_method, self.MERGE_METHODS
+        assert merge_method in self.MERGE_METHODS, (
+            "the merge method given, '{}', must be one of the methods available {}".format(
+                merge_method, self.MERGE_METHODS
+            )
         )
 
         self._merge_method = merge_method
