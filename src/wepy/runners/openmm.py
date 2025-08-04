@@ -868,9 +868,9 @@ class OpenMMState(WalkerState):
         if kinetic_energy is None:
             return None
         else:
-            return np.array(
-                [self.kinetic_energy.value_in_unit(self.kinetic_energy_unit)]
-            )
+            return np.array([
+                self.kinetic_energy.value_in_unit(self.kinetic_energy_unit)
+            ])
 
     # Potential Energy
     @property
@@ -901,9 +901,9 @@ class OpenMMState(WalkerState):
         if potential_energy is None:
             return None
         else:
-            return np.array(
-                [self.potential_energy.value_in_unit(self.potential_energy_unit)]
-            )
+            return np.array([
+                self.potential_energy.value_in_unit(self.potential_energy_unit)
+            ])
 
     # Time
     @property
