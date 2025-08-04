@@ -492,9 +492,9 @@ class Manager:
 
         # check that all of the keys that are specified for this sim
         # manager are present
-        assert all(
-            [True if rep_key in report else False for rep_key in self.REPORT_ITEM_KEYS]
-        )
+        assert all([
+            True if rep_key in report else False for rep_key in self.REPORT_ITEM_KEYS
+        ])
 
         logger.info("Starting reporting")
         # report results to the reporters
