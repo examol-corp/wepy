@@ -5,7 +5,7 @@ logger = logging.getLogger(__name__)
 
 # Third Party Library
 import click
-import simtk.unit as unit
+import openmm.unit as unit
 from multiprocessing_logging import install_mp_handler
 
 # First Party Library

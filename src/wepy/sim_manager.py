@@ -43,10 +43,9 @@ to be determined adaptively (e.g. according to some time limit).
 """
 
 # Standard Library
-from typing import Final, Any
+from typing import Final
 import logging
 
-logger = logging.getLogger(__name__)
 # Standard Library
 import time
 from copy import deepcopy
@@ -59,6 +58,9 @@ from wepy.resampling.resamplers.resampler import Resampler
 from wepy.reporter.reporter import Reporter
 from wepy.work_mapper.mapper import WorkerMapper
 from wepy.boundary_conditions.boundary import BoundaryConditions
+
+
+logger = logging.getLogger(__name__)
 
 
 class Manager:
@@ -120,7 +122,7 @@ class Manager:
         work_mapper=None,
         resampler: Resampler | None = None,
         boundary_conditions: BoundaryConditions | None = None,
-        reporters: Reporter | None = None,
+        reporters: list[Reporter] | None = None,
         sim_monitor=None,
     ):
         """Constructor for Manager.
@@ -339,12 +341,15 @@ class Manager:
 
     def _run_cycle(
         self,
-        walkers,
-        n_segment_steps,
-        cycle_idx,
-        runner_opts=None,
+        walkers: list[Walker],
+        n_segment_steps: int,
+        cycle_idx: int,
+        runner_opts: dict | None = None,
     ):
         """See run_cycle."""
+
+        if self.runner is None:
+            raise ValueError("No runner provided to simulation manager.")
 
         if runner_opts is None:
             runner_opts = {}
@@ -638,7 +643,12 @@ class Manager:
                 reporters=self.reporters,
             )
 
-    def run_simulation_by_time(self, run_time, segments_length, num_workers=None):
+    def run_simulation_by_time(
+        self,
+        run_time: float,
+        segments_length: int,
+        num_workers: int | None = None,
+    ) -> tuple[list[Walker], list]:
         """Run a simulation for a certain amount of time.
 
         This starts timing as soon as this is called. If the time
@@ -683,6 +693,7 @@ class Manager:
         self.init(num_workers=num_workers)
         cycle_idx = 0
         walkers = self.init_walkers
+        filters = []
         while time.time() - start_time < run_time:
             logger.info(
                 "starting cycle {} at time {}".format(
@@ -705,10 +716,10 @@ class Manager:
 
     def run_simulation(
         self,
-        n_cycles,
-        segment_lengths,
-        num_workers=None,
-    ):
+        n_cycles: int,
+        segment_lengths: int | list[int],
+        num_workers: int | None = None,
+    ) -> tuple[list[Walker], list]:
         """Run a simulation for an explicit number of cycles.
 
         Parameters
@@ -716,7 +727,7 @@ class Manager:
         n_cycles : int
             Number of cycles to perform.
 
-        segment_lengths : int
+        segment_lengths : int or list[int]
             The number of steps for each runner segment.
 
         num_workers : int
@@ -743,15 +754,20 @@ class Manager:
 
         self.init(num_workers=num_workers)
 
-        if type(segment_lengths) == int:
-            segment_lengths = [segment_lengths for _ in range(n_cycles)]
+        if isinstance(segment_lengths, int):
+            _segment_lengths = [segment_lengths for _ in range(n_cycles)]
+        else:
+            _segment_lengths = segment_lengths
 
         walkers = self.init_walkers
+        filters = []
 
         # the main cycle loop
         for cycle_idx in range(n_cycles):
             walkers, filters = self.run_cycle(
-                walkers, segment_lengths[cycle_idx], cycle_idx
+                walkers,
+                _segment_lengths[cycle_idx],
+                cycle_idx,
             )
 
             # run the simulation monitor to get metrics on everything
@@ -764,10 +780,10 @@ class Manager:
 
     def continue_run_simulation(
         self,
-        run_idx,
-        n_cycles,
-        segment_lengths,
-        num_workers=None,
+        run_idx: int,
+        n_cycles: int,
+        segment_lengths: list[int],
+        num_workers: int | None = None,
     ):
         """Continue a simulation. All this does is provide a run idx to the
         reporters, which is the run that is intended to be
@@ -809,6 +825,8 @@ class Manager:
         self.init(num_workers=num_workers, continue_run=run_idx)
 
         walkers = self.init_walkers
+        filters = []
+
         # the main cycle loop
         for cycle_idx in range(n_cycles):
             walkers, filters = self.run_cycle(
@@ -824,8 +842,12 @@ class Manager:
         return walkers, filters
 
     def continue_run_simulation_by_time(
-        self, run_idx, run_time, segments_length, num_workers=None
-    ):
+        self,
+        run_idx: int,
+        run_time: float,
+        segments_length: int,
+        num_workers: int | None = None,
+    ) -> tuple[list[Walker], list]:
         """Continue a simulation with a separate run by time.
 
         This starts timing as soon as this is called. If the time
@@ -859,6 +881,7 @@ class Manager:
 
         cycle_idx = 0
         walkers = self.init_walkers
+        filters = []
         while time.time() - start_time < run_time:
             logger.info(
                 "starting cycle {} at time {}".format(

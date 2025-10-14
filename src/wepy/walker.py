@@ -125,7 +125,7 @@ def merge(walkers):
     return new_walker, keep_idx
 
 
-class Walker(object):
+class Walker:
     """Reference implementation of the Walker interface.
 
     A container for:
@@ -174,7 +174,7 @@ class Walker(object):
         split_prob = self.weight / (number + 1)
         # make the clones
         clones = []
-        for i in range(number + 1):
+        for _ in range(number + 1):
             clones.append(type(self)(self.state, split_prob))
 
         return clones
@@ -211,7 +211,7 @@ class Walker(object):
         return merge([self] + other_walkers)
 
 
-class WalkerState(object):
+class WalkerState:
     """Reference implementation of the WalkerState interface.
 
     Access all key-value pairs as a dictionary with the dict() method.
