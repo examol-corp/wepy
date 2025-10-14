@@ -6,27 +6,34 @@ wepy simulation cycles.
 
 # Standard Library
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
 import multiprocessing as mp
 import queue as pyq
 import signal
 import sys
 import time
 import traceback
+from collections.abc import Callable
+from typing import Any, Literal
 from warnings import warn
 
 # First Party Library
-from wepy.util.util import set_loglevel
+from wepy.walker import Walker
+
+# from wepy.work_mapper.worker import Worker
+
+logger = logging.getLogger(__name__)
+
+ProcStartMethod = Literal["fork", "spawn", "forkserver"]
+
+SegmentFunc = Callable[[Walker, int | float], Walker]
 
 PY_MAP = map
 
 
-class ABCMapper(object):
+class ABCMapper:
     """Abstract base class for a Mapper."""
 
-    def __init__(self, segment_func=None, **kwargs):
+    def __init__(self, segment_func: SegmentFunc | None = None, **kwargs):
         """Constructor for the Mapper class. No arguments are required.
 
         Parameters
@@ -44,7 +51,7 @@ class ABCMapper(object):
     def attributes(self):
         return self._attributes
 
-    def init(self, segment_func=None, **kwargs):
+    def init(self, segment_func: SegmentFunc | None = None, **kwargs):
         """Runtime initialization and setting of function to map over walkers.
 
         Parameters
@@ -68,7 +75,7 @@ class ABCMapper(object):
             self._func = segment_func
 
     @property
-    def segment_func(self):
+    def segment_func(self) -> SegmentFunc | None:
         """The function that will be called for new data in the `map` method."""
         return self._func
 
@@ -94,7 +101,7 @@ class ABCMapper(object):
 class Mapper(ABCMapper):
     """Basic non-parallel reference implementation of a mapper."""
 
-    def __init__(self, segment_func=None, **kwargs):
+    def __init__(self, segment_func: SegmentFunc | None = None, **kwargs):
         """Constructor for the Mapper class. No arguments are required.
 
         Parameters
@@ -123,11 +130,13 @@ class Mapper(ABCMapper):
 
         Examples
         --------
-
         >>> Mapper(segment_func=sum).map([(0,1,2), (3,4,5)])
         [3, 12]
 
         """
+
+        if self._func is None:
+            raise ValueError("No segment_func has been set.")
 
         # expand the generators for the args and kwargs
         args = [list(arg) for arg in args]
@@ -204,7 +213,7 @@ class Mapper(ABCMapper):
 class Task:
     """Class that composes a function and arguments."""
 
-    def __init__(self, func, *args, **kwargs):
+    def __init__(self, func: Callable, *args, **kwargs):
         """Constructor for Task.
 
         Parameters
@@ -254,502 +263,6 @@ class TaskException(WrapperException):
     pass
 
 
-class ABCWorkerMapper(ABCMapper):
-    def __init__(
-        self, num_workers=None, segment_func=None, proc_start_method="fork", **kwargs
-    ):
-        """Constructor for WorkerMapper.
-
-
-        Parameters
-        ----------
-        num_workers : int
-            The number of worker processes to spawn.
-
-        segment_func : callable, optional
-            Set a default segment_func. Typically set at runtime.
-
-        proc_start_method : str or None
-            A string indicating the type of process start method to
-            use from python multiprocessing typically 'fork', 'spawn',
-            or 'forkserver', or the platform default for None. See
-            documentation. Generates a context with the method
-            multiprocessing.get_context(proc_start_method) on `init`.
-
-        """
-
-        super().__init__(segment_func=segment_func, **kwargs)
-
-        self._proc_start_method = proc_start_method
-
-        self._num_workers = num_workers
-        self._worker_segment_times = None
-
-        if num_workers is not None:
-            self._worker_segment_times = {i: [] for i in range(self.num_workers)}
-
-    def init(self, num_workers=None, segment_func=None, **kwargs):
-        """Runtime initialization and setting of function to map over walkers.
-
-        Parameters
-        ----------
-        num_workers : int
-            The number of worker processes to spawn
-
-        segment_func : callable implementing the Runner.run_segment interface
-
-        """
-
-        super().init(segment_func=segment_func)
-
-        # create the multiprocessing context to use for spawning
-        # processes here
-        self._mp_ctx = mp.get_context(method=self._proc_start_method)
-
-        # the number of workers must be given here or set as an object attribute
-        if num_workers is None and self.num_workers is None:
-            raise ValueError(
-                "The number of workers must be given, received {}".format(num_workers)
-            )
-
-        # if the number of walkers was given for this init() call use
-        # that, otherwise we use the default that was specified when
-        # the object was created
-        elif num_workers is not None and self.num_workers is None:
-            self._num_workers = num_workers
-
-        # update the worker segment times
-        self._worker_segment_times = {i: [] for i in range(self.num_workers)}
-
-    def cleanup(self, **kwargs):
-        # ALERT: is this all we need to do? I have a hunch there is
-        # more caveats, but these context objects are not really
-        # documented
-
-        # make sure the context for this work mapper is destroyed
-        del self._mp_ctx
-
-    @property
-    def num_workers(self):
-        """The number of worker processes."""
-        return self._num_workers
-
-    @property
-    def worker_segment_times(self):
-        """The run timings for each segment for each walker.
-
-        Returns
-        -------
-        worker_seg_times : dict of int : list of float
-            Dictionary mapping worker indices to a list of times in
-            seconds for each segment run.
-
-        """
-        return self._worker_segment_times
-
-    def _make_task(self, *args, **kwargs):
-        """Generate a task from 'segment_func' attribute.
-
-        Similar to partial evaluation (or currying).
-
-        Args will be eventually used as the arguments to the call of
-        'segment_func' by the worker processes when they receive the
-        task from the queue.
-
-        Returns
-        -------
-        task : Task object
-
-        """
-        return Task(self._func, *args, **kwargs)
-
-
-# ----------------------------------
-# everything below this logically belongs in worker.py and should be imported from there
-
-
-class WorkerException(WrapperException):
-    pass
-
-
-class WorkerKilledError(ChildProcessError):
-    pass
-
-
-# TODO: move this class to the wepy.work_mapper.worker class where it
-# belongs. It shouldn't be in this namespace, but we will leave it
-# here. Furthermore I would like to rename it since we now have
-# different worker mapper implementations with different concurrency
-# models
-class WorkerMapper(ABCWorkerMapper):
-    """Work mapper implementation using multiple worker processes and task
-    queue.
-
-    Uses the python multiprocessing module to spawn multiple worker
-    processes which watch a task queue of walker segments.
-    """
-
-    def __init__(
-        self,
-        num_workers=None,
-        worker_type=None,
-        worker_attributes=None,
-        segment_func=None,
-        **kwargs,
-    ):
-        """Constructor for WorkerMapper.
-
-
-        Parameters
-        ----------
-        num_workers : int
-            The number of worker processes to spawn.
-
-        worker_type : callable, optional
-            Callable that generates an object implementing the Worker
-            interface, typically a type from a Worker class.
-
-        worker_attributes : dictionary
-            A dictionary of values that are passed to the worker
-            constructor as key-word arguments.
-
-        segment_func : callable, optional
-            Set a default segment_func. Typically set at runtime.
-
-        """
-
-        super().__init__(num_workers=num_workers, segment_func=segment_func, **kwargs)
-
-        # since the workers will be their own process classes we
-        # handle this data
-
-        # attributes that will be passed to the worker constructors
-        if worker_attributes is not None:
-            self._worker_attributes = worker_attributes
-        else:
-            self._worker_attributes = {}
-
-        # choose the type of the worker
-        if worker_type is None:
-            self._worker_type = Worker
-            warn("worker_type not given using the default base class")
-            logger.warn("worker_type not given using the default base class")
-        else:
-            self._worker_type = worker_type
-
-    @property
-    def worker_type(self):
-        """The callable that generates a worker object.
-
-        Typically this is just the type from the class definition of
-        the Worker where the constructor is called.
-
-        """
-        return self._worker_type
-
-    def init(self, num_workers=None, segment_func=None, **kwargs):
-        """Runtime initialization and setting of function to map over walkers.
-
-        Parameters
-        ----------
-        num_workers : int
-            The number of worker processes to spawn
-
-        segment_func : callable implementing the Runner.run_segment interface
-
-        """
-
-        super().init(num_workers=num_workers, segment_func=segment_func, **kwargs)
-
-        manager = self._mp_ctx.Manager()
-
-        # Establish communication queues
-
-        # A queue for errors
-        self._exception_queue = manager.Queue()
-
-        # queue for the tasks we know the batch size so we don't need
-        # a JoinableQueue
-        self._task_queue = manager.Queue()
-
-        # results queue
-        self._result_queue = manager.Queue()
-
-        # use pipes for communication channels between this parent
-        # process and the children for sending specific interrupts
-        # such as the signal to kill them. Note that the clean way to
-        # end the process is to send poison pills on the task queue,
-        # this is for other stuff. IRQ is a common abbreviation for
-        # interrupts
-        self._irq_parent_conns = []
-
-        # Start workers, giving them all the queues
-        self._workers = []
-        for i in range(self.num_workers):
-            # make a pipe to communicate with this worker for the int
-            parent_conn, child_conn = self._mp_ctx.Pipe()
-            self._irq_parent_conns.append(parent_conn)
-
-            # create the worker giving it all of the communication
-            # channels
-            worker = self.worker_type(
-                i,
-                self._task_queue,
-                self._result_queue,
-                self._exception_queue,
-                child_conn,
-                mapper_attributes=self._attributes,
-                **self._worker_attributes,
-            )
-            self._workers.append(worker)
-
-        # start the worker processes
-        for worker in self._workers:
-            worker.start()
-
-            logger.info(
-                "Worker process started as name: {}; PID: {}".format(
-                    worker.name, worker.pid
-                )
-            )
-
-        # now that we have started the processes register the handler
-        # for SIGTERM signals that will clean up our children cleanly
-        signal.signal(signal.SIGTERM, self._sigterm_shutdown)
-
-    def _sigterm_shutdown(self, signum, frame):
-        logger.critical("Received external SIGTERM, forcing shutdown.")
-
-        self.force_shutdown()
-
-    def force_shutdown(self, **kwargs):
-        logger.critical("Forcing shutdown")
-
-        # our primary job is to shut down all of the running processes
-        # without just shutting down the queues and breaking the pipes
-
-        # to do this we send the kill signals to them on the kill
-        # channel.
-
-        for worker_idx, worker in enumerate(self._workers):
-            logger.critical(
-                "Sending SIGTERM message on {} to worker {}".format(
-                    self._irq_parent_conns[worker_idx].fileno(), worker_idx
-                )
-            )
-
-            # send a kill message to the worker
-            self._irq_parent_conns[worker_idx].send(signal.SIGTERM)
-
-        logger.critical("All kill messages sent to workers")
-
-        # check that all have exited
-        alive_workers = [worker.is_alive() for worker in self._workers]
-        worker_acks = {}
-        worker_exitcodes = {}
-        premature_exit = False
-        while any(alive_workers) and not premature_exit:
-            for worker_idx, worker in enumerate(self._workers):
-                # ignore already known dead workers
-                if not alive_workers[worker_idx]:
-                    continue
-
-                if worker.is_alive():
-                    # if it is still alive and we have an ack from it
-                    # just terminate. There is a bug in the code and
-                    # is out of our control
-                    if worker_idx in worker_acks:
-                        logger.debug(
-                            "Ack received from {} but has not shut down".format(
-                                worker.name
-                            )
-                        )
-                        premature_exit = True
-
-                    # otherwise we need to try and receive the ack
-                    elif self._irq_parent_conns[worker_idx].poll(1):
-                        # receive the acknowledgement
-                        ack = self._irq_parent_conns[worker_idx].recv()
-
-                        logger.debug(
-                            "Received {} acknowledgement from {}".format(
-                                ack, worker.name
-                            )
-                        )
-
-                        # make sure the ack is affirmative
-                        if ack is True:
-                            worker_acks[worker_idx] = ack
-
-                        # if it is an exeption wrap it as a worker
-                        # error and use the os to kill the process
-                        elif issubclass(type(ack), Exception):
-                            # wrap it as a worker exception
-                            exception = WorkerException(wrapped_exception=ack)
-                            worker_acks[worker_idx] = exception
-
-                            logger.critical(
-                                "{} not responding, terminating with SIGTERM".format(
-                                    worker.name
-                                )
-                            )
-
-                            worker.terminate()
-
-                else:
-                    alive_workers[worker_idx] = False
-                    worker_exitcodes[worker_idx] = worker.exitcode
-
-        if any(alive_workers):
-            logger.critical(
-                "Terminating main process with running workers {}".format(
-                    ",".join([
-                        str(worker_idx)
-                        for worker_idx in range(len(self._workers))
-                        if alive_workers[worker_idx]
-                    ])
-                )
-            )
-
-    def cleanup(self, **kwargs):
-        """Runtime post-simulation tasks.
-
-        This is run either at the end of a successful simulation or
-        upon an error in the main process of the simulation manager
-        call to `run_cycle`.
-
-        The Mapper class performs no actions here and all arguments
-        are ignored.
-
-        """
-
-        super().cleanup(**kwargs)
-
-        # send poison pills (Stop signals) to the queues to stop them in a nice way
-        # and let them finish up
-        for i in range(self.num_workers):
-            self._task_queue.put((None, None))
-
-        # delete the queues and workers
-        self._task_queue = None
-        self._result_queue = None
-        self._workers = None
-
-    def map(self, *args, **kwargs):
-        # docstring in superclass
-
-        map_process = self._mp_ctx.current_process()
-        logger.info(
-            "Mapping from process {}; PID {}".format(map_process.name, map_process.pid)
-        )
-
-        # make tuples for the arguments to each function call
-        task_args = zip(*args)
-        kwargs = {key: list(kwarg) for key, kwarg in kwargs.items()}
-
-        num_tasks = len(args[0])
-        # Enqueue the jobs
-        for task_idx, task_arg in enumerate(task_args):
-            task_kwargs = {key: value[task_idx] for key, value in kwargs.items()}
-
-            # a task will be the actual task and its task idx so we can
-            # sort them later
-            self._task_queue.put((task_idx, self._make_task(*task_arg, **task_kwargs)))
-
-        logger.info("Waiting for tasks to be run")
-
-        # poll the exception and result queues for results
-        n_results_left = num_tasks
-        results = []
-        while n_results_left > 0:
-            # first check if any errors came back but don't wait,
-            # since the methods for querying whether it is empty or
-            # not are not reliable we just try and if we don't get
-            # anything we will come back around
-            try:
-                proc_name, pid, exception = self._exception_queue.get_nowait()
-            except pyq.Empty:
-                pass
-
-            else:
-                logger.error(
-                    "Exception occured in process {}; pid {}.".format(proc_name, pid)
-                )
-
-                # we can handle Task and Worker exceptions differently
-                if type(exception) == TaskException:
-                    logger.critical(
-                        "Exception encountered in a task which is unrecoverable."
-                        "You will need to reconfigure your components in a stable manner."
-                    )
-
-                    self.force_shutdown()
-
-                    logger.critical("Shutdown complete.")
-                    raise exception
-
-                elif type(exception) == WorkerException:
-                    # we make just an error message to say that errors
-                    # in the worker may be due to the network or
-                    # something and could recover
-                    logger.error(
-                        "Exception encountered in the work mapper worker process."
-                        "Recovery possible, see further messages."
-                    )
-
-                    # However, the current implementation doesn't
-                    # support retries or whatever so we issue a
-                    # critical log informing that it has been elevated
-                    # to critical and will force shutdown
-                    logger.critical(
-                        "Worker error mode resiliency not supported at this time."
-                        "Performing force shutdown and simulation ending."
-                    )
-
-                    self.force_shutdown()
-
-                    logger.critical("Shutdown complete.")
-                    raise exception
-
-                else:
-                    logger.critical("Unknown exception encountered.")
-
-                    self.force_shutdown()
-
-                    logger.critical("Shutdown complete.")
-
-                    raise exception
-
-            # attempt to get something off of the results queue
-            try:
-                result = self._result_queue.get_nowait()
-            except pyq.Empty:
-                pass
-
-            # if we get something handle it
-            else:
-                logger.info("Retrieved result: {}".format(result))
-                results.append(result)
-
-                # reduce the counter so we know when we are done
-                n_results_left -= 1
-
-        # sort the results according to their task_idx
-        results.sort()
-
-        # save the task run times, so they can be accessed if desired,
-        # after clearing the task times from the last mapping
-
-        # DEBUG: removing this because it should be set on init()
-        # self._worker_segment_times = {i : [] for i in range(self.num_workers)}
-
-        for task_idx, worker_idx, task_time, result in results:
-            self._worker_segment_times[worker_idx].append(task_time)
-
-        # then just return the values of the function
-        return [result for task_idx, worker_idx, task_time, result in results]
-
-
 # same for the worker in terms of refactoring
 class Worker(mp.Process):
     """Worker process.
@@ -767,12 +280,12 @@ class Worker(mp.Process):
 
     def __init__(
         self,
-        worker_idx,
-        task_queue,
-        result_queue,
-        exception_queue,
+        worker_idx: int,
+        task_queue: mp.JoinableQueue,
+        result_queue: mp.Queue,
+        exception_queue: mp.Queue,
         interrupt_connection,
-        mapper_attributes=None,
+        mapper_attributes: dict[str, Any] | None = None,
         log_level="INFO",
         **kwargs,
     ):
@@ -801,7 +314,7 @@ class Worker(mp.Process):
         """
 
         # call the Process constructor
-        mp.Process.__init__(self, name=self.NAME_TEMPLATE.format(worker_idx))
+        super().__init__(name=self.NAME_TEMPLATE.format(worker_idx))
 
         self._exception_queue = exception_queue
         self._exception = None
@@ -1030,7 +543,9 @@ class Worker(mp.Process):
             elif next_task is not Ellipsis:
                 logger.info(
                     "{}; task_idx : {}; args : {} ".format(
-                        self.name, task_idx, next_task.args
+                        self.name,
+                        task_idx,
+                        next_task.args,
                     )
                 )
 
@@ -1074,7 +589,7 @@ class Worker(mp.Process):
 
         return task()
 
-    def _run_task(self, task):
+    def _run_task(self, task: Task):
         """Runs the given task and returns the results.
 
         This manages handling exceptions and tracebacks from the
@@ -1125,3 +640,531 @@ class Worker(mp.Process):
                 wrapped_exception=task_exception,
                 tb=tb,
             )
+
+
+class ABCWorkerMapper(ABCMapper):
+    def __init__(
+        self,
+        num_workers: int | None = None,
+        segment_func: SegmentFunc | None = None,
+        proc_start_method: ProcStartMethod | None = "fork",
+        **kwargs,
+    ):
+        """Constructor for WorkerMapper.
+
+        Parameters
+        ----------
+        num_workers : int
+            The number of worker processes to spawn.
+
+        segment_func : callable, optional
+            Set a default segment_func. Typically set at runtime.
+
+        proc_start_method : str or None
+            A string indicating the type of process start method to
+            use from python multiprocessing typically 'fork', 'spawn',
+            or 'forkserver', or the platform default for None. See
+            documentation. Generates a context with the method
+            multiprocessing.get_context(proc_start_method) on `init`.
+
+        """
+
+        super().__init__(segment_func=segment_func, **kwargs)
+
+        self._proc_start_method = proc_start_method
+
+        self._num_workers = num_workers
+        self._worker_segment_times = None
+
+        if self.num_workers is not None:
+            self._worker_segment_times = {i: [] for i in range(self.num_workers)}
+
+    def init(
+        self,
+        segment_func: SegmentFunc | None = None,
+        num_workers: int | None = None,
+        **kwargs,
+    ):
+        """Runtime initialization and setting of function to map over walkers.
+
+        Parameters
+        ----------
+        num_workers : int
+            The number of worker processes to spawn
+
+        segment_func : callable implementing the Runner.run_segment interface
+
+        """
+
+        super().init(segment_func=segment_func)
+
+        # create the multiprocessing context to use for spawning
+        # processes here
+        self._mp_ctx = mp.get_context(method=self._proc_start_method)
+
+        # if the number of walkers was given for this init() call use
+        # that, otherwise we use the default that was specified when
+        # the object was created
+        if num_workers is not None and self.num_workers is None:
+            self._num_workers = num_workers
+        elif num_workers is not None and self.num_workers is not None:
+            logger.warning(
+                "Both num_workers and self.num_workers are set, using default from self"
+            )
+
+        # the number of workers must be given here or set as an object attribute
+        if self.num_workers is None:
+            raise ValueError(
+                "The number of workers must be given, received {}".format(
+                    self.num_workers
+                )
+            )
+
+        # update the worker segment times
+        self._worker_segment_times = {i: [] for i in range(self.num_workers)}
+
+    def cleanup(self, **kwargs):
+        # ALERT: is this all we need to do? I have a hunch there is
+        # more caveats, but these context objects are not really
+        # documented
+
+        # make sure the context for this work mapper is destroyed
+        del self._mp_ctx
+
+    @property
+    def num_workers(self):
+        """The number of worker processes."""
+        return self._num_workers
+
+    @property
+    def worker_segment_times(self):
+        """The run timings for each segment for each walker.
+
+        Returns
+        -------
+        worker_seg_times : dict of int : list of float
+            Dictionary mapping worker indices to a list of times in
+            seconds for each segment run.
+
+        """
+        return self._worker_segment_times
+
+    def _make_task(self, *args, **kwargs):
+        """Generate a task from 'segment_func' attribute.
+
+        Similar to partial evaluation (or currying).
+
+        Args will be eventually used as the arguments to the call of
+        'segment_func' by the worker processes when they receive the
+        task from the queue.
+
+        Returns
+        -------
+        task : Task object
+
+        """
+        return Task(self._func, *args, **kwargs)
+
+
+# ----------------------------------
+# everything below this logically belongs in worker.py and should be imported from there
+
+
+class WorkerException(WrapperException):
+    pass
+
+
+class WorkerKilledError(ChildProcessError):
+    pass
+
+
+# TODO: move this class to the wepy.work_mapper.worker class where it
+# belongs. It shouldn't be in this namespace, but we will leave it
+# here. Furthermore I would like to rename it since we now have
+# different worker mapper implementations with different concurrency
+# models
+class WorkerMapper(ABCWorkerMapper):
+    """Work mapper implementation using multiple worker processes and task
+    queue.
+
+    Uses the python multiprocessing module to spawn multiple worker
+    processes which watch a task queue of walker segments.
+    """
+
+    def __init__(
+        self,
+        num_workers: int | None = None,
+        worker_type: type[Worker] | None = None,
+        worker_attributes: dict | None = None,
+        segment_func: SegmentFunc | None = None,
+        **kwargs,
+    ):
+        """Constructor for WorkerMapper.
+
+        Parameters
+        ----------
+        num_workers : int
+            The number of worker processes to spawn.
+
+        worker_type : callable, optional
+            Callable that generates an object implementing the Worker
+            interface, typically a type from a Worker class.
+
+        worker_attributes : dictionary
+            A dictionary of values that are passed to the worker
+            constructor as key-word arguments.
+
+        segment_func : callable, optional
+            Set a default segment_func. Typically set at runtime.
+
+        """
+
+        super().__init__(
+            num_workers=num_workers,
+            segment_func=segment_func,
+            **kwargs,
+        )
+
+        # since the workers will be their own process classes we
+        # handle this data
+
+        # attributes that will be passed to the worker constructors
+        if worker_attributes is not None:
+            self._worker_attributes = worker_attributes
+        else:
+            self._worker_attributes = {}
+
+        # choose the type of the worker
+        if worker_type is None:
+            self._worker_type = Worker
+            warn("worker_type not given using the default base class", stacklevel=1)
+            logger.warning("worker_type not given using the default base class")
+        else:
+            self._worker_type = worker_type
+
+    @property
+    def worker_type(self):
+        """The callable that generates a worker object.
+
+        Typically this is just the type from the class definition of
+        the Worker where the constructor is called.
+
+        """
+        return self._worker_type
+
+    def init(
+        self,
+        segment_func: SegmentFunc | None = None,
+        num_workers: int | None = None,
+        **kwargs,
+    ):
+        """Runtime initialization and setting of function to map over walkers.
+
+        Parameters
+        ----------
+        num_workers : int
+            The number of worker processes to spawn
+
+        segment_func : callable implementing the Runner.run_segment interface
+
+        """
+
+        super().init(
+            num_workers=num_workers,
+            segment_func=segment_func,
+            **kwargs,
+        )
+
+        if self.num_workers is None:
+            raise ValueError("num_workers is not set")
+
+        manager = self._mp_ctx.Manager()
+
+        # Establish communication queues
+
+        # A queue for errors
+        self._exception_queue = manager.Queue()
+
+        # queue for the tasks we know the batch size so we don't need
+        # a JoinableQueue
+        self._task_queue = manager.Queue()
+
+        # results queue
+        self._result_queue = manager.Queue()
+
+        # use pipes for communication channels between this parent
+        # process and the children for sending specific interrupts
+        # such as the signal to kill them. Note that the clean way to
+        # end the process is to send poison pills on the task queue,
+        # this is for other stuff. IRQ is a common abbreviation for
+        # interrupts
+        self._irq_parent_conns = []
+
+        # Start workers, giving them all the queues
+        self._workers = []
+        for i in range(self.num_workers):
+            # make a pipe to communicate with this worker for the int
+            parent_conn, child_conn = self._mp_ctx.Pipe()
+            self._irq_parent_conns.append(parent_conn)
+
+            # create the worker giving it all of the communication
+            # channels
+            worker = self.worker_type(
+                i,
+                self._task_queue,
+                self._result_queue,
+                self._exception_queue,
+                child_conn,
+                mapper_attributes=self._attributes,
+                **self._worker_attributes,
+            )
+            self._workers.append(worker)
+
+        # start the worker processes
+        for worker in self._workers:
+            worker.start()
+
+            logger.info(
+                "Worker process started as name: {}; PID: {}".format(
+                    worker.name, worker.pid
+                )
+            )
+
+        # now that we have started the processes register the handler
+        # for SIGTERM signals that will clean up our children cleanly
+        signal.signal(signal.SIGTERM, self._sigterm_shutdown)
+
+    def _sigterm_shutdown(self, signum, frame):
+        logger.critical("Received external SIGTERM, forcing shutdown.")
+
+        self.force_shutdown()
+
+    def force_shutdown(self, **kwargs):
+        logger.critical("Forcing shutdown")
+
+        # our primary job is to shut down all of the running processes
+        # without just shutting down the queues and breaking the pipes
+
+        # to do this we send the kill signals to them on the kill
+        # channel.
+
+        for worker_idx, worker in enumerate(self._workers):
+            logger.critical(
+                "Sending SIGTERM message on {} to worker {}".format(
+                    self._irq_parent_conns[worker_idx].fileno(), worker_idx
+                )
+            )
+
+            # send a kill message to the worker
+            self._irq_parent_conns[worker_idx].send(signal.SIGTERM)
+
+        logger.critical("All kill messages sent to workers")
+
+        # check that all have exited
+        alive_workers = [worker.is_alive() for worker in self._workers]
+        worker_acks = {}
+        worker_exitcodes = {}
+        premature_exit = False
+        while any(alive_workers) and not premature_exit:
+            for worker_idx, worker in enumerate(self._workers):
+                # ignore already known dead workers
+                if not alive_workers[worker_idx]:
+                    continue
+
+                if worker.is_alive():
+                    # if it is still alive and we have an ack from it
+                    # just terminate. There is a bug in the code and
+                    # is out of our control
+                    if worker_idx in worker_acks:
+                        logger.debug(
+                            "Ack received from {} but has not shut down".format(
+                                worker.name
+                            )
+                        )
+                        premature_exit = True
+
+                    # otherwise we need to try and receive the ack
+                    elif self._irq_parent_conns[worker_idx].poll(1):
+                        # receive the acknowledgement
+                        ack = self._irq_parent_conns[worker_idx].recv()
+
+                        logger.debug(
+                            "Received {} acknowledgement from {}".format(
+                                ack, worker.name
+                            )
+                        )
+
+                        # make sure the ack is affirmative
+                        if ack is True:
+                            worker_acks[worker_idx] = ack
+
+                        # if it is an exeption wrap it as a worker
+                        # error and use the os to kill the process
+                        elif issubclass(type(ack), Exception):
+                            # wrap it as a worker exception
+                            exception = WorkerException(wrapped_exception=ack)
+                            worker_acks[worker_idx] = exception
+
+                            logger.critical(
+                                "{} not responding, terminating with SIGTERM".format(
+                                    worker.name
+                                )
+                            )
+
+                            worker.terminate()
+
+                else:
+                    alive_workers[worker_idx] = False
+                    worker_exitcodes[worker_idx] = worker.exitcode
+
+        if any(alive_workers):
+            logger.critical(
+                "Terminating main process with running workers {}".format(
+                    ",".join([
+                        str(worker_idx)
+                        for worker_idx in range(len(self._workers))
+                        if alive_workers[worker_idx]
+                    ])
+                )
+            )
+
+    def cleanup(self, **kwargs):
+        """Runtime post-simulation tasks.
+
+        This is run either at the end of a successful simulation or
+        upon an error in the main process of the simulation manager
+        call to `run_cycle`.
+
+        The Mapper class performs no actions here and all arguments
+        are ignored.
+
+        """
+
+        super().cleanup(**kwargs)
+
+        if self.num_workers is None:
+            raise ValueError("num_workers is not set")
+
+        # send poison pills (Stop signals) to the queues to stop them in a nice way
+        # and let them finish up
+        for _ in range(self.num_workers):
+            self._task_queue.put((None, None))
+
+        # delete the queues and workers
+        self._task_queue = None
+        self._result_queue = None
+        self._workers = None
+
+    def map(self, *args, **kwargs):
+        # docstring in superclass
+
+        map_process = self._mp_ctx.current_process()
+        logger.info(
+            "Mapping from process {}; PID {}".format(map_process.name, map_process.pid)
+        )
+
+        # make tuples for the arguments to each function call
+        task_args = zip(*args, strict=False)
+        kwargs = {key: list(kwarg) for key, kwarg in kwargs.items()}
+
+        num_tasks = len(args[0])
+        # Enqueue the jobs
+        for task_idx, task_arg in enumerate(task_args):
+            task_kwargs = {key: value[task_idx] for key, value in kwargs.items()}
+
+            # a task will be the actual task and its task idx so we can
+            # sort them later
+            self._task_queue.put((task_idx, self._make_task(*task_arg, **task_kwargs)))
+
+        logger.info("Waiting for tasks to be run")
+
+        # poll the exception and result queues for results
+        n_results_left = num_tasks
+        results = []
+        while n_results_left > 0:
+            # first check if any errors came back but don't wait,
+            # since the methods for querying whether it is empty or
+            # not are not reliable we just try and if we don't get
+            # anything we will come back around
+            try:
+                proc_name, pid, exception = self._exception_queue.get_nowait()
+            except pyq.Empty:
+                pass
+
+            else:
+                logger.error(
+                    "Exception occured in process {}; pid {}.".format(proc_name, pid)
+                )
+
+                # we can handle Task and Worker exceptions differently
+                if type(exception) == TaskException:
+                    logger.critical(
+                        "Exception encountered in a task which is unrecoverable."
+                        "You will need to reconfigure your components in a stable manner."
+                    )
+
+                    self.force_shutdown()
+
+                    logger.critical("Shutdown complete.")
+                    raise exception
+
+                elif type(exception) == WorkerException:
+                    # we make just an error message to say that errors
+                    # in the worker may be due to the network or
+                    # something and could recover
+                    logger.error(
+                        "Exception encountered in the work mapper worker process."
+                        "Recovery possible, see further messages."
+                    )
+
+                    # However, the current implementation doesn't
+                    # support retries or whatever so we issue a
+                    # critical log informing that it has been elevated
+                    # to critical and will force shutdown
+                    logger.critical(
+                        "Worker error mode resiliency not supported at this time."
+                        "Performing force shutdown and simulation ending."
+                    )
+
+                    self.force_shutdown()
+
+                    logger.critical("Shutdown complete.")
+                    raise exception
+
+                else:
+                    logger.critical("Unknown exception encountered.")
+
+                    self.force_shutdown()
+
+                    logger.critical("Shutdown complete.")
+
+                    raise exception
+
+            # attempt to get something off of the results queue
+            try:
+                result = self._result_queue.get_nowait()
+            except pyq.Empty:
+                pass
+
+            # if we get something handle it
+            else:
+                logger.info("Retrieved result: {}".format(result))
+                results.append(result)
+
+                # reduce the counter so we know when we are done
+                n_results_left -= 1
+
+        # sort the results according to their task_idx
+        results.sort()
+
+        # save the task run times, so they can be accessed if desired,
+        # after clearing the task times from the last mapping
+
+        # DEBUG: removing this because it should be set on init()
+        # self._worker_segment_times = {i : [] for i in range(self.num_workers)}
+
+        for task_idx, worker_idx, task_time, result in results:
+            self._worker_segment_times[worker_idx].append(task_time)
+
+        # then just return the values of the function
+        return [result for task_idx, worker_idx, task_time, result in results]
