@@ -3,6 +3,7 @@ ready worker style mapper for mapping runner dynamics to walkers for
 wepy simulation cycles.
 
 """
+
 # Standard Library
 import logging
 
@@ -42,10 +43,6 @@ class ABCMapper(object):
     @property
     def attributes(self):
         return self._attributes
-
-    @attributes.getter
-    def attributes(self, key):
-        return self._attributes[key]
 
     def init(self, segment_func=None, **kwargs):
         """Runtime initialization and setting of function to map over walkers.
@@ -204,7 +201,7 @@ class Mapper(ABCMapper):
         return self._worker_segment_times
 
 
-class Task(object):
+class Task:
     """Class that composes a function and arguments."""
 
     def __init__(self, func, *args, **kwargs):
@@ -398,7 +395,7 @@ class WorkerMapper(ABCWorkerMapper):
         worker_type=None,
         worker_attributes=None,
         segment_func=None,
-        **kwargs
+        **kwargs,
     ):
         """Constructor for WorkerMapper.
 
@@ -502,7 +499,7 @@ class WorkerMapper(ABCWorkerMapper):
                 self._exception_queue,
                 child_conn,
                 mapper_attributes=self._attributes,
-                **self._worker_attributes
+                **self._worker_attributes,
             )
             self._workers.append(worker)
 
@@ -779,7 +776,7 @@ class Worker(mp.Process):
         interrupt_connection,
         mapper_attributes=None,
         log_level="INFO",
-        **kwargs
+        **kwargs,
     ):
         """Constructor for the Worker class.
 

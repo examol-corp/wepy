@@ -75,7 +75,7 @@ class WepyHDF5Reporter(FileReporter):
         progress_records=None,
         # other settings
         swmr_mode=False,
-        **kwargs
+        **kwargs,
     ):
         """Constructor for the WepyHDF5Reporter.
 
@@ -94,7 +94,7 @@ class WepyHDF5Reporter(FileReporter):
             Mapping of trajectory field names to string specs
             for units.
 
-        sparse_fields : list of str, optional
+        sparse_fields : dict of str: int, optional
             List of trajectory fields that should be initialized as sparse.
 
         feature_shapes : dict of str: shape_spec, optional
@@ -207,7 +207,19 @@ class WepyHDF5Reporter(FileReporter):
         self.save_fields = save_fields
         # dictionary of sparse_field_name -> int : frequency of cycles
         # to save the field
-        self._sparse_fields = sparse_fields
+
+        # TODO: refine requirements of sparse fields. Do they need to
+        # be in the 'save_fields'?
+        
+        self._sparse_fields = (
+            {
+                field_name : freq
+                for field_name, freq
+                in sparse_fields.items()
+            }
+            if sparse_fields is not None
+            else {}
+        )
         self._feature_shapes = feature_shapes
         self._feature_dtypes = feature_dtypes
         self._n_dims = n_dims
@@ -330,9 +342,9 @@ class WepyHDF5Reporter(FileReporter):
             self.alt_reps_idxs[self.ALL_ATOMS_REP_KEY] = np.arange(n_atoms)
             # add the frequency for this sparse fields to the
             # sparse fields dictionary
-            self._sparse_fields[
-                "alt_reps/{}".format(self.ALL_ATOMS_REP_KEY)
-            ] = all_atoms_rep_freq
+            self._sparse_fields["alt_reps/{}".format(self.ALL_ATOMS_REP_KEY)] = (
+                all_atoms_rep_freq
+            )
 
         # if there are no sparse fields set it as an empty dictionary
         if self._sparse_fields is None:
@@ -369,12 +381,10 @@ class WepyHDF5Reporter(FileReporter):
             state_fields = list(init_walkers[0].state.dict().keys())
 
             # make sure all the save_fields are present in the state
-            assert all(
-                [
-                    True if save_field in state_fields else False
-                    for save_field in self.save_fields
-                ]
-            ), "Not all specified save_fields present in walker states"
+            assert all([
+                True if save_field in state_fields else False
+                for save_field in self.save_fields
+            ]), "Not all specified save_fields present in walker states"
 
             filtered_init_walkers = []
             for walker in init_walkers:
@@ -501,7 +511,7 @@ class WepyHDF5Reporter(FileReporter):
         progress_data=None,
         resampling_data=None,
         resampler_data=None,
-        **kwargs
+        **kwargs,
     ):
         n_walkers = len(new_walkers)
 

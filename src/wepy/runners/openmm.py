@@ -23,12 +23,12 @@ allow passing of the device index to OpenMM for which GPU device to
 use.
 
 """
+
 # Standard Library
 import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-import random as rand
 import time
 from copy import copy
 from warnings import warn
@@ -40,7 +40,7 @@ try:
     # Third Party Library
     import openmm as omm
     import openmm.app as omma
-    import simtk.unit as unit
+    import openmm.unit as unit
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "OpenMM has not been installed, which this runner requires."
@@ -210,7 +210,7 @@ class OpenMMRunner(Runner):
         platform=None,
         platform_kwargs=None,
         enforce_box=False,
-        get_state_kwargs=None
+        get_state_kwargs=None,
     ):
         """Constructor for OpenMMRunner.
 
@@ -246,7 +246,7 @@ class OpenMMRunner(Runner):
             key-values to set for getting the state from the OpenMM context.
             keys not included will use the values in GET_STATE_KWARG_DEFAULTS.
             Will override the enforce_box flag.
-            
+
         Warnings
         --------
 
@@ -273,9 +273,10 @@ class OpenMMRunner(Runner):
 
         """
 
-        assert isinstance(
-            platform, str
-        ), f"platform should be a string, not {type(platform)}"
+        if platform is not None:
+            assert isinstance(
+                platform, str
+            ), f"platform should be a string, not {type(platform)}"
 
         # we save the different components. However, if we are to make
         # this runner picklable we have to convert the SWIG objects to
@@ -289,17 +290,20 @@ class OpenMMRunner(Runner):
         self.platform_kwargs = platform_kwargs
 
         self.enforce_box = enforce_box
-        
-        self.getState_kwargs = dict(GET_STATE_KWARG_DEFAULTS)
-        # update with the user based enforce_box
+
+        self.getState_kwargs = {}
         if get_state_kwargs is not None:
             for k in get_state_kwargs:
                 self.getState_kwargs[k] = get_state_kwargs[k]
 
             # override enforce_box option if specified in get_state_kwargs
-            if 'enforce_box' in get_state_kwargs:
-                self.enforce_box = get_state_kwargs['enforce_box']
-                
+            if "enforce_box" in get_state_kwargs:
+                self.enforce_box = get_state_kwargs["enforce_box"]
+
+        else:
+            self.getState_kwargs = dict(GET_STATE_KWARG_DEFAULTS)
+
+
         self._cycle_platform = None
         self._cycle_platform_kwargs = None
 
@@ -424,9 +428,9 @@ class OpenMMRunner(Runner):
         # set the kwargs that will be passed to getState
         tmp_getState_kwargs = getState_kwargs
 
-        logger.info("Default 'getState_kwargs' in runner: " f"{self.getState_kwargs}")
+        logger.info(f"Default 'getState_kwargs' in runner: {self.getState_kwargs}")
 
-        logger.info("'getState_kwargs' passed to 'run_segment' : " f"{getState_kwargs}")
+        logger.info(f"'getState_kwargs' passed to 'run_segment' : {getState_kwargs}")
 
         # start with the object value
         getState_kwargs = copy(self.getState_kwargs)
@@ -449,28 +453,27 @@ class OpenMMRunner(Runner):
 
         ## Platform
 
-        logger.info("Default 'platform' in runner: " f"{self.platform_name}")
+        logger.info(f"Default 'platform' in runner: {self.platform_name}")
 
-        logger.info("pre_cycle set 'platform' in runner: " f"{self._cycle_platform}")
+        logger.info(f"pre_cycle set 'platform' in runner: {self._cycle_platform}")
 
-        logger.info("'platform' passed to 'run_segment' : " f"{platform}")
+        logger.info(f"'platform' passed to 'run_segment' : {platform}")
 
-        logger.info("Default 'platform_kwargs' in runner: " f"{self.platform_kwargs}")
+        logger.info(f"Default 'platform_kwargs' in runner: {self.platform_kwargs}")
 
         logger.info(
-            "pre_cycle set 'platform_kwargs' in runner: "
-            f"{self._cycle_platform_kwargs}"
+            f"pre_cycle set 'platform_kwargs' in runner: {self._cycle_platform_kwargs}"
         )
 
-        logger.info("'platform_kwargs' passed to 'run_segment' : " f"{platform_kwargs}")
+        logger.info(f"'platform_kwargs' passed to 'run_segment' : {platform_kwargs}")
 
         platform_name, platform_kwargs = self._resolve_platform(
             platform, platform_kwargs
         )
 
-        logger.info("Resolved 'platform' : " f"{platform_name}")
+        logger.info(f"Resolved 'platform' : {platform_name}")
 
-        logger.info("Resolved 'platform_kwargs' : " f"{platform_kwargs}")
+        logger.info(f"Resolved 'platform_kwargs' : {platform_kwargs}")
 
         # create simulation object
 
@@ -1399,6 +1402,7 @@ class OpenMMCPUWalkerTaskProcess(WalkerTaskProcess):
     NAME_TEMPLATE = "OpenMM_CPU_Walker_Task-{}"
 
     def run_task(self, task):
+        print("CPU Walker Task ---->", self.mapper_attributes, task, task.func)
         if "num_threads" in self.mapper_attributes:
             num_threads = self.mapper_attributes["num_threads"]
 
@@ -1421,6 +1425,7 @@ class OpenMMGPUWalkerTaskProcess(WalkerTaskProcess):
     def run_task(self, task):
         logger.info(f"Starting to run a task as worker {self._worker_idx}")
 
+        print("GPU Walker Task ---->", self.mapper_attributes)
         # get the platform
         platform = self.mapper_attributes["platform"]
 

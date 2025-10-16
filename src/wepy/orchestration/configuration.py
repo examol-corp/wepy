@@ -1,4 +1,5 @@
 # Standard Library
+from typing import Final
 import itertools as it
 import logging
 
@@ -15,15 +16,15 @@ from wepy.work_mapper.worker import Worker
 class Configuration:
     """ """
 
-    DEFAULT_WORKDIR = osp.realpath(osp.curdir)
-    DEFAULT_CONFIG_NAME = "root"
-    DEFAULT_NARRATION = ""
-    DEFAULT_REPORTER_CLASS = ""
+    DEFAULT_WORKDIR: Final = osp.realpath(osp.curdir)
+    DEFAULT_CONFIG_NAME: Final = "root"
+    DEFAULT_NARRATION: Final = ""
+    DEFAULT_REPORTER_CLASS: Final = ""
 
     # if there is to be reporter class in filenames use this template
     # to put it into the filename
-    REPORTER_CLASS_SEG_TEMPLATE = ".{}"
-    DEFAULT_MODE = "x"
+    REPORTER_CLASS_SEG_TEMPLATE: Final = ".{}"
+    DEFAULT_MODE: Final = "x"
 
     def __init__(
         self,
@@ -123,6 +124,12 @@ class Configuration:
 
         # then generate a work mapper
         self._work_mapper = self._work_mapper_class(**self._work_mapper_partial_kwargs)
+        print(
+            "config mapper  ---->",
+            self._work_mapper.__class__.__name__,
+            self._work_mapper._attributes,
+            self._work_mapper_partial_kwargs,
+        )
 
         ### Monitor options
 

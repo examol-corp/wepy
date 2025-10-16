@@ -1,5 +1,4 @@
 # Standard Library
-import itertools as it
 import logging
 
 logger = logging.getLogger(__name__)
@@ -1083,7 +1082,7 @@ class Orchestrator:
         mode=None,
         # extra kwargs will be passed to the
         # configuration.reparametrize method
-        **kwargs
+        **kwargs,
     ):
         """
 
@@ -1188,7 +1187,7 @@ class Orchestrator:
                 config_name=config_name,
                 narration=narration,
                 mode=mode,
-                **kwargs
+                **kwargs,
             )
 
         # make parametric paths for the checkpoint directory and the

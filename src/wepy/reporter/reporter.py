@@ -3,18 +3,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-import os
 import os.path as osp
-import pickle
 
 
 class ReporterError(Exception):
-    """ """
-
     pass
 
 
-class Reporter(object):
+class Reporter:
     """Abstract base class for wepy reporters.
 
     All reporters must customize and override minimally the 'report'
@@ -83,7 +79,7 @@ class Reporter(object):
         method_name = "init"
         assert not hasattr(
             super(), method_name
-        ), "Superclass with method {} is masked".format(method_name)
+        ), f"Superclass with method {method_name} is masked"
 
     def report(self, **kwargs):
         """Given data concerning the main simulation components state, perform

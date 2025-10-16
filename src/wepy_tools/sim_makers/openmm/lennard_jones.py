@@ -7,7 +7,7 @@ from scipy.spatial.distance import euclidean
 from wepy.boundary_conditions.receptor import UnbindingBC
 from wepy.resampling.distances.distance import Distance
 from wepy.runners.openmm import GET_STATE_KWARG_DEFAULTS
-from wepy_tools.sim_makers.openmm import OpenMMToolsTestSysSimMaker
+from .sim_maker import OpenMMToolsTestSysSimMaker
 
 
 ## Distance Metric
@@ -25,11 +25,6 @@ class PairDistance(Distance):
         dist_b = self.metric(image_b[0], image_b[1])
 
         return np.abs(dist_a - dist_b)
-
-
-# class PairUnbinding(BoundaryCondition):
-
-#     pass
 
 
 class LennardJonesPairOpenMMSimMaker(OpenMMToolsTestSysSimMaker):
