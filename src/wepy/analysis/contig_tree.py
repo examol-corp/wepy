@@ -77,8 +77,8 @@ class BaseContigTree:
     def __init__(
         self,
         wepy_h5: WepyHDF5,
-        continuations: ellipsis | list[tuple[int, int]] = Ellipsis,
-        runs: ellipsis | list[int] = Ellipsis,
+        continuations: type(Ellipsis) | list[tuple[int, int]] = Ellipsis,
+        runs: type(Ellipsis) | list[int] = Ellipsis,
         boundary_condition_class: type[BoundaryConditions] | None = None,
         decision_class: type[Decision] | None = None,
     ):
