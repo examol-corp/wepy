@@ -306,12 +306,19 @@ class WepyHDF5Reporter(FileReporter):
 
         # the idxs for alternate representations of the system
         # positions
+
+        # this is a record of which alt_reps to actually save in the simulation
+        self.alt_reps_to_save = []
         if alt_reps is not None:
             self.alt_reps_idxs = {key: list(tup[0]) for key, tup in alt_reps.items()}
+
 
             # add the frequencies for these alt_reps to the
             # sparse_fields frequency dictionary
             for key, (idxs, freq) in alt_reps.items():
+
+                self.alt_reps_to_save.append(key)
+                
                 alt_rep_key = "alt_reps/{}".format(key)
 
                 # if the frequency is Ellipsis or 1 then we save it
@@ -332,14 +339,21 @@ class WepyHDF5Reporter(FileReporter):
         if self.ALL_ATOMS_REP_KEY in self.alt_reps_idxs:
             raise ValueError("Cannot name an alt_rep 'all_atoms'")
 
+        # Handle the all_atoms fields. There is always a record of
+        # what the all_atoms are even if there is no extra field for
+        # this given in the trajectory data.
+
+        # count the number of atoms in the topology and set the
+        # alt_reps to have the full slice for all atoms
+        self._n_atoms = json_top_atom_count(self._tmp_topology)
+        self._all_atom_idxs = np.arange(self._n_atoms)
+        self.alt_reps_idxs[self.ALL_ATOMS_REP_KEY] = self._all_atom_idxs
+
         # if there is a frequency for all atoms rep then we make an
         # alt_rep for the all_atoms system with the specified
         # frequency
         if all_atoms_rep_freq is not None:
-            # count the number of atoms in the topology and set the
-            # alt_reps to have the full slice for all atoms
-            n_atoms = json_top_atom_count(self._tmp_topology)
-            self.alt_reps_idxs[self.ALL_ATOMS_REP_KEY] = np.arange(n_atoms)
+
             # add the frequency for this sparse fields to the
             # sparse fields dictionary
             self._sparse_fields["alt_reps/{}".format(self.ALL_ATOMS_REP_KEY)] = (
@@ -408,6 +422,10 @@ class WepyHDF5Reporter(FileReporter):
                     # otherwise get only the atoms we want
                     else:
                         state_d[alt_rep_path] = state_d["positions"][alt_rep_idxs]
+
+
+                # always store a copy of the all_atoms rep for the init_walkers
+                state_d[f"alt_reps/{self.ALL_ATOMS_REP_KEY}"] = state_d["positions"]
 
                 # if the main rep is different then the full state
                 # positions set that
@@ -555,7 +573,9 @@ class WepyHDF5Reporter(FileReporter):
                             continue
 
                 # Add the alt_reps fields by slicing the positions
-                for alt_rep_key, alt_rep_idxs in self.alt_reps_idxs.items():
+                for alt_rep_key in self.alt_reps_to_save:
+
+                    alt_rep_idxs = self.alt_reps_idxs[alt_rep_key]
                     alt_rep_path = "alt_reps/{}".format(alt_rep_key)
 
                     # if the alt rep is also a sparse field check this
