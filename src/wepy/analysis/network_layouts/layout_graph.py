@@ -252,7 +252,7 @@ class LayoutGraph:
 
         """
 
-        assert not any([
+        assert all([
             True if (color <= 255 and color >= 0) else False for color in color_vec
         ]), "invalid color values, must be between 0 and 255"
 
