@@ -26,12 +26,7 @@ use.
 
 # Standard Library
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
 import time
-import sys
-import os
 from copy import copy
 from warnings import warn
 
@@ -55,6 +50,9 @@ from wepy.util.util import box_vectors_to_lengths_angles
 from wepy.walker import Walker, WalkerState
 from wepy.work_mapper.task_mapper import WalkerTaskProcess
 from wepy.work_mapper.worker import Worker
+
+
+logger = logging.getLogger(__name__)
 
 ## Constants
 
@@ -421,64 +419,6 @@ class OpenMMRunnerShared(Runner):
             Walker after dynamics was run, only the state should be modified.
 
         """
-        if False:
-            pdb = omma.PDBFile("16pk_A.pdb")
-            print(os.getpid())
-            print(self.system.getNumParticles())
-            print(self.topology.getPeriodicBoxVectors())
-            print(self.topology.getNumAtoms())
-            print(walker.state["positions"])
-            integrator = omm.LangevinMiddleIntegrator(
-                300 * unit.kelvin, 1 / unit.picosecond, 0.004 * unit.picoseconds
-            )
-            sim = omma.Simulation(
-                self.topology,
-                self.system,
-                copy(self.integrator),
-                omm.Platform.getPlatformByName("CPU"),
-            )
-            # sim.context.setPositions(walker.state["positions"])
-            sim.context.setState(walker.state.sim_state)
-            sim.step(100)
-            return
-
-        if False:
-            logger.debug(f"Reporting from {os.getpid()} -> Start")
-            pdb = omma.PDBFile("16pk_A.pdb")
-            logger.debug(f"Reporting from {os.getpid()} -> Load pdb")
-            forcefield = omma.ForceField("amber19-all.xml", "amber19/tip3pfb.xml")
-            logger.debug(f"Reporting from {os.getpid()} -> Forces")
-            system = forcefield.createSystem(
-                pdb.topology,
-                nonbondedMethod=omma.PME,
-                nonbondedCutoff=1 * unit.nanometer,
-                constraints=omma.HBonds,
-            )
-            logger.debug(f"Reporting from {os.getpid()} -> System")
-            integrator = omm.LangevinMiddleIntegrator(
-                300 * unit.kelvin, 1 / unit.picosecond, 0.004 * unit.picoseconds
-            )
-            logger.debug(f"Reporting from {os.getpid()} -> Integrator")
-            simulation = omma.Simulation(
-                pdb.topology,
-                system,
-                copy(integrator),
-                omm.Platform.getPlatformByName("Reference"),
-            )
-            logger.debug(f"Reporting from {os.getpid()} -> Simulation")
-            simulation.context.setPositions(pdb.positions)
-            logger.debug(f"Reporting from {os.getpid()} -> Context")
-            # simulation.minimizeEnergy()
-            simulation.reporters.append(omma.DCDReporter("output.dcd", 1000))
-            simulation.reporters.append(
-                omma.StateDataReporter(
-                    sys.stdout, 1000, step=True, potentialEnergy=True, temperature=True
-                )
-            )
-            logger.debug(f"Reporting from {os.getpid()} -> Reporters")
-            simulation.step(10)
-            logger.debug(f"Reporting from {os.getpid()} -> After sim")
-            return
 
         run_segment_start = time.time()
 
@@ -1958,7 +1898,6 @@ class OpenMMCPUWalkerTaskProcess(WalkerTaskProcess):
     NAME_TEMPLATE = "OpenMM_CPU_Walker_Task-{}"
 
     def run_task(self, task):
-        print("CPU Walker Task ---->", self.mapper_attributes, task, task.func)
         if "num_threads" in self.mapper_attributes:
             num_threads = self.mapper_attributes["num_threads"]
 
@@ -1981,7 +1920,6 @@ class OpenMMGPUWalkerTaskProcess(WalkerTaskProcess):
     def run_task(self, task):
         logger.info(f"Starting to run a task as worker {self._worker_idx}")
 
-        print("GPU Walker Task ---->", self.mapper_attributes)
         # get the platform
         platform = self.mapper_attributes["platform"]
 
