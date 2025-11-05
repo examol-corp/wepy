@@ -26,9 +26,6 @@ use.
 
 # Standard Library
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
 import time
 from copy import copy
 from warnings import warn
@@ -53,6 +50,9 @@ from wepy.util.util import box_vectors_to_lengths_angles
 from wepy.walker import Walker, WalkerState
 from wepy.work_mapper.task_mapper import WalkerTaskProcess
 from wepy.work_mapper.worker import Worker
+
+
+logger = logging.getLogger(__name__)
 
 ## Constants
 
@@ -198,19 +198,18 @@ UNIT_NAMES = (
 # RAND_SEED_RANGE_MAX = 1000000
 
 
-# the runner for the simulation which runs the actual dynamics
-class OpenMMRunner(Runner):
+class OpenMMRunnerShared(Runner):
     """Runner for OpenMM simulations."""
 
     def __init__(
         self,
-        system,
-        topology,
-        integrator,
-        platform=None,
-        platform_kwargs=None,
-        enforce_box=False,
-        get_state_kwargs=None,
+        system: omm.System,
+        topology: omma.Topology,
+        integrator: omm.Integrator,
+        platform: str | None = None,
+        platform_kwargs: dict | None = None,
+        enforce_box: bool = False,
+        get_state_kwargs: dict | None = None,
     ):
         """Constructor for OpenMMRunner.
 
@@ -274,9 +273,9 @@ class OpenMMRunner(Runner):
         """
 
         if platform is not None:
-            assert isinstance(
-                platform, str
-            ), f"platform should be a string, not {type(platform)}"
+            assert isinstance(platform, str), (
+                f"platform should be a string, not {type(platform)}"
+            )
 
         # we save the different components. However, if we are to make
         # this runner picklable we have to convert the SWIG objects to
@@ -302,7 +301,422 @@ class OpenMMRunner(Runner):
 
         else:
             self.getState_kwargs = dict(GET_STATE_KWARG_DEFAULTS)
+        self._cycle_platform = None
+        self._cycle_platform_kwargs = None
 
+        # for special monitoring purposes to get split times to debug
+        # performance
+        self._last_cycle_segments_split_times = []
+
+    def pre_cycle(self, platform=None, platform_kwargs=None, **kwargs):
+        # choose to use the platform spec in this function call or to
+        # use the default one saved in the runner
+
+        # if the platform is given locally use this one
+        if platform is not None:
+            logger.info(
+                f"Setting the platform ({platform}) in the 'pre_cycle' OpenMM Runner call"
+                f"with platform kwargs: {platform_kwargs}"
+            )
+            # set the platform and kwargs for this cycle
+            self._cycle_platform = platform
+            self._cycle_platform_kwargs = platform_kwargs
+
+        # otherwise we just don't set this and let resolution of
+        # platform happen at run segment.
+
+        super().pre_cycle(**kwargs)
+
+        # each segment split times will get appended to this
+        self._last_cycle_segments_split_times = []
+
+    def post_cycle(self, **kwargs):
+        super().post_cycle(**kwargs)
+
+        # remove the platform and kwargs for this cycle
+        self._cycle_platform = None
+        self._cycle_platform_kwargs = None
+
+    def _resolve_platform(
+        self,
+        platform,
+        platform_kwargs,
+    ):
+        # resolve which platform to use
+
+        # force usage of environmental one
+        if platform is Ellipsis:
+            platform_name = None
+            platform_kwargs = None
+
+        # use the runtime given one
+        elif platform is not None:
+            platform_name = platform
+            platform_kwargs = platform_kwargs
+
+        # if the pre_cycle configured platform is set use this over
+        # the default
+        elif self._cycle_platform is not None:
+            platform_name = self._cycle_platform
+            platform_kwargs = self._cycle_platform_kwargs
+
+        # use the default one
+        elif self.platform_name is not None:
+            platform_name = self.platform_name
+            platform_kwargs = self.platform_kwargs
+
+        # if the default is not set fall back to the environmental one
+        else:
+            platform_name = None
+            platform_kwargs = None
+
+        return (
+            platform_name,
+            platform_kwargs,
+        )
+
+    def run_segment(
+        self,
+        walker: Walker,
+        segment_length: int | float,
+        getState_kwargs: dict | None = None,
+        platform: str | None = None,
+        platform_kwargs: dict | None = None,
+        **kwargs,
+    ):
+        """Run dynamics for the walker.
+
+        Parameters
+        ----------
+        walker : object implementing the Walker interface
+            The walker for which dynamics will be propagated.
+
+        segment_length : int or float
+            The numerical value that specifies how much dynamics are to be run.
+
+        getState_kwargs : dict of str : bool, optional
+            Specify the key-word arguments to pass to
+            simulation.context.getState when getting simulation
+            states. If None defaults object values.
+
+        platform : str or None or Ellipsis
+            The specification for the computational platform to
+            use. If None will use the default for the runner and
+            ignore platform_kwargs. If Ellipsis forces the use of the
+            OpenMM default or environmentally defined platform. See
+            OpenMM documentation for all value but typical ones are:
+            Reference, CUDA, OpenCL. If value is None the automatic
+            platform determining mechanism in OpenMM will be used.
+
+        platform_kwargs : dict of str : bool, optional
+            key-values to set for a platform with
+            platform.setPropertyDefaultValue for this segment only.
+
+
+        Returns
+        -------
+        new_walker : object implementing the Walker interface
+            Walker after dynamics was run, only the state should be modified.
+
+        """
+
+        run_segment_start = time.time()
+
+        # set the kwargs that will be passed to getState
+        tmp_getState_kwargs = getState_kwargs
+
+        logger.info(f"Default 'getState_kwargs' in runner: {self.getState_kwargs}")
+
+        logger.info(f"'getState_kwargs' passed to 'run_segment' : {getState_kwargs}")
+
+        # start with the object value
+        getState_kwargs = copy(self.getState_kwargs)
+        if tmp_getState_kwargs is not None:
+            getState_kwargs.update(tmp_getState_kwargs)
+
+        logger.info(
+            "After resolving 'getState_kwargs' that will be used are: "
+            f"{getState_kwargs}"
+        )
+
+        gen_sim_start = time.time()
+
+        # make a copy of the integrator for this particular segment
+        new_integrator = copy(self.integrator)
+        # force setting of random seed to 0, which is a special
+        # value that forces the integrator to choose another
+        # random number
+        # new_integrator.setRandomNumberSeed(0)
+
+        ## Platform
+
+        logger.info(f"Default 'platform' in runner: {self.platform_name}")
+
+        logger.info(f"pre_cycle set 'platform' in runner: {self._cycle_platform}")
+
+        logger.info(f"'platform' passed to 'run_segment' : {platform}")
+
+        logger.info(f"Default 'platform_kwargs' in runner: {self.platform_kwargs}")
+
+        logger.info(
+            f"pre_cycle set 'platform_kwargs' in runner: {self._cycle_platform_kwargs}"
+        )
+
+        logger.info(f"'platform_kwargs' passed to 'run_segment' : {platform_kwargs}")
+
+        platform_name, platform_kwargs = self._resolve_platform(
+            platform,
+            platform_kwargs,
+        )
+
+        logger.info(f"Resolved 'platform' : {platform_name}")
+
+        logger.info(f"Resolved 'platform_kwargs' : {platform_kwargs}")
+
+        # create simulation object
+
+        ## create the platform and customize
+
+        # if a platform was given we use it to make a Simulation object
+        if platform_name is not None:
+            logger.info("Using platform configured in code.")
+
+            # get the platform by its name to use
+            platform = omm.Platform.getPlatformByName(platform_name)
+            logger.info(f"Platform object created: {platform}")
+
+            if platform_kwargs is None:
+                platform_kwargs = {}
+
+            # set properties from the kwargs if they apply to the platform
+            for key, value in platform_kwargs.items():
+                if key in platform.getPropertyNames():
+                    logger.info(f"Setting platform property: {key} : {value}")
+                    platform.setPropertyDefaultValue(key, value)
+
+                else:
+                    warn(
+                        f"Platform kwargs given ({key} : {value}) "
+                        f"but is not valid for this platform ({platform_name})"
+                    )
+
+            # make a new simulation object
+            simulation = omma.Simulation(
+                self.topology,
+                self.system,
+                new_integrator,
+                omm.Platform.getPlatformByName("Reference"),
+            )
+
+        # otherwise just use the default or environmentally defined one
+        else:
+            logger.info("Using environmental platform.")
+            simulation = omma.Simulation(self.topology, self.system, new_integrator)
+
+        # set the state to the context from the walker
+        # simulation.context.setState(walker.state.sim_state)
+        simulation.context.setPositions(walker.state["positions"])
+
+        gen_sim_end = time.time()
+        gen_sim_time = gen_sim_end - gen_sim_start
+
+        logger.info("Time to generate the system: {}".format(gen_sim_time))
+
+        # actually run the simulation
+
+        steps_start = time.time()
+        logger.debug(f"Running {segment_length} steps of dynamics. {simulation!r}")
+
+        # Run the simulation segment for the number of time steps
+        simulation.step(segment_length)
+
+        steps_end = time.time()
+        steps_time = steps_end - steps_start
+
+        logger.info("Time to run {} sim steps: {}".format(segment_length, steps_time))
+
+        get_state_start = time.time()
+
+        get_state_end = time.time()
+        get_state_time = get_state_end - get_state_start
+        logger.info("Getting context state time: {}".format(get_state_time))
+
+        # generate the new state/walker
+        # new_state = self.generate_state(
+        #    simulation,
+        #    segment_length,
+        #    walker,
+        #    getState_kwargs,
+        # )
+        new_sim_state = simulation.context.getState(**getState_kwargs)
+        new_state = PlainOpenMMState.from_openmm_state(new_sim_state)
+
+        # create a new walker for this
+        new_walker = OpenMMWalker(new_state, walker.weight)
+
+        run_segment_end = time.time()
+        run_segment_time = run_segment_end - run_segment_start
+        logger.info("Total internal run_segment time: {}".format(run_segment_time))
+
+        segment_split_times = {
+            "gen_sim_time": gen_sim_time,
+            "steps_time": steps_time,
+            "get_state_time": get_state_time,
+            "run_segment_time": run_segment_time,
+        }
+
+        self._last_cycle_segments_split_times.append(segment_split_times)
+
+        return new_walker
+
+    def generate_state(
+        self, simulation, segment_length, starting_walker, getState_kwargs
+    ):
+        """Method for generating a wepy compliant state from an OpenMM
+        simulation object and data about the last segment of dynamics run.
+
+        Parameters
+        ----------
+
+        simulation : simtk.openmm.app.Simulation object
+            A complete simulation object from which the state will be extracted.
+
+        segment_length : int
+            The number of integration steps run in a segment of simulation.
+
+        starting_walker : wepy.walker.Walker subclass object
+            The walker that was the beginning of this segment of simyulation.
+
+        getState_kwargs : dict of str : bool
+            Specify the key-word arguments to pass to
+            simulation.context.getState when getting simulation
+            states.
+
+        Returns
+        -------
+
+        new_state : wepy.runners.openmm.OpenMMState object
+            A new state from the simulation state.
+
+        This method is meant to be called from within the
+        `run_segment` method during a simulation. It can be customized
+        in subclasses to allow for the addition of custom attributes
+        for a state, in addition to the base ones implemented in the
+        interface to the openmm simulation state in OpenMMState.
+
+        The extra arguments to this function are data that would allow
+        for the calculation of integral values over the duration of
+        the segment, such as time elapsed and differences from the
+        starting state.
+
+        """
+
+        # save the state of the system with all possible values
+        new_sim_state = simulation.context.getState(**getState_kwargs)
+
+        # make an OpenMMState wrapper with this
+        new_state = OpenMMState(new_sim_state)
+
+        return new_state
+
+
+# the runner for the simulation which runs the actual dynamics
+class OpenMMRunner(Runner):
+    """Runner for OpenMM simulations."""
+
+    def __init__(
+        self,
+        system: omm.System,
+        topology: omma.Topology,
+        integrator: omm.Integrator,
+        platform: str | None = None,
+        platform_kwargs: dict | None = None,
+        enforce_box: bool = False,
+        get_state_kwargs: dict | None = None,
+    ):
+        """Constructor for OpenMMRunner.
+
+        Parameters
+        ----------
+        system : simtk.openmm.System object
+            The system (forcefields) for the simulation.
+
+        topology : simtk.openmm.app.Topology object
+            The topology for you system.
+
+        integrator : subclass simtk.openmm.Integrator object
+            Integrator for propagating dynamics.
+
+        platform : str
+            The specification for the default computational platform
+            to use. Platform can also be set when run_segment is
+            called. If None uses OpenMM default platform, see OpenMM
+            documentation for all value but typical ones are:
+            Reference, CUDA, OpenCL. If value is None the automatic
+            platform determining mechanism in OpenMM will be used.
+
+        platform_kwargs : dict of str : bool, optional
+            key-values to set for a platform with
+            platform.setPropertyDefaultValue as the default for this
+            runner.
+
+        enforce_box : bool
+            Calls 'context.getState' with 'enforcePeriodicBox' if True.
+             (Default value = False)
+
+        get_state_kwargs : dict of str : bool, optional
+            key-values to set for getting the state from the OpenMM context.
+            keys not included will use the values in GET_STATE_KWARG_DEFAULTS.
+            Will override the enforce_box flag.
+
+        Warnings
+        --------
+
+        Regarding the enforce_box option.
+
+        When retrieving states from an OpenMM simulation Context, you
+        have the option to enforce periodic boundary conditions in the
+        resulting atomic positions in a topology aware way that
+        doesn't break bonds through boundaries. This is convenient for
+        post-processing as this can be a complex task and is not
+        readily exposed in the OpenMM API as a standalone function.
+
+        However, in some types of simulations the periodic box vectors
+        are ignored (such as implicit solvent ones) despite there
+        being no option to not have periodic boundaries in the context
+        itself. Likely if you are running one of these kinds of
+        simulations you will not pay attention to the box vectors at
+        all and the random defaults that exist will be very wrong but
+        this incorrectness will not show in a non-wepy simulation with
+        openmm unless you are handling the context states
+        yourself. Then when you run in wepy the default of True to
+        enforce the boxes will be applied and confusingly wrong
+        answers will result that are difficult to find root cause of.
+
+        """
+
+        # we save the different components. However, if we are to make
+        # this runner picklable we have to convert the SWIG objects to
+        # a picklable form
+        self.system = system
+        self.integrator = integrator
+
+        # these are not SWIG objects
+        self.topology = topology
+        self.platform_name = platform
+        self.platform_kwargs = platform_kwargs
+
+        self.enforce_box = enforce_box
+
+        self.getState_kwargs = dict(GET_STATE_KWARG_DEFAULTS)
+        # update with the user based enforce_box
+        if get_state_kwargs is not None:
+            for k in get_state_kwargs:
+                self.getState_kwargs[k] = get_state_kwargs[k]
+
+            # override enforce_box option if specified in get_state_kwargs
+            if "enforce_box" in get_state_kwargs:
+                self.enforce_box = get_state_kwargs["enforce_box"]
 
         self._cycle_platform = None
         self._cycle_platform_kwargs = None
@@ -380,11 +794,11 @@ class OpenMMRunner(Runner):
 
     def run_segment(
         self,
-        walker,
-        segment_length,
-        getState_kwargs=None,
-        platform=None,
-        platform_kwargs=None,
+        walker: Walker,
+        segment_length: int | float,
+        getState_kwargs: dict | None = None,
+        platform: str | None = None,
+        platform_kwargs: dict | None = None,
         **kwargs,
     ):
         """Run dynamics for the walker.
@@ -468,7 +882,8 @@ class OpenMMRunner(Runner):
         logger.info(f"'platform_kwargs' passed to 'run_segment' : {platform_kwargs}")
 
         platform_name, platform_kwargs = self._resolve_platform(
-            platform, platform_kwargs
+            platform,
+            platform_kwargs,
         )
 
         logger.info(f"Resolved 'platform' : {platform_name}")
@@ -504,7 +919,10 @@ class OpenMMRunner(Runner):
 
             # make a new simulation object
             simulation = omma.Simulation(
-                self.topology, self.system, new_integrator, platform
+                self.topology,
+                self.system,
+                new_integrator,
+                platform,
             )
 
         # otherwise just use the default or environmentally defined one
@@ -513,7 +931,8 @@ class OpenMMRunner(Runner):
             simulation = omma.Simulation(self.topology, self.system, new_integrator)
 
         # set the state to the context from the walker
-        simulation.context.setState(walker.state.sim_state)
+        # simulation.context.setState(walker.state.sim_state)
+        simulation.context.setPositions(walker.state["positions"])
 
         gen_sim_end = time.time()
         gen_sim_time = gen_sim_end - gen_sim_start
@@ -523,6 +942,7 @@ class OpenMMRunner(Runner):
         # actually run the simulation
 
         steps_start = time.time()
+        logger.debug(f"Running {segment_length} steps of dynamics. {simulation!r}")
 
         # Run the simulation segment for the number of time steps
         simulation.step(segment_length)
@@ -539,12 +959,14 @@ class OpenMMRunner(Runner):
         logger.info("Getting context state time: {}".format(get_state_time))
 
         # generate the new state/walker
-        new_state = self.generate_state(
-            simulation, segment_length, walker, getState_kwargs
-        )
+        # new_state = self.generate_state(
+        #     simulation, segment_length, walker, getState_kwargs
+        # )
+        new_sim_state = simulation.context.getState(**getState_kwargs)
+        new_state = PlainOpenMMState.from_openmm_state(new_sim_state)
 
         # create a new walker for this
-        new_walker = OpenMMWalker(new_state, walker.weight)
+        new_walker = Walker(new_state, walker.weight)
 
         run_segment_end = time.time()
         run_segment_time = run_segment_end - run_segment_start
@@ -612,6 +1034,84 @@ class OpenMMRunner(Runner):
         return new_state
 
 
+class PlainOpenMMState(WalkerState):
+    def __init__(
+        self,
+        fields_present: list[str],
+        **kwargs,
+    ):
+        self._fields_present = fields_present
+        self._data = kwargs
+
+    def mutate_context(self, context: omm.Context):
+        # TODO: figure out units
+        for field in self._fields_present:
+            if field == "positions":
+                context.setPositions(self._data["positions"])
+            elif field == "velocities":
+                context.setVelocities(self._data["velocities"])
+            else:
+                logger.warning(f"Mutate context does not know how to set field {field}")
+
+    @classmethod
+    def from_dict(cls, state_dict: dict):
+        fields_present = list(state_dict.keys())
+        return cls(fields_present, **state_dict)
+
+    @classmethod
+    def from_openmm_state(cls, state: omm.State):
+        fields_present = get_state_fields_present(state)
+
+        fields = dict()
+
+        if "positions" in fields_present:
+            positions = state.getPositions(asNumpy=True)
+            unit = positions.unit
+            fields["positions"] = positions.value_in_unit(unit)
+
+        if "velocities" in fields_present:
+            velocities = state.getVelocities(asNumpy=True)
+            unit = velocities.unit
+            fields["velocities"] = velocities.value_in_unit(unit)
+
+        if "forces" in fields_present:
+            forces = state.getForces(asNumpy=True)
+            unit = forces.unit
+            fields["forces"] = forces.value_in_unit(unit)
+
+        if "kinetic_energy" in fields_present:
+            kinetic_energy = state.getKineticEnergy()
+            unit = kinetic_energy.unit
+            fields["kinetic_energy"] = kinetic_energy.value_in_unit(unit)
+
+            fields["kinetic_energy"] = np.array([kinetic_energy])
+
+        if "potential_energy" in fields_present:
+            potential_energy = state.getPotentialEnergy()
+            unit = potential_energy.unit
+            fields["potential_energy"] = np.array([
+                potential_energy.value_in_unit(unit)
+            ])
+
+        if "time" in fields_present:
+            fields["time"] = state.getTime()
+
+        if "box_vectors" in fields_present:
+            box_vectors = state.getPeriodicBoxVectors()
+            unit = box_vectors.unit
+            fields["box_vectors"] = box_vectors.value_in_unit(unit)
+
+        if "box_volume" in fields_present:
+            box_volume = state.getPeriodicBoxVolume()
+            unit = box_volume.unit
+            fields["box_volume"] = np.array([box_volume.value_in_unit(unit)])
+
+        return cls(
+            fields_present,
+            **fields,
+        )
+
+
 class OpenMMState(WalkerState):
     """Walker state that wraps an simtk.openmm.State object.
 
@@ -661,9 +1161,7 @@ class OpenMMState(WalkerState):
                 warn(
                     "Key {} in kwargs is already taken by this class, renaming to {}".format(
                         self.OTHER_KEY_TEMPLATE
-                    ).format(
-                        key
-                    )
+                    ).format(key)
                 )
 
                 # make a new key
@@ -874,9 +1372,9 @@ class OpenMMState(WalkerState):
         if kinetic_energy is None:
             return None
         else:
-            return np.array(
-                [self.kinetic_energy.value_in_unit(self.kinetic_energy_unit)]
-            )
+            return np.array([
+                self.kinetic_energy.value_in_unit(self.kinetic_energy_unit)
+            ])
 
     # Potential Energy
     @property
@@ -907,9 +1405,9 @@ class OpenMMState(WalkerState):
         if potential_energy is None:
             return None
         else:
-            return np.array(
-                [self.potential_energy.value_in_unit(self.potential_energy_unit)]
-            )
+            return np.array([
+                self.potential_energy.value_in_unit(self.potential_energy_unit)
+            ])
 
     # Time
     @property
@@ -1322,21 +1820,21 @@ class OpenMMWalker(Walker):
     def __init__(self, state, weight):
         # documented in superclass
 
-        assert isinstance(
-            state, OpenMMState
-        ), "state must be an instance of class OpenMMState not {}".format(type(state))
+        assert isinstance(state, OpenMMState), (
+            "state must be an instance of class OpenMMState not {}".format(type(state))
+        )
 
         super().__init__(state, weight)
 
 
 class OpenMMCPUWorker(Worker):
-    """Worker for OpenMM GPU simulations (CUDA or OpenCL platforms).
+    """Worker for OpenMM CPU simulations.
 
     This is intended to be used with the wepy.work_mapper.WorkerMapper
     work mapper class.
 
     This class must be used in order to ensure OpenMM runs jobs on the
-    appropriate GPU device.
+    appropriate CPU configuration.
 
     """
 
@@ -1360,8 +1858,6 @@ class OpenMMCPUWorker(Worker):
         # make the platform kwargs dictionary
         platform_options = {"Threads": str(self.attributes["num_threads"])}
 
-        # run the task and pass in the DeviceIndex for OpenMM to
-        # assign work to the correct GPU
         return task(platform_kwargs=platform_options)
 
 
@@ -1402,7 +1898,6 @@ class OpenMMCPUWalkerTaskProcess(WalkerTaskProcess):
     NAME_TEMPLATE = "OpenMM_CPU_Walker_Task-{}"
 
     def run_task(self, task):
-        print("CPU Walker Task ---->", self.mapper_attributes, task, task.func)
         if "num_threads" in self.mapper_attributes:
             num_threads = self.mapper_attributes["num_threads"]
 
@@ -1425,7 +1920,6 @@ class OpenMMGPUWalkerTaskProcess(WalkerTaskProcess):
     def run_task(self, task):
         logger.info(f"Starting to run a task as worker {self._worker_idx}")
 
-        print("GPU Walker Task ---->", self.mapper_attributes)
         # get the platform
         platform = self.mapper_attributes["platform"]
 
@@ -1441,3 +1935,40 @@ class OpenMMGPUWalkerTaskProcess(WalkerTaskProcess):
             platform=platform,
             platform_kwargs=platform_options,
         )
+
+
+def gen_plain_walker_state(positions, system, integrator, getState_kwargs=None):
+    """Convenience function for generating a wepy walker State object for
+    an openmm simulation state.
+
+    Parameters
+    ----------
+
+    positions : arraylike of float
+        The positions for the system you want to set
+
+    system : openmm.app.System object
+
+    integrator : openmm.Integrator object
+
+    Returns
+    -------
+
+    walker_state : wepy.runners.openmm.OpenMMState object
+
+    """
+
+    box_vectors = system.getDefaultPeriodicBoxVectors()
+    box_vectors_values = []
+    for v in range(3):
+        u = box_vectors[v].unit
+        v3 = box_vectors[v].value_in_unit(u)
+        box_vectors_values.append([v3.x, v3.y, v3.z])
+
+    positions_unit = positions.unit
+    positions_values = positions.value_in_unit(positions_unit)
+
+    return PlainOpenMMState.from_dict({
+        "positions": positions_values,
+        "box_vectors": np.array(box_vectors_values),
+    })

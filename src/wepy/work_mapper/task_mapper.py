@@ -1,7 +1,6 @@
 # Standard Library
 import logging
 
-logger = logging.getLogger(__name__)
 # Standard Library
 import multiprocessing as mp
 import pickle
@@ -15,10 +14,13 @@ from warnings import warn
 # First Party Library
 from wepy.work_mapper.mapper import (
     ABCWorkerMapper,
+    SegmentFunc,
     Task,
     TaskException,
     WrapperException,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TaskProcessException(WrapperException):
@@ -29,327 +31,13 @@ class TaskProcessKilledError(ChildProcessError):
     pass
 
 
-class TaskMapper(ABCWorkerMapper):
-    """Process-per-task mapper.
-
-    This method of work mapper starts new processes for each runner
-    segment task that needs to be run. This allows cheap copying of
-    shared state using the operating system primitives. On linux this
-    would be either 'fork' (default) or 'spawn'. Fork is cheap but
-    doesn't initialize certain process namespace things, whereas spawn
-    is much more expensive but properly cleans things up. Fork should
-    be sufficient in most cases, however spawn may be needed when you
-    have some special contexts in the parent process. This is the case
-    with starting CUDA contexts in the main parent process and then
-    forking new processes from it. We suggest using fork and avoiding
-    making these kinds of contexts in the main process.
-
-    This method avoids using shared memory or sending objects through
-    interprocess communication (that has a serialization and
-    deserialization cost associated with them) by using OS copying
-    mechanism. However, a new process will be created each cycle for
-    each walker in the simulation. So if you want a large number of
-    walkers you may experience a large overhead. If your walker states
-    are very small or a very fast serializer is available you may also
-    not benefit from full process address space copies. Instead the
-    WorkerMapper may be better suited.
-
-    """
-
-    def __init__(
-        self, walker_task_type=None, num_workers=None, segment_func=None, **kwargs
-    ):
-        super().__init__(num_workers=num_workers, segment_func=segment_func, **kwargs)
-
-        # choose the type of the worker
-        if walker_task_type is None:
-            self._walker_task_type = WalkerTaskProcess
-            warn("walker_task_type not given using the default base class")
-            logger.warning("walker_task_type not given using the default base class")
-        else:
-            self._walker_task_type = walker_task_type
-
-        # initialize a list to put results in
-        self.results = None
-
-        # this is meant to be a transient variable, will be initialized and deinitialized
-        self._walker_processes = None
-
-    def init(self, **kwargs):
-        super().init(**kwargs)
-
-        # now that we have started the processes register the handler
-        # for SIGTERM signals that will clean up our children cleanly
-        signal.signal(signal.SIGTERM, self._sigterm_shutdown)
-
-    def _sigterm_shutdown(self, signum, frame):
-        logger.critical("Received external SIGTERM, forcing shutdown.")
-
-        self.force_shutdown()
-
-        logger.critical("Shutdown complete.")
-
-    @property
-    def walker_task_type(self):
-        """The callable that generates a worker object.
-
-        Typically this is just the type from the class definition of
-        the Worker where the constructor is called.
-
-        """
-        return self._walker_task_type
-
-    def force_shutdown(self):
-        # send sigterm signals to processes to kill them
-        for walker_idx, walker_process in enumerate(self._walker_processes):
-            logger.critical(
-                "Sending SIGTERM message on {} to worker {}".format(
-                    self._irq_parent_conns[walker_idx].fileno(), walker_idx
-                )
-            )
-
-            # send a kill message to the worker
-            self._irq_parent_conns[walker_idx].send(signal.SIGTERM)
-
-        logger.critical("All kill messages sent to workers")
-
-        # wait for the walkers to finish and handle errors in them
-        # appropriately
-        alive_walkers = [walker.is_alive() for walker in self._walker_processes]
-        walker_exitcodes = {}
-        premature_exit = False
-        while any(alive_walkers):
-            for walker_idx, walker in enumerate(self._walker_processes):
-                if not alive_walkers[walker_idx]:
-                    continue
-
-                if walker.is_alive():
-                    pass
-
-                # otherwise the walker is done
-                else:
-                    alive_walkers[walker_idx] = False
-                    walker_exitcodes[walker_idx] = walker.exitcode
-
-    def map(self, *args, **kwargs):
-        # run computations in a Manager context
-        with self._mp_ctx.Manager() as manager:
-            num_walkers = len(args[0])
-
-            # to manage access to worker resources we use a queue with
-            # the index of the worker
-            worker_queue = manager.Queue()
-
-            # put the workers onto the queue
-            for worker_idx in range(self.num_workers):
-                worker_queue.put(worker_idx)
-
-            # initialize segment times for workers to
-            # fill in
-            worker_segment_times = manager.dict()
-
-            # initialize for the number of workers, since these will be
-            # the slots to put timing results in
-            for i in range(self.num_workers):
-                worker_segment_times[i] = []
-
-            # make a shared list for the walker results
-            results = manager.list()
-
-            # since this will be indexed by walker index initialize the
-            # length of the array
-            for walker in range(num_walkers):
-                results.append(None)
-
-            # use pipes for communication channels between this parent
-            # process and the children for sending specific interrupts
-            # such as the signal to kill them. Note that the clean way to
-            # end the process is to send poison pills on the task queue,
-            # this is for other stuff. IRQ is a common abbreviation for
-            # interrupts
-            self._irq_parent_conns = []
-
-            # unpack the generator for the kwargs
-            kwargs = {key: list(kwarg) for key, kwarg in kwargs.items()}
-
-            # create the task based processes
-            self._walker_processes = []
-            for walker_idx, task_args in enumerate(zip(*args)):
-                task_kwargs = {key: value[walker_idx] for key, value in kwargs.items()}
-
-                # make the interrupt pipe
-                parent_conn, child_conn = self._mp_ctx.Pipe()
-                self._irq_parent_conns.append(parent_conn)
-
-                # start a process for this walker
-                walker_process = self.walker_task_type(
-                    walker_idx,
-                    self._attributes,
-                    self._func,
-                    task_args,
-                    task_kwargs,
-                    worker_queue,
-                    results,
-                    worker_segment_times,
-                    child_conn,
-                )
-
-                walker_process.start()
-
-                self._walker_processes.append(walker_process)
-
-            new_walkers = [None for _ in range(num_walkers)]
-            results_found = [False for _ in range(num_walkers)]
-            while not all(results_found):
-                # go through the results list and handle the values that may be there
-                for walker_idx, result in enumerate(results):
-                    if results_found[walker_idx]:
-                        continue
-
-                    # logger.info("Checking for walker {}".format(walker_idx))
-
-                    # first check to see if any of the task processes were
-                    # terminated from the system
-                    if self._irq_parent_conns[walker_idx].poll():
-                        irq = self._irq_parent_conns[walker_idx].recv()
-
-                        if issubclass(type(irq), TaskProcessKilledError):
-                            # just terminate if a worker goes down. We
-                            # could handle this better but it is not implemented now
-                            logger.critical(
-                                "Process {} was killed by sigterm, shutting down.".format(
-                                    walker_process[walker_idx].name
-                                )
-                            )
-
-                            logger.info(
-                                "Recovery is possible here, but is not implemented "
-                                "so we opt to fail fast and let you know a problem exists."
-                                "Please use checkpointing to avoid lost data."
-                            )
-
-                            self.force_shutdown()
-                            logger.critical("Shutdown complete.")
-
-                        logger.debug(
-                            "Received {} acknowledgement from {}".format(
-                                ack, worker.name
-                            )
-                        )
-
-                    # if no interrupts were handled we continue
-
-                    # if it is None no response has been made at all
-                    # yet, this is the initialized value
-                    if result is None:
-                        pass
-
-                    # walker results are returned serialized as
-                    # pickles, they are packed into a tuple so that we
-                    # can associate them with an explicit marker, if
-                    # we have a tuple then we can handle that
-                    # appropriately
-                    elif type(result) == tuple:
-                        logger.debug("Received a results tuple")
-
-                        assert (
-                            len(result) == 2
-                        ), "Result tuples should be only be (ID, pickle)"
-
-                        result_id, payload = result
-
-                        # there was a walker successfully returned
-                        if result_id == "Walker":
-                            logger.debug("Received a serialized results walker")
-
-                            # deserialize
-                            logger.debug("deserializing")
-                            new_walker = pickle.loads(payload)
-
-                            logger.info("Got result for walker {}".format(walker_idx))
-
-                            new_walkers[walker_idx] = new_walker
-                            results_found[walker_idx] = True
-
-                        else:
-                            raise ValueError("Unkown result ID: {}".format(result_id))
-
-                    elif issubclass(type(result), TaskException):
-                        logger.critical(
-                            "Exception encountered in a task which is unrecoverable."
-                            "You will need to reconfigure your components in a stable manner."
-                        )
-
-                        self.force_shutdown()
-
-                        logger.critical("Shutdown complete.")
-                        raise result
-
-                    elif issubclass(type(result), TaskProcessException):
-                        # we make just an error message to say that errors
-                        # in the worker may be due to the network or
-                        # something and could recover
-                        logger.error(
-                            "Exception encountered in the work mapper task process."
-                            "Recovery possible, see further messages."
-                        )
-
-                        # However, the current implementation doesn't
-                        # support retries or whatever so we issue a
-                        # critical log informing that it has been elevated
-                        # to critical and will force shutdown
-                        logger.critical(
-                            "Task process error mode resiliency not supported at this time."
-                            "Performing force shutdown and simulation ending."
-                        )
-
-                        self.force_shutdown()
-
-                        logger.critical("Shutdown complete.")
-                        raise result
-
-                    elif issubclass(type(result), Exception):
-                        logger.critical(
-                            "Unknown exception {} encountered.".format(result)
-                        )
-
-                        self.force_shutdown()
-
-                        logger.critical("Shutdown complete.")
-
-                        raise result
-
-                    else:
-                        logger.critical(
-                            "Unknown result value {} encountered.".format(result)
-                        )
-
-                        self.force_shutdown()
-
-                        logger.critical("Shutdown complete.")
-
-            # save the managed list of the recorded worker times locally
-            for key, val in worker_segment_times.items():
-                self._worker_segment_times[key] = val
-
-            # wait for the processes to end
-            # for walker in self._walker_processes:
-            #     walker.join()
-            #     logger.info("Joined {}".format(walker.name))
-
-        # deinitialize the current walker processes
-        self._walker_processes = None
-
-        return new_walkers
-
-
 class WalkerTaskProcess(mp.Process):
     NAME_TEMPLATE = "Walker-{}"
 
     def __init__(
         self,
-        walker_idx,
-        mapper_attributes,
+        walker_idx: int,
+        mapper_attributes: dict,
         func,
         task_args,
         task_kwargs,
@@ -360,7 +48,10 @@ class WalkerTaskProcess(mp.Process):
         **kwargs,
     ):
         # initialize the process customizing the name
-        mp.Process.__init__(self, name=self.NAME_TEMPLATE.format(walker_idx), **kwargs)
+        super().__init__(
+            name=self.NAME_TEMPLATE.format(walker_idx),
+            **kwargs,
+        )
 
         # the idea with this TaskProcess thing is that we pass in all
         # the data to the constructor to create a "thunk" (a closure
@@ -466,7 +157,33 @@ class WalkerTaskProcess(mp.Process):
     def run_task(self, task):
         logger.info("Running an unspecialized task")
 
-        return task()
+        task_kwargs = dict()
+
+        if self.mapper_attributes.get("platform") is not None:
+            task_kwargs["platform"] = self.mapper_attributes.get("platform")
+
+            if task_kwargs["platform"] == "CUDA":
+                device_ids = self.mapper_attributes.get("device_ids")
+                if device_ids is not None and isinstance(device_ids, list):
+                    if self._worker_idx >= len(device_ids):
+                        raise ValueError(
+                            "Worker index {} is greater than the number of device ids {} given to mapper. Set the 'device_ids' attribute in TaskMapper appropriately.".format(
+                                self._worker_idx, len(device_ids)
+                            )
+                        )
+
+                    task_kwargs["platform_kwargs"] = {
+                        "DeviceIndex": str(device_ids[self._worker_idx])
+                    }
+
+                else:
+                    raise ValueError(
+                        "CUDA platform selected but no device ids given to mapper. Set the 'device_ids' attribute in TaskMapper."
+                    )
+
+        return task(
+            **task_kwargs,
+        )
 
     def run(self):
         logger.debug("{}: starting to run".format(self.name))
@@ -664,3 +381,333 @@ class WalkerTaskProcess(mp.Process):
         self._worker_segment_times[worker_idx] = seg_times
 
         logger.info("{}: Exiting normally having completed the task".format(self.name))
+
+
+class TaskMapper(ABCWorkerMapper):
+    """Process-per-task mapper.
+
+    This method of work mapper starts new processes for each runner
+    segment task that needs to be run. This allows cheap copying of
+    shared state using the operating system primitives. On linux this
+    would be either 'fork' (default) or 'spawn'. Fork is cheap but
+    doesn't initialize certain process namespace things, whereas spawn
+    is much more expensive but properly cleans things up. Fork should
+    be sufficient in most cases, however spawn may be needed when you
+    have some special contexts in the parent process. This is the case
+    with starting CUDA contexts in the main parent process and then
+    forking new processes from it. We suggest using fork and avoiding
+    making these kinds of contexts in the main process.
+
+    This method avoids using shared memory or sending objects through
+    interprocess communication (that has a serialization and
+    deserialization cost associated with them) by using OS copying
+    mechanism. However, a new process will be created each cycle for
+    each walker in the simulation. So if you want a large number of
+    walkers you may experience a large overhead. If your walker states
+    are very small or a very fast serializer is available you may also
+    not benefit from full process address space copies. Instead the
+    WorkerMapper may be better suited.
+
+    """
+
+    def __init__(
+        self,
+        num_workers: int | None = None,
+        walker_task_type: type[WalkerTaskProcess] | None = None,
+        segment_func: SegmentFunc | None = None,
+        **kwargs,
+    ):
+        super().__init__(num_workers=num_workers, segment_func=segment_func, **kwargs)
+
+        # choose the type of the worker
+        if walker_task_type is None:
+            self._walker_task_type = WalkerTaskProcess
+            warn("walker_task_type not given using the default base class")
+            logger.warning("walker_task_type not given using the default base class")
+        else:
+            self._walker_task_type = walker_task_type
+
+        # initialize a list to put results in
+        self.results = None
+
+        # this is meant to be a transient variable, will be initialized and deinitialized
+        self._walker_processes = None
+
+    def init(
+        self,
+        segment_func: SegmentFunc | None = None,
+        num_workers: int | None = None,
+        **kwargs,
+    ):
+        super().init(
+            segment_func=segment_func,
+            num_workers=num_workers,
+            **kwargs,
+        )
+
+        # now that we have started the processes register the handler
+        # for SIGTERM signals that will clean up our children cleanly
+        signal.signal(signal.SIGTERM, self._sigterm_shutdown)
+
+    def _sigterm_shutdown(self, signum, frame):
+        logger.critical("Received external SIGTERM, forcing shutdown.")
+
+        self.force_shutdown()
+
+        logger.critical("Shutdown complete.")
+
+    @property
+    def walker_task_type(self):
+        """The callable that generates a worker object.
+
+        Typically this is just the type from the class definition of
+        the Worker where the constructor is called.
+
+        """
+        return self._walker_task_type
+
+    def force_shutdown(self):
+        # send sigterm signals to processes to kill them
+        for walker_idx, walker_process in enumerate(self._walker_processes):
+            logger.critical(
+                "Sending SIGTERM message on {} to worker {}".format(
+                    self._irq_parent_conns[walker_idx].fileno(), walker_idx
+                )
+            )
+
+            # send a kill message to the worker
+            self._irq_parent_conns[walker_idx].send(signal.SIGTERM)
+
+        logger.critical("All kill messages sent to workers")
+
+        # wait for the walkers to finish and handle errors in them
+        # appropriately
+        alive_walkers = [walker.is_alive() for walker in self._walker_processes]
+        walker_exitcodes = {}
+        premature_exit = False
+        while any(alive_walkers):
+            for walker_idx, walker in enumerate(self._walker_processes):
+                if not alive_walkers[walker_idx]:
+                    continue
+
+                if walker.is_alive():
+                    pass
+
+                # otherwise the walker is done
+                else:
+                    alive_walkers[walker_idx] = False
+                    walker_exitcodes[walker_idx] = walker.exitcode
+
+    def map(self, *args, **kwargs):
+        if self.num_workers is None:
+            raise ValueError("num_workers is not set")
+
+        # run computations in a Manager context
+        with self._mp_ctx.Manager() as manager:
+            num_walkers = len(args[0])
+
+            # to manage access to worker resources we use a queue with
+            # the index of the worker
+            worker_queue = manager.Queue()
+
+            # put the workers onto the queue
+            for worker_idx in range(self.num_workers):
+                worker_queue.put(worker_idx)
+
+            # initialize segment times for workers to
+            # fill in
+            worker_segment_times = manager.dict()
+
+            # initialize for the number of workers, since these will be
+            # the slots to put timing results in
+            for i in range(self.num_workers):
+                worker_segment_times[i] = []
+
+            # make a shared list for the walker results
+            results = manager.list()
+
+            # since this will be indexed by walker index initialize the
+            # length of the array
+            for _ in range(num_walkers):
+                results.append(None)
+
+            # use pipes for communication channels between this parent
+            # process and the children for sending specific interrupts
+            # such as the signal to kill them. Note that the clean way to
+            # end the process is to send poison pills on the task queue,
+            # this is for other stuff. IRQ is a common abbreviation for
+            # interrupts
+            self._irq_parent_conns = []
+
+            # unpack the generator for the kwargs
+            kwargs = {key: list(kwarg) for key, kwarg in kwargs.items()}
+
+            # create the task based processes
+            self._walker_processes = []
+            for walker_idx, task_args in enumerate(zip(*args)):
+                task_kwargs = {key: value[walker_idx] for key, value in kwargs.items()}
+
+                # make the interrupt pipe
+                parent_conn, child_conn = self._mp_ctx.Pipe()
+                self._irq_parent_conns.append(parent_conn)
+
+                # start a process for this walker
+                walker_process = self.walker_task_type(
+                    walker_idx,
+                    self._attributes,
+                    self._func,
+                    task_args,
+                    task_kwargs,
+                    worker_queue,
+                    results,
+                    worker_segment_times,
+                    child_conn,
+                )
+
+                walker_process.start()
+
+                self._walker_processes.append(walker_process)
+
+            new_walkers = [None for _ in range(num_walkers)]
+            results_found = [False for _ in range(num_walkers)]
+            while not all(results_found):
+                # go through the results list and handle the values that may be there
+                for walker_idx, result in enumerate(results):
+                    if results_found[walker_idx]:
+                        continue
+
+                    # logger.info("Checking for walker {}".format(walker_idx))
+
+                    # first check to see if any of the task processes were
+                    # terminated from the system
+                    if self._irq_parent_conns[walker_idx].poll():
+                        irq = self._irq_parent_conns[walker_idx].recv()
+
+                        if issubclass(type(irq), TaskProcessKilledError):
+                            # just terminate if a worker goes down. We
+                            # could handle this better but it is not implemented now
+                            logger.critical(
+                                "Process {} was killed by sigterm, shutting down.".format(
+                                    walker_process[walker_idx].name
+                                )
+                            )
+
+                            logger.info(
+                                "Recovery is possible here, but is not implemented "
+                                "so we opt to fail fast and let you know a problem exists."
+                                "Please use checkpointing to avoid lost data."
+                            )
+
+                            self.force_shutdown()
+                            logger.critical("Shutdown complete.")
+
+                        logger.debug(
+                            "Received {} acknowledgement from {}".format(
+                                ack, worker.name
+                            )
+                        )
+
+                    # if no interrupts were handled we continue
+
+                    # if it is None no response has been made at all
+                    # yet, this is the initialized value
+                    if result is None:
+                        pass
+
+                    # walker results are returned serialized as
+                    # pickles, they are packed into a tuple so that we
+                    # can associate them with an explicit marker, if
+                    # we have a tuple then we can handle that
+                    # appropriately
+                    elif type(result) == tuple:
+                        logger.debug("Received a results tuple")
+
+                        assert len(result) == 2, (
+                            "Result tuples should be only be (ID, pickle)"
+                        )
+
+                        result_id, payload = result
+
+                        # there was a walker successfully returned
+                        if result_id == "Walker":
+                            logger.debug("Received a serialized results walker")
+
+                            # deserialize
+                            logger.debug("deserializing")
+                            new_walker = pickle.loads(payload)
+
+                            logger.info("Got result for walker {}".format(walker_idx))
+
+                            new_walkers[walker_idx] = new_walker
+                            results_found[walker_idx] = True
+
+                        else:
+                            raise ValueError("Unkown result ID: {}".format(result_id))
+
+                    elif issubclass(type(result), TaskException):
+                        logger.critical(
+                            "Exception encountered in a task which is unrecoverable."
+                            "You will need to reconfigure your components in a stable manner."
+                        )
+
+                        self.force_shutdown()
+
+                        logger.critical("Shutdown complete.")
+                        raise result
+
+                    elif issubclass(type(result), TaskProcessException):
+                        # we make just an error message to say that errors
+                        # in the worker may be due to the network or
+                        # something and could recover
+                        logger.error(
+                            "Exception encountered in the work mapper task process."
+                            "Recovery possible, see further messages."
+                        )
+
+                        # However, the current implementation doesn't
+                        # support retries or whatever so we issue a
+                        # critical log informing that it has been elevated
+                        # to critical and will force shutdown
+                        logger.critical(
+                            "Task process error mode resiliency not supported at this time."
+                            "Performing force shutdown and simulation ending."
+                        )
+
+                        self.force_shutdown()
+
+                        logger.critical("Shutdown complete.")
+                        raise result
+
+                    elif issubclass(type(result), Exception):
+                        logger.critical(
+                            "Unknown exception {} encountered.".format(result)
+                        )
+
+                        self.force_shutdown()
+
+                        logger.critical("Shutdown complete.")
+
+                        raise result
+
+                    else:
+                        logger.critical(
+                            "Unknown result value {} encountered.".format(result)
+                        )
+
+                        self.force_shutdown()
+
+                        logger.critical("Shutdown complete.")
+
+            # save the managed list of the recorded worker times locally
+            for key, val in worker_segment_times.items():
+                self._worker_segment_times[key] = val
+
+            # wait for the processes to end
+            # for walker in self._walker_processes:
+            #     walker.join()
+            #     logger.info("Joined {}".format(walker.name))
+
+        # deinitialize the current walker processes
+        self._walker_processes = None
+
+        return new_walkers
