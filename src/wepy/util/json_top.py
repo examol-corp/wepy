@@ -209,15 +209,16 @@ def json_top_subset(json_str, atom_idxs):
 
     """
 
+    _json_topology = json.loads(json_str)
+
     # cast so we can use the list index method
     atom_idxs = list(atom_idxs)
 
     # do checks on the atom idxs
 
     # no duplicates
-    assert len(set(atom_idxs)) == len(atom_idxs), "duplicate atom indices"
-
-    top = json.loads(json_str)
+    if len(set(atom_idxs)) != len(atom_idxs):
+        raise ValueError("duplicate atom indices")
 
     # the dictionaries for each thing indexed by their old index
     atom_data_ds = {}
@@ -229,7 +230,8 @@ def json_top_subset(json_str, atom_idxs):
 
     # go through and collect data on the atoms and convert indices to
     # the new ones
-    for chain in top["chains"]:
+    for chain in _json_topology["chains"]:
+
         for residue in chain["residues"]:
             res_chain_idxs[residue["index"]] = chain["index"]
 
@@ -241,9 +243,6 @@ def json_top_subset(json_str, atom_idxs):
 
                 # if the current atom's index is in the selection
                 if atom["index"] in atom_idxs:
-                    # we add this to the mapping by getting the index
-                    # of the atom in subset
-                    new_idx = atom_idxs.index(atom["index"])
 
                     # save the atom attributes
                     atom_data_ds[atom["index"]] = atom
@@ -253,14 +252,23 @@ def json_top_subset(json_str, atom_idxs):
 
     residue_idx_map = {}
     chain_idx_map = {}
+    # internal idxs of residues within chains
+    chain_res_idx_map = {}
 
     old_to_new_atoms = {}
 
-    # initialize the new indexing of the chains and residues
-    new_res_idx_counter = 0
+    # initialize the new indexing of the chains
     new_chain_idx_counter = 0
+
+    # The overall residue index, this goes in the residue["index"] field
+    new_res_idx_counter = 0
+
+    # count the residue index within the current chain, this is the
+    # position in the chain residue list
+    new_chain_res_idx_counter = 0
     # now in the new order go through and create the topology
     for new_atom_idx, old_atom_idx in enumerate(atom_idxs):
+
         old_to_new_atoms[old_atom_idx] = new_atom_idx
 
         atom_data = atom_data_ds[old_atom_idx]
@@ -276,17 +284,34 @@ def json_top_subset(json_str, atom_idxs):
             residue_idx_map[old_res_idx] = new_res_idx_counter
             new_res_idx_counter += 1
 
+
             # do the same but for the chain
             old_chain_idx = res_chain_idxs[old_res_idx]
 
             # make it if necessary
             if old_chain_idx not in chain_idx_map:
+
                 chain_idx_map[old_chain_idx] = new_chain_idx_counter
                 new_chain_idx_counter += 1
+                # reset the in-chain idxs
+                new_chain_res_idx_counter = 0
 
                 # and add the chain to the topology
                 new_chain_idx = chain_idx_map[old_chain_idx]
-                top_subset["chains"].append({"index": new_chain_idx, "residues": []})
+                top_subset["chains"].append(
+                    {
+                        "index": new_chain_idx,
+                        **(
+                            {"id": _json_topology["chains"][old_chain_idx]["id"]}
+                            if "id" in _json_topology["chains"][old_chain_idx]
+                            else {}
+                        ),
+                        "residues": [],
+                    }
+                )
+
+            chain_res_idx_map[old_res_idx] = new_chain_res_idx_counter
+            new_chain_res_idx_counter += 1
 
             # add the new index to the dats dict for the residue
             res_data = residue_data_ds[old_res_idx]
@@ -301,21 +326,23 @@ def json_top_subset(json_str, atom_idxs):
         # now that (if) we have made the necessary chains and residues
         # for this atom we replace the atom index with the new index
         # and add it to the residue
-        new_res_idx = residue_idx_map[old_res_idx]
+        # TODO: remove this one
+        # new_res_idx = residue_idx_map[old_res_idx]
         new_chain_idx = chain_idx_map[res_chain_idxs[old_res_idx]]
-
+        new_chain_res_idx = chain_res_idx_map[old_res_idx]
         atom_data["index"] = new_atom_idx
 
-        top_subset["chains"][new_chain_idx]["residues"][new_res_idx]["atoms"].append(
+        top_subset["chains"][new_chain_idx]["residues"][new_chain_res_idx]["atoms"].append(
             atom_data
         )
 
     # then translate the atom indices in the bonds
     new_bonds = []
-    for bond_atom_idxs in top["bonds"]:
-        if all([
-            True if a_idx in old_to_new_atoms else False for a_idx in bond_atom_idxs
-        ]):
+    for bond_atom_idxs in _json_topology["bonds"]:
+
+        if all(
+            [True if a_idx in old_to_new_atoms else False for a_idx in bond_atom_idxs]
+        ):
             new_bond_atom_idxs = [
                 old_to_new_atoms[a_idx]
                 for a_idx in bond_atom_idxs
