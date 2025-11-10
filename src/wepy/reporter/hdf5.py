@@ -360,6 +360,8 @@ class WepyHDF5Reporter(FileReporter):
                 all_atoms_rep_freq
             )
 
+            self.alt_reps_to_save.append(self.ALL_ATOMS_REP_KEY)
+
         # if there are no sparse fields set it as an empty dictionary
         if self._sparse_fields is None:
             self._sparse_fields = {}
