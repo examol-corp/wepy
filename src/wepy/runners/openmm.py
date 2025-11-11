@@ -1425,7 +1425,7 @@ class OpenMMGPUWalkerTaskProcess(WalkerTaskProcess):
     def run_task(self, task):
         logger.info(f"Starting to run a task as worker {self._worker_idx}")
 
-        logger.info("GPU Walker Task ---->", self.mapper_attributes)
+        logger.info(f"GPU Walker Task ----> {self.mapper_attributes}")
         # get the platform
         platform = self.mapper_attributes["platform"]
 
