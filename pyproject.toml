@@ -37,7 +37,6 @@ dependencies = [
   "jinja2",
   "pint",
   "multiprocessing_logging",
-  "openmm[cuda12]",
 ]
 
 [project.optional-dependencies]
@@ -45,6 +44,9 @@ dependencies = [
 md = [
   "mdtraj",
   "openmm_systems==0.0.0",
+  # NOTE: you should just install this yourself to get it the compute
+  # runtime you need.
+  "openmm",
 ]
 
 distributed = [
