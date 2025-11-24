@@ -12,7 +12,7 @@ import networkx as nx
 import numpy as np
 
 # First Party Library
-from wepy.analysis.transitions import counts_d_to_matrix, transition_counts
+from wepy.analysis.transitions import transition_counts
 
 try:
     # Third Party Library
@@ -129,7 +129,7 @@ class BaseMacroStateNetwork:
         The 'transition_lag_time' must be given as an integer greater
         than 1.
 
-        Arguments
+        Arguments:
         ---------
         contig_tree : ContigTree object
 
@@ -145,19 +145,19 @@ class BaseMacroStateNetwork:
             arraylikes of shape (n_traj, observable_shape[0], ...).
 
 
-        See Also
+        See Also:
 
         """
 
         self._graph = nx.DiGraph()
 
-        assert not (assg_field_key is None and assignments is None), (
-            "either assg_field_key or assignments must be given"
-        )
+        assert not (
+            assg_field_key is None and assignments is None
+        ), "either assg_field_key or assignments must be given"
 
-        assert assg_field_key is not None or assignments is not None, (
-            "one of assg_field_key or assignments must be given"
-        )
+        assert (
+            assg_field_key is not None or assignments is not None
+        ), "one of assg_field_key or assignments must be given"
 
         self._base_contig_tree = contig_tree.base_contigtree
 
@@ -352,11 +352,13 @@ class BaseMacroStateNetwork:
         for run_idx, run in enumerate(assignments):
             for traj_idx, traj in enumerate(run):
                 for frame_idx, assignment in enumerate(traj):
-                    self._node_assignments[assignment].append((
-                        run_idx,
-                        traj_idx,
-                        frame_idx,
-                    ))
+                    self._node_assignments[assignment].append(
+                        (
+                            run_idx,
+                            traj_idx,
+                            frame_idx,
+                        )
+                    )
 
     def _init_transition_counts(
         self,
@@ -795,9 +797,9 @@ class BaseMacroStateNetwork:
             exclude_node_fields = list(set(exclude_node_fields))
 
         # exclude the layouts, we will set the viz manually for the layout
-        exclude_node_fields.extend([
-            "_layouts/{}".format(layout_name) for layout_name in self.layouts
-        ])
+        exclude_node_fields.extend(
+            ["_layouts/{}".format(layout_name) for layout_name in self.layouts]
+        )
 
         for node in gexf_graph:
             # remove requested fields
@@ -1007,7 +1009,6 @@ class BaseMacroStateNetwork:
 
         Returns
         -------
-
         node_values : dict of node_id : values
             The mapping of node_ids to the values computed by the mapped func.
 
@@ -1071,7 +1072,6 @@ class BaseMacroStateNetwork:
 
         Parameters
         ----------
-
         attribute_key : str
             The key of the edge attribute the matrix should be made of.
 
@@ -1082,7 +1082,6 @@ class BaseMacroStateNetwork:
 
         Returns
         -------
-
         edge_matrix : numpy.ndarray
 
             Assymetric matrix of dim (n_macrostates,
@@ -1171,7 +1170,6 @@ class MacroStateNetwork:
 
     Warnings
     --------
-
     This class is not serializable as it references a 'WepyHDF5'
     object. Either construct a 'BaseMacroStateNetwork' or use the
     attached instance in the 'base_network' attribute.
@@ -1202,7 +1200,6 @@ class MacroStateNetwork:
 
         Parameters
         ----------
-
         base_network : BaseMacroStateNetwork object
             An already constructed network, which will avoid
             recomputing all in-memory network values again for this
@@ -1424,7 +1421,6 @@ class MacroStateNetwork:
 
         Returns
         -------
-
         fields : dict of str: array_like
            A dictionary mapping the names of the fields to an array of the field.
            Like fields of a trace.
@@ -1501,7 +1497,8 @@ class MacroStateNetwork:
 
     def set_macrostate_weights(self):
         """Compute the macrostate weights and set them as node attributes
-        'total_weight'."""
+        'total_weight'.
+        """
 
         self.base_network.set_nodes_observable(
             "total_weight",
@@ -1542,14 +1539,12 @@ class MacroStateNetwork:
 
         Returns
         -------
-
         node_values : dict of node_id : values
             The mapping of node_ids to the values computed by the mapped func.
 
 
         Returns
         -------
-
         node_values : dict of node_id : values
             Dictionary mapping nodes to the computed values from the
             mapped function.

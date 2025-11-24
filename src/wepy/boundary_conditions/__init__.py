@@ -94,7 +94,6 @@ where possible.
 
 Notes
 -----
-
 Boundary conditions in wepy simulations are optional.
 
 Inherit from the

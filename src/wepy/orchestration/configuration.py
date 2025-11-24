@@ -1,7 +1,7 @@
 # Standard Library
-from typing import Final
 import itertools as it
 import logging
+from typing import Final
 
 logger = logging.getLogger(__name__)
 # Standard Library
@@ -10,7 +10,6 @@ from copy import deepcopy
 
 # First Party Library
 from wepy.work_mapper.mapper import Mapper, WorkerMapper
-from wepy.work_mapper.worker import Worker
 
 
 class Configuration:
@@ -326,9 +325,7 @@ class Configuration:
         return deepcopy(self._work_mapper)
 
     def reparametrize(self, **kwargs):
-        """
-
-        Parameters
+        """Parameters
         ----------
         **kwargs :
 

@@ -4,7 +4,7 @@ import numpy as np
 import openmm.unit as unit
 
 # First Party Library
-from wepy.util.mdtraj import json_to_mdtraj_topology, mdtraj_to_json_topology
+from wepy.util.mdtraj import json_to_mdtraj_topology
 from wepy.util.util import box_vectors_to_lengths_angles
 
 
@@ -40,7 +40,6 @@ def binding_site_idxs(
 
     Returns
     -------
-
     binding_site_idxs : arraylike (1,)
 
     """

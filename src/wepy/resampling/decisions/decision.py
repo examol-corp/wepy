@@ -50,12 +50,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-from collections import namedtuple
 from enum import Enum
-from string import ascii_lowercase
-
-# Third Party Library
-import numpy as np
 
 
 # ABC for the Decision class
@@ -115,7 +110,6 @@ class Decision:
 
         Returns
         -------
-
         fields : list of tuples
             Field specs each spec is of the form (name, shape, dtype).
 
@@ -239,7 +233,6 @@ class Decision:
 
         Returns
         -------
-
         resampled_walkers : list of Walker objects
             The resampled walkers.
 

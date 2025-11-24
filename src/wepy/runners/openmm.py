@@ -47,7 +47,6 @@ except ModuleNotFoundError:
     )
 
 # First Party Library
-from wepy.reporter.reporter import Reporter
 from wepy.runners.runner import Runner
 from wepy.util.util import box_vectors_to_lengths_angles
 from wepy.walker import Walker, WalkerState
@@ -249,7 +248,6 @@ class OpenMMRunner(Runner):
 
         Warnings
         --------
-
         Regarding the enforce_box option.
 
         When retrieving states from an OpenMM simulation Context, you
@@ -302,7 +300,6 @@ class OpenMMRunner(Runner):
 
         else:
             self.getState_kwargs = dict(GET_STATE_KWARG_DEFAULTS)
-
 
         self._cycle_platform = None
         self._cycle_platform_kwargs = None
@@ -569,7 +566,6 @@ class OpenMMRunner(Runner):
 
         Parameters
         ----------
-
         simulation : simtk.openmm.app.Simulation object
             A complete simulation object from which the state will be extracted.
 
@@ -586,7 +582,6 @@ class OpenMMRunner(Runner):
 
         Returns
         -------
-
         new_state : wepy.runners.openmm.OpenMMState object
             A new state from the simulation state.
 
@@ -1154,7 +1149,8 @@ class OpenMMState(WalkerState):
     def parameters_features(self):
         """Returns a dictionary of the parameters with their appropriate
         compound keys. This can be used for placing them in the same namespace
-        as the rest of the attributes."""
+        as the rest of the attributes.
+        """
 
         parameters = self.parameters_values()
         if parameters is None:
@@ -1165,7 +1161,8 @@ class OpenMMState(WalkerState):
     def parameter_derivatives_features(self):
         """Returns a dictionary of the parameter derivatives with their appropriate
         compound keys. This can be used for placing them in the same namespace
-        as the rest of the attributes."""
+        as the rest of the attributes.
+        """
 
         parameter_derivatives = self.parameter_derivatives_values()
         if parameter_derivatives is None:
@@ -1177,7 +1174,8 @@ class OpenMMState(WalkerState):
 
     def omm_state_dict(self):
         """Return a dictionary with all of the default keys from the wrapped
-        simtk.openmm.State object"""
+        simtk.openmm.State object
+        """
 
         feature_d = {
             "positions": self.positions_values(),
@@ -1244,7 +1242,6 @@ def gen_sim_state(positions, system, integrator, getState_kwargs=None):
 
     Parameters
     ----------
-
     positions : arraylike of float
         The positions for the system you want to set
 
@@ -1254,7 +1251,6 @@ def gen_sim_state(positions, system, integrator, getState_kwargs=None):
 
     Returns
     -------
-
     sim_state : openmm.State object
 
     """
@@ -1289,7 +1285,6 @@ def gen_walker_state(positions, system, integrator, getState_kwargs=None):
 
     Parameters
     ----------
-
     positions : arraylike of float
         The positions for the system you want to set
 
@@ -1299,7 +1294,6 @@ def gen_walker_state(positions, system, integrator, getState_kwargs=None):
 
     Returns
     -------
-
     walker_state : wepy.runners.openmm.OpenMMState object
 
     """

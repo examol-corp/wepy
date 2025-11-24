@@ -32,7 +32,8 @@ from wepy.reporter.reporter import ProgressiveFileReporter
 
 class ResTreeReporter(ProgressiveFileReporter):
     """Reporter that generates resampling parent trees in the GEXF
-    format."""
+    format.
+    """
 
     FILE_ORDER = ("gexf_restree_path",)
 
@@ -62,7 +63,6 @@ class ResTreeReporter(ProgressiveFileReporter):
 
         Parameters
         ----------
-
         resampler : Resampler
             Used to generate parental relations from resampling
             records.
@@ -177,7 +177,6 @@ class ResTreeReporter(ProgressiveFileReporter):
 
         Returns
         -------
-
         record : namedtuple
 
         """
@@ -211,7 +210,6 @@ class ResTreeReporter(ProgressiveFileReporter):
 
         Returns
         -------
-
         record : namedtuple
 
         """
@@ -264,7 +262,6 @@ class ResTreeReporter(ProgressiveFileReporter):
 
         Returns
         -------
-
         record : namedtuple object
 
         """

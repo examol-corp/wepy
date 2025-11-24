@@ -12,7 +12,6 @@ from warnings import warn
 # Third Party Library
 import mdtraj as mdj
 import mdtraj.core.element as elem
-import numpy as np
 
 # First Party Library
 from wepy.util.util import traj_box_vectors_to_lengths_angles
@@ -112,11 +111,13 @@ def mdtraj_to_json_topology(mdj_top):
                 except AttributeError:
                     element_symbol_string = ""
 
-                residue_dict["atoms"].append({
-                    "index": int(atom.index),
-                    "name": str(atom.name),
-                    "element": element_symbol_string,
-                })
+                residue_dict["atoms"].append(
+                    {
+                        "index": int(atom.index),
+                        "name": str(atom.name),
+                        "element": element_symbol_string,
+                    }
+                )
             chain_dict["residues"].append(residue_dict)
         topology_dict["chains"].append(chain_dict)
 
@@ -270,7 +271,6 @@ def traj_fields_to_mdtraj(traj_fields, json_topology, rep_key="positions"):
 
     Parameters
     ----------
-
     traj_fields : dict of str: values
         The values for the trajectory, must have a positions field
         specified by the `rep_key` kwarg, and a 'box_vectors' field.
@@ -288,9 +288,9 @@ def traj_fields_to_mdtraj(traj_fields, json_topology, rep_key="positions"):
     topology = json_to_mdtraj_topology(json_topology)
 
     req_fields = ["box_vectors", rep_key]
-    assert [field in traj_fields for field in req_fields], (
-        "Fields must have the fields: {}".format(",".join(req_fields))
-    )
+    assert [
+        field in traj_fields for field in req_fields
+    ], "Fields must have the fields: {}".format(",".join(req_fields))
 
     unitcell_lengths, unitcell_angles = traj_box_vectors_to_lengths_angles(
         traj_fields["box_vectors"]

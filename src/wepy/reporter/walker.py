@@ -18,7 +18,7 @@ import numpy as np
 # First Party Library
 from wepy.reporter.reporter import ProgressiveFileReporter
 from wepy.util.json_top import json_top_subset
-from wepy.util.mdtraj import json_to_mdtraj_topology, mdtraj_to_json_topology
+from wepy.util.mdtraj import json_to_mdtraj_topology
 from wepy.util.util import (
     box_vectors_to_lengths_angles,
     traj_box_vectors_to_lengths_angles,
@@ -63,7 +63,6 @@ class WalkerReporter(ProgressiveFileReporter):
 
         Parameters
         ----------
-
         init_state : object implementing WalkerState
             An initial state, only used for writing the PDB topology.
 
@@ -141,9 +140,9 @@ class WalkerReporter(ProgressiveFileReporter):
 
         # slice off the main_rep indices because that is all we want
         # to write for these
-        main_rep_positions = np.array([
-            walker.state["positions"][self.main_rep_idxs] for walker in new_walkers
-        ])
+        main_rep_positions = np.array(
+            [walker.state["positions"][self.main_rep_idxs] for walker in new_walkers]
+        )
 
         # convert the box vectors
         unitcell_lengths, unitcell_angles = traj_box_vectors_to_lengths_angles(

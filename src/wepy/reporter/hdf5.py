@@ -3,7 +3,6 @@ import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-from copy import deepcopy
 
 # Third Party Library
 import numpy as np
@@ -27,7 +26,6 @@ class WepyHDF5Reporter(FileReporter):
 
     See Also
     --------
-
     wepy.hdf5.WepyHDF5
 
 
@@ -81,7 +79,6 @@ class WepyHDF5Reporter(FileReporter):
 
         Parameters
         ----------
-
         save_fields : tuple of str, default: None
            A selection of fields from the walker states to be
            stored. Allows for the ignoring of some states. If None all
@@ -149,7 +146,6 @@ class WepyHDF5Reporter(FileReporter):
 
         Other Parameters
         ----------------
-
         resampling_fields : list of str
             The names of the fields for resampling records
 
@@ -210,13 +206,9 @@ class WepyHDF5Reporter(FileReporter):
 
         # TODO: refine requirements of sparse fields. Do they need to
         # be in the 'save_fields'?
-        
+
         self._sparse_fields = (
-            {
-                field_name : freq
-                for field_name, freq
-                in sparse_fields.items()
-            }
+            {field_name: freq for field_name, freq in sparse_fields.items()}
             if sparse_fields is not None
             else {}
         )
@@ -312,13 +304,12 @@ class WepyHDF5Reporter(FileReporter):
         if alt_reps is not None:
             self.alt_reps_idxs = {key: list(tup[0]) for key, tup in alt_reps.items()}
 
-
             # add the frequencies for these alt_reps to the
             # sparse_fields frequency dictionary
             for key, (idxs, freq) in alt_reps.items():
 
                 self.alt_reps_to_save.append(key)
-                
+
                 alt_rep_key = "alt_reps/{}".format(key)
 
                 # if the frequency is Ellipsis or 1 then we save it
@@ -397,10 +388,12 @@ class WepyHDF5Reporter(FileReporter):
             state_fields = list(init_walkers[0].state.dict().keys())
 
             # make sure all the save_fields are present in the state
-            assert all([
-                True if save_field in state_fields else False
-                for save_field in self.save_fields
-            ]), "Not all specified save_fields present in walker states"
+            assert all(
+                [
+                    True if save_field in state_fields else False
+                    for save_field in self.save_fields
+                ]
+            ), "Not all specified save_fields present in walker states"
 
             filtered_init_walkers = []
             for walker in init_walkers:
@@ -424,7 +417,6 @@ class WepyHDF5Reporter(FileReporter):
                     # otherwise get only the atoms we want
                     else:
                         state_d[alt_rep_path] = state_d["positions"][alt_rep_idxs]
-
 
                 # always store a copy of the all_atoms rep for the init_walkers
                 state_d[f"alt_reps/{self.ALL_ATOMS_REP_KEY}"] = state_d["positions"]

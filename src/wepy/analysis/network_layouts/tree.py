@@ -9,16 +9,11 @@ ResamplingTreeLayout.layout
 
 # Standard Library
 import itertools as it
-from collections import defaultdict
 from copy import copy
 from warnings import warn
 
 # Third Party Library
-import networkx as nx
 import numpy as np
-
-# First Party Library
-from wepy.analysis.network_layouts.layout import LayoutError
 
 
 class ResamplingTreeLayout:
@@ -28,7 +23,6 @@ class ResamplingTreeLayout:
 
     Attributes
     ----------
-
     node_radius : float
         Default node radius to use.
     row_spacing : float
@@ -45,7 +39,7 @@ class ResamplingTreeLayout:
         """Constructing the object is just a setting of the parameters and
         collection of methods for generating layout positions.
 
-        Arguments
+        Arguments:
         ---------
         node_radius : float, optional
             Default node radius to use.
@@ -70,9 +64,7 @@ class ResamplingTreeLayout:
         self.central_axis = central_axis
 
     def _overlaps(self, positions, node_radii, node_idx):
-        """
-
-        Parameters
+        """Parameters
         ----------
         positions :
 
@@ -118,7 +110,6 @@ class ResamplingTreeLayout:
 
         Returns
         -------
-
         row_length : float
 
         """
@@ -131,9 +122,7 @@ class ResamplingTreeLayout:
         return abs(max_edge - min_edge)
 
     def _simple_gen_distribution(self, nodes_x, node_radii):
-        """
-
-        Parameters
+        """Parameters
         ----------
         nodes_x :
 
@@ -142,7 +131,6 @@ class ResamplingTreeLayout:
 
         Returns
         -------
-
         new_nodes_positions
 
         """
@@ -349,16 +337,14 @@ class ResamplingTreeLayout:
             new_node_positions[node_idx] = eff_positions[n_groups + i]
 
         # sanity check that we covered them all
-        assert all([
-            True if pos is not None else False for pos in new_node_positions
-        ]), "not all positions recovered from the effective nodes"
+        assert all(
+            [True if pos is not None else False for pos in new_node_positions]
+        ), "not all positions recovered from the effective nodes"
 
         return new_node_positions
 
     def _simple_next_gen(self, parents_x, children_parent_idxs, node_radii):
-        """
-
-        Parameters
+        """Parameters
         ----------
         parents_x :
 
@@ -369,7 +355,6 @@ class ResamplingTreeLayout:
 
         Returns
         -------
-
         children_x
 
         """
@@ -390,15 +375,12 @@ class ResamplingTreeLayout:
         return children_x
 
     def _initial_parent_distribution(self, node_radii):
-        """
-
-        Parameters
+        """Parameters
         ----------
         node_radii :
 
         Returns
         -------
-
         positions
 
         """
@@ -447,7 +429,6 @@ class ResamplingTreeLayout:
 
         Returns
         -------
-
         centered_positions
 
         """
@@ -478,7 +459,6 @@ class ResamplingTreeLayout:
 
         Returns
         -------
-
         node_positions
 
         """
@@ -544,9 +524,9 @@ class ResamplingTreeLayout:
             step_y = last_y + last_max_radius + self.step_spacing + this_max_radius
 
             # then generate the coordinates
-            node_positions[generation_idx] = np.array([
-                np.array([x, step_y, 0.0]) for x in curr_gen_positions
-            ])
+            node_positions[generation_idx] = np.array(
+                [np.array([x, step_y, 0.0]) for x in curr_gen_positions]
+            )
 
             # set the last gen positions
             last_gen_positions = curr_gen_positions

@@ -1,7 +1,6 @@
 """Miscellaneous functions needed by wepy."""
 
 # Standard Library
-import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,15 +12,15 @@ import numpy as np
 
 
 def set_loglevel(loglevel):
-    """
+    """\b
 
-    \b
     Parameters
     ----------
     loglevel :
 
 
     \b
+
     Returns
     -------
 
@@ -69,15 +68,17 @@ def traj_box_vectors_to_lengths_angles(traj_box_vectors):
 
     traj_unitcell_angles = []
     for vs in traj_box_vectors:
-        angles = np.array([
-            np.degrees(
-                np.arccos(
-                    np.dot(vs[i], vs[j])
-                    / (np.linalg.norm(vs[i]) * np.linalg.norm(vs[j]))
+        angles = np.array(
+            [
+                np.degrees(
+                    np.arccos(
+                        np.dot(vs[i], vs[j])
+                        / (np.linalg.norm(vs[i]) * np.linalg.norm(vs[j]))
+                    )
                 )
-            )
-            for i, j in [(0, 1), (1, 2), (2, 0)]
-        ])
+                for i, j in [(0, 1), (1, 2), (2, 0)]
+            ]
+        )
 
         traj_unitcell_angles.append(angles)
 
@@ -112,15 +113,17 @@ def box_vectors_to_lengths_angles(box_vectors):
     unitcell_lengths = np.array(unitcell_lengths)
 
     # calculate the angles for the vectors
-    unitcell_angles = np.array([
-        np.degrees(
-            np.arccos(
-                np.dot(box_vectors[i], box_vectors[j])
-                / (np.linalg.norm(box_vectors[i]) * np.linalg.norm(box_vectors[j]))
+    unitcell_angles = np.array(
+        [
+            np.degrees(
+                np.arccos(
+                    np.dot(box_vectors[i], box_vectors[j])
+                    / (np.linalg.norm(box_vectors[i]) * np.linalg.norm(box_vectors[j]))
+                )
             )
-        )
-        for i, j in [(0, 1), (1, 2), (2, 0)]
-    ])
+            for i, j in [(0, 1), (1, 2), (2, 0)]
+        ]
+    )
 
     return unitcell_lengths, unitcell_angles
 
@@ -185,6 +188,7 @@ def lengths_and_angles_to_box_vectors(a_length, b_length, c_length, alpha, beta,
 
     Examples
     --------
+
     Notes
     -----
     This code is adapted from gyroid, which is licensed under the BSD
@@ -206,11 +210,13 @@ def lengths_and_angles_to_box_vectors(a_length, b_length, c_length, alpha, beta,
     gamma = gamma * np.pi / 180
 
     a = np.array([a_length, np.zeros_like(a_length), np.zeros_like(a_length)])
-    b = np.array([
-        b_length * np.cos(gamma),
-        b_length * np.sin(gamma),
-        np.zeros_like(b_length),
-    ])
+    b = np.array(
+        [
+            b_length * np.cos(gamma),
+            b_length * np.sin(gamma),
+            np.zeros_like(b_length),
+        ]
+    )
     cx = c_length * np.cos(beta)
     cy = c_length * (np.cos(alpha) - np.cos(beta) * np.cos(gamma)) / np.sin(gamma)
     cz = np.sqrt(c_length * c_length - cx * cx - cy * cy)
@@ -235,8 +241,8 @@ def concat_traj_fields(trajs_fields):
 
     cum_traj_fields = {}
     for field in fields:
-        cum_traj_fields[field] = np.concatenate([
-            traj_fields[field] for traj_fields in trajs_fields
-        ])
+        cum_traj_fields[field] = np.concatenate(
+            [traj_fields[field] for traj_fields in trajs_fields]
+        )
 
     return cum_traj_fields

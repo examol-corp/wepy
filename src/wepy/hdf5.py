@@ -399,12 +399,10 @@ logger = logging.getLogger(__name__)
 # Standard Library
 import os.path as osp
 from collections import Counter, defaultdict, namedtuple
-from copy import copy
 from warnings import warn
 
 # Third Party Library
 import h5py
-import networkx as nx
 import numpy as np
 
 # First Party Library
@@ -412,7 +410,6 @@ from wepy.analysis.parents import resampling_panel
 from wepy.util.json_top import json_top_atom_count, json_top_subset
 from wepy.util.mdtraj import (
     json_to_mdtraj_topology,
-    mdtraj_to_json_topology,
     traj_fields_to_mdtraj,
 )
 from wepy.util.util import traj_box_vectors_to_lengths_angles
@@ -782,7 +779,6 @@ class WepyHDF5:
 
         Raises
         ------
-
         AssertionError
             If the mode is not one of the supported mode specs.
 
@@ -791,7 +787,6 @@ class WepyHDF5:
 
         Warns
         -----
-
         If initialization data was given but the file was opened in a read mode.
 
         """
@@ -892,19 +887,21 @@ class WepyHDF5:
             # read only mode
             elif self._wepy_mode == "r":
                 # if any data was given, warn the user
-                if any([
-                    kwarg is not None
-                    for kwarg in [
-                        topology,
-                        units,
-                        sparse_fields,
-                        feature_shapes,
-                        feature_dtypes,
-                        n_dims,
-                        alt_reps,
-                        main_rep_idxs,
+                if any(
+                    [
+                        kwarg is not None
+                        for kwarg in [
+                            topology,
+                            units,
+                            sparse_fields,
+                            feature_shapes,
+                            feature_dtypes,
+                            n_dims,
+                            alt_reps,
+                            main_rep_idxs,
+                        ]
                     ]
-                ]):
+                ):
                     warn("Data was given but opening in read-only mode", RuntimeWarning)
 
                 # then run the initialization process
@@ -973,9 +970,9 @@ class WepyHDF5:
         and set with the new ones if given.
         """
 
-        assert self._topology is not None, (
-            "Topology must be given for a creation constructor"
-        )
+        assert (
+            self._topology is not None
+        ), "Topology must be given for a creation constructor"
 
         # initialize the runs group
         runs_grp = self._h5.create_group(RUNS)
@@ -1036,8 +1033,8 @@ class WepyHDF5:
         # any sparse field with unspecified shape and dtype must be
         # set to None so that it will be set at runtime
         for sparse_field in self.sparse_fields:
-            if (not sparse_field in self._field_feature_shapes) or (
-                not sparse_field in self._field_feature_dtypes
+            if (sparse_field not in self._field_feature_shapes) or (
+                sparse_field not in self._field_feature_dtypes
             ):
                 self._field_feature_shapes[sparse_field] = None
                 self._field_feature_dtypes[sparse_field] = None
@@ -1470,9 +1467,7 @@ class WepyHDF5:
         )
 
     def _init_sparse_traj_field(self, run_idx, traj_idx, field_path, shape, dtype):
-        """
-
-        Parameters
+        """Parameters
         ----------
         run_idx : int
         traj_idx : int
@@ -1617,9 +1612,9 @@ class WepyHDF5:
         field = traj_grp[field_path]
 
         # make sure this is a feature vector
-        assert len(field_data.shape) > 1, (
-            "field_data must be a feature vector with the same number of dimensions as the number"
-        )
+        assert (
+            len(field_data.shape) > 1
+        ), "field_data must be a feature vector with the same number of dimensions as the number"
 
         # of datase new frames
         n_new_frames = field_data.shape[0]
@@ -1628,9 +1623,9 @@ class WepyHDF5:
         if all([i == 0 for i in field.shape]):
             # check the feature shape against the maxshape which gives
             # the feature dimensions for an empty dataset
-            assert field_data.shape[1:] == field.maxshape[1:], (
-                "field feature dimensions must be the same, i.e. all but the first dimension"
-            )
+            assert (
+                field_data.shape[1:] == field.maxshape[1:]
+            ), "field feature dimensions must be the same, i.e. all but the first dimension"
 
             # if it is empty resize it to make an array the size of
             # the new field_data with the maxshape for the feature
@@ -1644,9 +1639,9 @@ class WepyHDF5:
         else:
             # make sure the new data has the right dimensions against
             # the shape it already has
-            assert field_data.shape[1:] == field.shape[1:], (
-                "field feature dimensions must be the same, i.e. all but the first dimension"
-            )
+            assert (
+                field_data.shape[1:] == field.shape[1:]
+            ), "field feature dimensions must be the same, i.e. all but the first dimension"
 
             # append to the dataset on the first dimension, keeping the
             # others the same, these must be feature vectors and therefore
@@ -1688,10 +1683,10 @@ class WepyHDF5:
         if all([i == 0 for i in field_data.shape]):
             # check the feature shape against the maxshape which gives
             # the feature dimensions for an empty dataset
-            assert values.shape[1:] == field_data.maxshape[1:], (
-                "input value features have shape {}, expected {}".format(
-                    values.shape[1:], field_data.maxshape[1:]
-                )
+            assert (
+                values.shape[1:] == field_data.maxshape[1:]
+            ), "input value features have shape {}, expected {}".format(
+                values.shape[1:], field_data.maxshape[1:]
             )
 
             # if it is empty resize it to make an array the size of
@@ -1705,25 +1700,29 @@ class WepyHDF5:
 
         else:
             # make sure the new data has the right dimensions
-            assert values.shape[1:] == field_data.shape[1:], (
-                "field feature dimensions must be the same, i.e. all but the first dimension"
-            )
+            assert (
+                values.shape[1:] == field_data.shape[1:]
+            ), "field feature dimensions must be the same, i.e. all but the first dimension"
 
             # append to the dataset on the first dimension, keeping the
             # others the same, these must be feature vectors and therefore
             # must exist
-            field_data.resize((
-                field_data.shape[0] + n_new_frames,
-                *field_data.shape[1:],
-            ))
+            field_data.resize(
+                (
+                    field_data.shape[0] + n_new_frames,
+                    *field_data.shape[1:],
+                )
+            )
             # add the new data
             field_data[-n_new_frames:, ...] = values
 
         # add the sparse idxs in the same way
-        field_sparse_idxs.resize((
-            field_sparse_idxs.shape[0] + n_new_frames,
-            *field_sparse_idxs.shape[1:],
-        ))
+        field_sparse_idxs.resize(
+            (
+                field_sparse_idxs.shape[0] + n_new_frames,
+                *field_sparse_idxs.shape[1:],
+            )
+        )
         # add the new data
         field_sparse_idxs[-n_new_frames:, ...] = sparse_idxs
 
@@ -1839,7 +1838,6 @@ class WepyHDF5:
                         field_path,
                         field_feature_dtype,
                         self.field_feature_dtypes[field_path],
-                        NONE_STR,
                     )
                 )
         # it was not previously set so we must create then save it
@@ -1871,9 +1869,9 @@ class WepyHDF5:
         field = records_grp[field_name]
 
         # make sure this is a feature vector
-        assert len(field_data.shape) > 1, (
-            "field_data must be a feature vector with the same number of dimensions as the number"
-        )
+        assert (
+            len(field_data.shape) > 1
+        ), "field_data must be a feature vector with the same number of dimensions as the number"
 
         # of datase new frames
         n_new_frames = field_data.shape[0]
@@ -1914,9 +1912,9 @@ class WepyHDF5:
             if all([i == 0 for i in field.shape]):
                 # check the feature shape against the maxshape which gives
                 # the feature dimensions for an empty dataset
-                assert field_data.shape[1:] == field.maxshape[1:], (
-                    "field feature dimensions must be the same, i.e. all but the first dimension"
-                )
+                assert (
+                    field_data.shape[1:] == field.maxshape[1:]
+                ), "field feature dimensions must be the same, i.e. all but the first dimension"
 
                 # if it is empty resize it to make an array the size of
                 # the new field_data with the maxshape for the feature
@@ -1984,13 +1982,11 @@ class WepyHDF5:
 
         Returns
         -------
-
         record_dset : list
             Table-ified values
 
         Raises
         ------
-
         TypeError
             If the field feature vector shape rank is greater than 1.
 
@@ -2490,7 +2486,6 @@ class WepyHDF5:
 
         Parameters
         ----------
-
         mode : str
            Valid mode spec. Opens the HDF5 file in this mode if given
            otherwise uses the existing mode.
@@ -2893,7 +2888,6 @@ class WepyHDF5:
 
         Parameters
         ----------
-
         field_names : list of str
             The field names to check for.
 
@@ -2956,7 +2950,8 @@ class WepyHDF5:
     @property
     def alt_reps_idxs(self):
         """Mapping of the names of the alt reps to the indices of the atoms
-        from the topology that they include in their datasets."""
+        from the topology that they include in their datasets.
+        """
 
         idxs_grp = self.h5["{}/{}".format(SETTINGS, ALT_REPS_IDXS)]
         return {name: ds[:] for name, ds in idxs_grp.items()}
@@ -2971,7 +2966,8 @@ class WepyHDF5:
     @property
     def field_feature_shapes(self):
         """Mapping of the names of the trajectory fields to their feature
-        vector shapes."""
+        vector shapes.
+        """
 
         shapes_grp = self.h5["{}/{}".format(SETTINGS, FIELD_FEATURE_SHAPES_STR)]
 
@@ -2990,14 +2986,15 @@ class WepyHDF5:
     @property
     def field_feature_dtypes(self):
         """Mapping of the names of the trajectory fields to their feature
-        vector numpy dtypes."""
+        vector numpy dtypes.
+        """
 
         dtypes_grp = self.h5["{}/{}".format(SETTINGS, FIELD_FEATURE_DTYPES_STR)]
 
         field_paths = _iter_field_paths(dtypes_grp)
 
         _NONE_STR = NONE_STR.encode()
-        
+
         dtypes = {}
         for field_path in field_paths:
             dtype_str = dtypes_grp[field_path][()]
@@ -3423,7 +3420,7 @@ class WepyHDF5:
 
         traj_path = "{}/{}/{}/{}".format(RUNS, run_idx, TRAJECTORIES, traj_idx)
 
-        if not field_path in self._h5[traj_path]:
+        if field_path not in self._h5[traj_path]:
             raise KeyError("key for field {} not found".format(field_path))
 
         # if the field is not sparse just return the cycle indices for
@@ -3940,14 +3937,18 @@ class WepyHDF5:
         """
 
         continuations_dset = self.settings_grp[CONTINUATIONS]
-        continuations_dset.resize((
-            continuations_dset.shape[0] + 1,
-            continuations_dset.shape[1],
-        ))
-        continuations_dset[continuations_dset.shape[0] - 1] = np.array([
-            continuation_run,
-            base_run,
-        ])
+        continuations_dset.resize(
+            (
+                continuations_dset.shape[0] + 1,
+                continuations_dset.shape[1],
+            )
+        )
+        continuations_dset[continuations_dset.shape[0] - 1] = np.array(
+            [
+                continuation_run,
+                base_run,
+            ]
+        )
 
     def new_run(self, init_walkers, continue_run=None, **kwargs):
         """Initialize a new run.
@@ -4346,9 +4347,9 @@ class WepyHDF5:
             weights = np.ones((n_frames, 1), dtype=float)
         else:
             assert isinstance(weights, np.ndarray), "weights must be a numpy.ndarray"
-            assert weights.shape[0] == n_frames, (
-                "weights and the number of frames must be the same length"
-            )
+            assert (
+                weights.shape[0] == n_frames
+            ), "weights and the number of frames must be the same length"
 
         # current traj_idx
         traj_idx = self.next_run_traj_idx(run_idx)
@@ -4365,7 +4366,7 @@ class WepyHDF5:
 
         # add the rest of the metadata if given
         for key, val in metadata.items():
-            if not key in [RUN_IDX, TRAJ_IDX]:
+            if key not in [RUN_IDX, TRAJ_IDX]:
                 traj_grp.attrs[key] = val
             else:
                 warn(
@@ -4374,15 +4375,15 @@ class WepyHDF5:
                 )
 
         # check to make sure the positions are the right shape
-        assert traj_data[POSITIONS].shape[1] == self.num_atoms, (
-            "positions given have different number of atoms: {}, should be {}".format(
-                traj_data[POSITIONS].shape[1], self.num_atoms
-            )
+        assert (
+            traj_data[POSITIONS].shape[1] == self.num_atoms
+        ), "positions given have different number of atoms: {}, should be {}".format(
+            traj_data[POSITIONS].shape[1], self.num_atoms
         )
-        assert traj_data[POSITIONS].shape[2] == self.num_dims, (
-            "positions given have different number of dims: {}, should be {}".format(
-                traj_data[POSITIONS].shape[2], self.num_dims
-            )
+        assert (
+            traj_data[POSITIONS].shape[2] == self.num_dims
+        ), "positions given have different number of dims: {}, should be {}".format(
+            traj_data[POSITIONS].shape[2], self.num_dims
         )
 
         # add datasets to the traj group
@@ -4453,9 +4454,9 @@ class WepyHDF5:
         """
 
         if self._wepy_mode == "c-":
-            assert self._append_flags[dataset_key], (
-                "dataset is not available for appending to"
-            )
+            assert self._append_flags[
+                dataset_key
+            ], "dataset is not available for appending to"
 
         # convenient alias
         traj_data = data
@@ -4479,9 +4480,9 @@ class WepyHDF5:
             weights = np.ones((n_new_frames, 1), dtype=float)
         else:
             assert isinstance(weights, np.ndarray), "weights must be a numpy.ndarray"
-            assert weights.shape[0] == n_new_frames, (
-                "weights and the number of frames must be the same length"
-            )
+            assert (
+                weights.shape[0] == n_new_frames
+            ), "weights and the number of frames must be the same length"
 
         # add the weights
         weights_ds = traj_grp[WEIGHTS]
@@ -4489,10 +4490,12 @@ class WepyHDF5:
         # append to the dataset on the first dimension, keeping the
         # others the same, if they exist
         if len(weights_ds.shape) > 1:
-            weights_ds.resize((
-                weights_ds.shape[0] + n_new_frames,
-                *weights_ds.shape[1:],
-            ))
+            weights_ds.resize(
+                (
+                    weights_ds.shape[0] + n_new_frames,
+                    *weights_ds.shape[1:],
+                )
+            )
         else:
             weights_ds.resize((weights_ds.shape[0] + n_new_frames,))
 
@@ -4503,7 +4506,7 @@ class WepyHDF5:
         for field_path, field_data in traj_data.items():
             # if the field hasn't been initialized yet initialize it,
             # unless we are in SWMR mode
-            if not field_path in traj_grp:
+            if field_path not in traj_grp:
                 # if in SWMR mode you cannot create groups so if we
                 # are in SWMR mode raise a warning that the data won't
                 # be recorded
@@ -4519,9 +4522,9 @@ class WepyHDF5:
 
                     # not specified as sparse_field, no settings
                     if (
-                        (not field_path in self.field_feature_shapes)
-                        and (not field_path in self.field_feature_dtypes)
-                        and not field_path in self.sparse_fields
+                        (field_path not in self.field_feature_shapes)
+                        and (field_path not in self.field_feature_dtypes)
+                        and field_path not in self.sparse_fields
                     ):
                         # only save if it is an observable
                         is_observable = False
@@ -5214,7 +5217,6 @@ class WepyHDF5:
 
         Returns
         -------
-
         traj_id_tuples : list of tuple of int, if 'idxs' option is True
             A list of the tuple identifiers for each trajectory result.
 
@@ -5319,7 +5321,7 @@ class WepyHDF5:
         traj_path = "{}/{}/{}/{}".format(RUNS, run_idx, TRAJECTORIES, traj_idx)
 
         # if the field doesn't exist return None
-        if not field_path in self._h5[traj_path]:
+        if field_path not in self._h5[traj_path]:
             raise KeyError("key for field {} not found".format(field_path))
             # return None
 
@@ -5512,15 +5514,17 @@ class WepyHDF5:
         for run_idx, cycle_idx in contig_trace:
             runs_frames[run_idx].append(cycle_idx)
 
-            if not run_idx in run_idxs:
+            if run_idx not in run_idxs:
                 run_idxs.append(run_idx)
 
         # (there must be the same number of trajectories in each run)
         n_trajs_test = self.num_run_trajs(run_idxs[0])
-        assert all([
-            True if n_trajs_test == self.num_run_trajs(run_idx) else False
-            for run_idx in run_idxs
-        ])
+        assert all(
+            [
+                True if n_trajs_test == self.num_run_trajs(run_idx) else False
+                for run_idx in run_idxs
+            ]
+        )
 
         # then using this we go run by run and get all the
         # trajectories
@@ -5874,14 +5878,12 @@ class WepyHDF5:
 
         Parameters
         ----------
-
         alt_rep : str
             The short name (non relative path) for a representation of
             the positions.
 
         Returns
         -------
-
         rep_path : str
             The relative field path to that representation.
 
@@ -5919,7 +5921,6 @@ class WepyHDF5:
 
         Parameters
         ----------
-
         traj_fields : dict of str : arraylike
             Dictionary of the traj fields to their values
 
@@ -5930,7 +5931,6 @@ class WepyHDF5:
 
         Returns
         -------
-
         traj : mdtraj.Trajectory object
 
         This is mainly a convenience function to retrieve the correct
@@ -5949,7 +5949,8 @@ class WepyHDF5:
         self, run_idx, target_file_path, target_grp_path, run_slice=None, mode="x"
     ):
         """Copy this run to another HDF5 file (target_file_path) at the group
-        (target_grp_path)"""
+        (target_grp_path)
+        """
 
         assert mode in ["w", "w-", "x", "r+"], "must be opened in write mode"
 

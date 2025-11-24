@@ -8,7 +8,7 @@ import os.path as osp
 import sqlite3
 import time
 from base64 import b64decode, b64encode
-from copy import copy, deepcopy
+from copy import deepcopy
 from hashlib import md5
 from zlib import compress, decompress
 
@@ -299,9 +299,7 @@ class Orchestrator:
 
     @classmethod
     def hash_snapshot(cls, serial_str):
-        """
-
-        Parameters
+        """Parameters
         ----------
         serial_str :
 
@@ -357,9 +355,7 @@ class Orchestrator:
         return list(self.configuration_kv.keys())
 
     def add_snapshot(self, snapshot):
-        """
-
-        Parameters
+        """Parameters
         ----------
         snapshot :
 
@@ -399,9 +395,7 @@ class Orchestrator:
         return snaphash
 
     def gen_start_snapshot(self, init_walkers):
-        """
-
-        Parameters
+        """Parameters
         ----------
         init_walkers :
 
@@ -595,9 +589,7 @@ class Orchestrator:
         c.execute(self.update_run_record_query, params)
 
     def register_run(self, start_hash, end_hash, config_hash, cycle_idx):
-        """
-
-        Parameters
+        """Parameters
         ----------
         start_hash :
 
@@ -766,9 +758,7 @@ class Orchestrator:
         checkpoint_db_path,
         cycle_idx,
     ):
-        """
-
-        Parameters
+        """Parameters
         ----------
         checkpoint_snapshot :
 
@@ -886,9 +876,7 @@ class Orchestrator:
 
     @staticmethod
     def gen_sim_manager(start_snapshot, configuration):
-        """
-
-        Parameters
+        """Parameters
         ----------
         start_snapshot :
 
@@ -1084,9 +1072,7 @@ class Orchestrator:
         # configuration.reparametrize method
         **kwargs,
     ):
-        """
-
-        Parameters
+        """Parameters
         ----------
         snapshot_hash :
 
@@ -1250,9 +1236,7 @@ class Orchestrator:
 
 
 def reconcile_orchestrators(host_path, *orchestrator_paths):
-    """
-
-    Parameters
+    """Parameters
     ----------
     template_orchestrator :
 

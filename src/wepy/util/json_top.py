@@ -17,13 +17,11 @@ def json_top_chain_fields(json_topology):
 
     Parameters
     ----------
-
     json_topology : str
         JSON format topology
 
     Returns
     -------
-
     chain_cols : dict of str: list
 
     """
@@ -44,13 +42,11 @@ def json_top_chain_df(json_topology):
 
     Parameters
     ----------
-
     json_topology : str
         JSON format topology
 
     Returns
     -------
-
     chain_df : pandas.DataFrame
 
     """
@@ -63,13 +59,11 @@ def json_top_residue_fields(json_topology):
 
     Parameters
     ----------
-
     json_topology : str
         JSON format topology
 
     Returns
     -------
-
     residue_cols : dict of str: list
 
     """
@@ -93,13 +87,11 @@ def json_top_residue_df(json_topology):
 
     Parameters
     ----------
-
     json_topology : str
         JSON format topology
 
     Returns
     -------
-
     residue_df : pandas.DataFrame
 
     """
@@ -112,13 +104,11 @@ def json_top_atom_fields(json_topology):
 
     Parameters
     ----------
-
     json_topology : str
         JSON format topology
 
     Returns
     -------
-
     atom_cols : dict of str: list
 
     """
@@ -145,13 +135,11 @@ def json_top_atom_df(json_topology):
 
     Parameters
     ----------
-
     json_topology : str
         JSON format topology
 
     Returns
     -------
-
     atoms_df : pandas.DataFrame
 
     """
@@ -193,7 +181,6 @@ def json_top_subset(json_str, atom_idxs):
 
     Parameters
     ----------
-
     json_str : str
         A string of valid JSON in the format of JSON used in WepyHDF5
         and mdtraj HDF5 format.
@@ -203,7 +190,6 @@ def json_top_subset(json_str, atom_idxs):
 
     Returns
     -------
-
     subset_json_str : str
         JSON string of the subset of atoms. Ordering preserved.
 
@@ -284,7 +270,6 @@ def json_top_subset(json_str, atom_idxs):
             residue_idx_map[old_res_idx] = new_res_idx_counter
             new_res_idx_counter += 1
 
-
             # do the same but for the chain
             old_chain_idx = res_chain_idxs[old_res_idx]
 
@@ -332,9 +317,9 @@ def json_top_subset(json_str, atom_idxs):
         new_chain_res_idx = chain_res_idx_map[old_res_idx]
         atom_data["index"] = new_atom_idx
 
-        top_subset["chains"][new_chain_idx]["residues"][new_chain_res_idx]["atoms"].append(
-            atom_data
-        )
+        top_subset["chains"][new_chain_idx]["residues"][new_chain_res_idx][
+            "atoms"
+        ].append(atom_data)
 
     # then translate the atom indices in the bonds
     new_bonds = []

@@ -3,11 +3,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-from collections import defaultdict, namedtuple
+from collections import defaultdict
 from enum import Enum
-
-# Third Party Library
-import numpy as np
 
 # First Party Library
 from wepy.resampling.decisions.decision import Decision

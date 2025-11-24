@@ -29,6 +29,8 @@ logger = logging.getLogger(__name__)
 
 # Third Party Library
 import numpy as np
+
+# First Party Library
 from wepy.util.util import box_vectors_to_lengths_angles
 
 
@@ -73,13 +75,11 @@ class Distance(object):
 
         Returns
         -------
-
         distance : float
             The distance between the two images
 
         Raises
         ------
-
         NotImplementedError : always because this is abstract
 
         """
@@ -96,7 +96,6 @@ class Distance(object):
 
         Returns
         -------
-
         distance : float
             The distance between the two walker states
 
@@ -130,7 +129,6 @@ class AtomPairDistance(Distance):
 
         Parameters
         ----------
-
         pair_list : arraylike of tuples
             The indices of the atom pairs between which to compute
             distances.

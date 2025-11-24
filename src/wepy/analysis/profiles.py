@@ -96,7 +96,6 @@ def cumulative_partitions(
 
     Parameters
     ----------
-
     ensemble_values : arraylikes of float of shape (n_cycles, n_trajs)
         Array of scalar values for all of the frames of an ensemble simulation.
 
@@ -115,7 +114,6 @@ def cumulative_partitions(
 
     Yields
     ------
-
     cumulative_tranche : arraylike
         A slice along the cycles axis of the ensemble values starting
         at the beginning and including up to the end of the next
@@ -146,10 +144,8 @@ def free_energy_profile(
     max_energy=100,
     zero_point_energy=1e-12,
 ):
-    """
-    Parameters
+    """Parameters
     ----------
-
     weights : arraylikes of float of shape (n_trajs, n_cycles)
         The weights for all of the frames of an ensemble simulation.
 
@@ -162,7 +158,6 @@ def free_energy_profile(
 
     Returns
     -------
-
     hist_fe : arraylike
         The free energies of the histogram bins
 
@@ -171,9 +166,9 @@ def free_energy_profile(
 
     """
 
-    assert weights.shape == observables.shape, (
-        "Weights and observables must correspond in shape"
-    )
+    assert (
+        weights.shape == observables.shape
+    ), "Weights and observables must correspond in shape"
 
     hist_weights, bin_edges = np.histogram(
         observables,
@@ -201,7 +196,6 @@ def contigtrees_bin_edges(
 
     Parameters
     ----------
-
     contigtrees : list of ContigTree objects
         The contigtrees to draw the data from.
 
@@ -287,14 +281,14 @@ def contigtrees_bin_edges(
 
 class ContigTreeProfiler(object):
     """A wrapper class around a ContigTree that provides extra methods for
-    generating free energy profiles for observables."""
+    generating free energy profiles for observables.
+    """
 
     def __init__(self, contigtree, truncate_cycles=None):
         """Create a wrapper around a contigtree for the profiler.
 
         Parameters
         ----------
-
         contigtree : ContigTree object
             The contigtree you want to generate profiles for.
 
@@ -328,7 +322,6 @@ class ContigTreeProfiler(object):
 
         Parameters
         ----------
-
         contigtree : ContigTree
 
         truncate_cycles : int
@@ -336,7 +329,6 @@ class ContigTreeProfiler(object):
 
         Returns
         -------
-
         ignored_trace : set of (int, int)
             The frames to ignore given the truncation.
 
@@ -346,10 +338,12 @@ class ContigTreeProfiler(object):
         for span_idx, span_trace in contigtree.span_traces.items():
             for run_idx, cycle_idx in span_trace:
                 if cycle_idx >= truncate_cycles:
-                    ignore_trace.add((
-                        run_idx,
-                        cycle_idx,
-                    ))
+                    ignore_trace.add(
+                        (
+                            run_idx,
+                            cycle_idx,
+                        )
+                    )
 
         return ignore_trace
 
@@ -369,7 +363,6 @@ class ContigTreeProfiler(object):
 
         Parameters
         ----------
-
         trace : list of tuple of ints (run_idx, traj_idx, cycle_idx)
 
         field_key : str
@@ -387,7 +380,6 @@ class ContigTreeProfiler(object):
 
         Returns
         -------
-
         fe_profile : arraylike of dtype float
             An array of free energies for each bin.
 
@@ -451,7 +443,6 @@ class ContigTreeProfiler(object):
 
         Parameters
         ----------
-
         field_key : str
             The key for the trajectory field to calculate the profiles
             for. Must be a rank 0 (or equivalent (1,) rank) field.
@@ -468,7 +459,6 @@ class ContigTreeProfiler(object):
 
         Returns
         -------
-
         fe_profile : arraylike of dtype float
             An array of free energies for each bin.
 
@@ -545,10 +535,12 @@ class ContigTreeProfiler(object):
                 ]
 
             # reshape to match
-            weights = weights.reshape((
-                weights.shape[0],
-                weights.shape[1],
-            ))
+            weights = weights.reshape(
+                (
+                    weights.shape[0],
+                    weights.shape[1],
+                )
+            )
 
             all_weights.append(weights)
             all_values.append(values)
@@ -607,7 +599,6 @@ class ContigTreeProfiler(object):
 
         Parameters
         ----------
-
         span : int
             The index of the span to calculate profiles for.
 
@@ -627,7 +618,6 @@ class ContigTreeProfiler(object):
 
         Returns
         -------
-
         fe_profile : arraylike of dtype float
             An array of free energies for each bin.
 
@@ -709,7 +699,6 @@ class ContigTreeProfiler(object):
 
         Parameters
         ----------
-
         span : int
             The index of the span to calculate profiles for.
 
@@ -740,7 +729,6 @@ class ContigTreeProfiler(object):
 
         Returns
         -------
-
         cumulative_fe_profiles : list of arraylike of dtype float
             A list of each cumulative free energy profile. Each profile is
             an array of free energies for each bin.
@@ -828,7 +816,6 @@ class ContigTreeProfiler(object):
 
         Parameters
         ----------
-
         field_key : str
             The key for the trajectory field to calculate the profiles
             for. Must be a rank 0 (or equivalent (1,) rank) field.
@@ -858,7 +845,6 @@ class ContigTreeProfiler(object):
 
         Returns
         -------
-
         cumulative_fe_profiles : list of arraylike of dtype float
             A list of each cumulative free energy profile. Each profile is
             an array of free energies for each bin.
@@ -892,9 +878,9 @@ class ContigTreeProfiler(object):
 
             # trace of all of the frames in the contigtree
             all_trace = list(
-                it.chain(*[
-                    span_trace for span_trace in self.contigtree.span_traces.values()
-                ])
+                it.chain(
+                    *[span_trace for span_trace in self.contigtree.span_traces.values()]
+                )
             )
 
             # filter it for the ignored fields if applicable
@@ -983,10 +969,12 @@ class ContigTreeProfiler(object):
                 contig_values = contig.contig_fields([field_key])[field_key]
 
             # reshape to match
-            contig_weights = contig_weights.reshape((
-                contig_weights.shape[0],
-                contig_weights.shape[1],
-            ))
+            contig_weights = contig_weights.reshape(
+                (
+                    contig_weights.shape[0],
+                    contig_weights.shape[1],
+                )
+            )
 
             # make the cumulative generators for each
             contig_weights_partition_gen = cumulative_partitions(
@@ -1041,7 +1029,6 @@ class ContigTreeProfiler(object):
 
         Parameters
         ----------
-
         bins : int or str
             The number of bins to make or the method to use for
             autobinning.
@@ -1061,10 +1048,12 @@ class ContigTreeProfiler(object):
 
         """
 
-        all_values = np.concatenate([
-            fields[field_key]
-            for fields in self.contigtree.wepy_h5.iter_trajs_fields([field_key])
-        ])
+        all_values = np.concatenate(
+            [
+                fields[field_key]
+                for fields in self.contigtree.wepy_h5.iter_trajs_fields([field_key])
+            ]
+        )
 
         bin_edges = np.histogram_bin_edges(all_values, bins=bins)
 

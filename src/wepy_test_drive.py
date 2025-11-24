@@ -50,9 +50,9 @@ def cli(
     """Run a pre-parametrized wepy simulation.
 
     \b
+
     Parameters
     ----------
-
     \b
     SYSTEM : str
         Which pre-parametrized simulation to run should have the format: System/Runner-Platform
@@ -119,15 +119,15 @@ def cli(
     REVO : Stateless and Binless algorithm that rewards in-ensemble novelty.
 
     \b
+
     Examples
     --------
-
     python -m wepy_test_drive LennardJonesPair/OpenMM-CPU 20 10 2 4
 
     \b
+
     Notes
     -----
-
     When using a GPU platform your number of workers should be the
     number of GPUs you want to use.
 

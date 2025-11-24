@@ -2,7 +2,6 @@
 
 Warnings
 --------
-
 Deprecation warning!
 
 Try not to rely on these functions as part of your stable code. These

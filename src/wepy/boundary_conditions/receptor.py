@@ -4,13 +4,10 @@ including unbinding and rebinding.
 """
 
 # Standard Library
-import itertools as it
 import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-import time
-from collections import defaultdict
 
 # Third Party Library
 import numpy as np
@@ -90,7 +87,7 @@ class ReceptorBC(WarpBC):
         If the initial weights for each initial state are not given
         uniform weights are assigned to them.
 
-        Arguments
+        Arguments:
         ---------
         ligand_idxs : arraylike of int
             The indices of the atom positions in the state considered
@@ -100,7 +97,7 @@ class ReceptorBC(WarpBC):
             The indices of the atom positions in the state considered
             the receptor.
 
-        Raises
+        Raises:
         ------
         AssertionError
             If any of the following kwargs are not given:
@@ -209,9 +206,8 @@ class RebindingBC(ReceptorBC):
     ):
         """Constructor for RebindingBC.
 
-        Arguments
+        Arguments:
         ---------
-
         native_state : object implementing the State interface
             The reference bound state. Will be automatically centered.
 
@@ -234,7 +230,7 @@ class RebindingBC(ReceptorBC):
             The indices of the atom positions in the state considered
             the binding site.
 
-        Raises
+        Raises:
         ------
         AssertionError
             If any of the following kwargs are not given:
@@ -400,7 +396,7 @@ class UnbindingBC(ReceptorBC):
         The 'initial_state' should be the initial state of your
         simulation for proper non-equilibrium simulations.
 
-        Arguments
+        Arguments:
         ---------
         initial_state : object implementing State interface
             The state walkers will take on after unbinding.
@@ -420,7 +416,7 @@ class UnbindingBC(ReceptorBC):
            Indices of the atoms in the topology that correspond to the
            receptor for the ligand.
 
-        Raises
+        Raises:
         ------
         AssertionError
             If any of the following are not provided: initial_state,
@@ -429,7 +425,7 @@ class UnbindingBC(ReceptorBC):
         AssertionError
             If the cutoff distance is not a float.
 
-        Warnings
+        Warnings:
         --------
         The 'initial_state' should be the initial state of your
         simulation for proper non-equilibrium simulations.
@@ -463,7 +459,8 @@ class UnbindingBC(ReceptorBC):
     @property
     def topology(self):
         """JSON string topology of the system.
-        Note: Deprecated and will be removed in future versions."""
+        Note: Deprecated and will be removed in future versions.
+        """
         return self._topology
 
     def _calc_min_distance(self, walker):

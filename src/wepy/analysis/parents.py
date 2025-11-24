@@ -62,7 +62,6 @@ from copy import copy
 
 # Third Party Library
 import networkx as nx
-import numpy as np
 
 DISCONTINUITY_VALUE = -1
 """Special value used to determine if a parent-child relationship has
@@ -490,7 +489,7 @@ class ParentForest:
         The underlying data structure used is a parent table. However,
         if a contig is given a reference to it will be kept.
 
-        Arguments
+        Arguments:
         ---------
         contig : Conting object, optional conditional on parent_table
 
@@ -499,7 +498,7 @@ class ParentForest:
             include metadata on discontinuities use the contig input
             which is preferrable.
 
-        Raises
+        Raises:
         ------
         ValueError
             If neither parent_table nor contig is given, or if both are given.
@@ -521,9 +520,9 @@ class ParentForest:
 
         # otherwise use the one given
         else:
-            assert not self.DISCONTINUITY_VALUE in it.chain(*parent_table), (
-                "Discontinuity values in parent table are not allowed."
-            )
+            assert self.DISCONTINUITY_VALUE not in it.chain(
+                *parent_table
+            ), "Discontinuity values in parent table are not allowed."
 
             self._parent_table = parent_table
 

@@ -1,4 +1,4 @@
-# First Party Library
+# Local Modules
 from .lennard_jones import LennardJonesPairOpenMMSimMaker
 from .lysozyme import LysozymeImplicitOpenMMSimMaker
 from .sim_maker import (

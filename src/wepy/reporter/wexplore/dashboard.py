@@ -4,12 +4,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-import os.path as osp
 from collections import defaultdict
-from warnings import warn
 
 # Third Party Library
-import numpy as np
 import pandas as pd
 from tabulate import tabulate
 
@@ -67,12 +64,12 @@ Defined Regions with the number of child regions per parent region:
             self.max_n_regions = resampler.max_n_regions
             self.max_region_sizes = resampler.max_region_sizes
         else:
-            assert max_n_regions is not None, (
-                "If a resampler is not given must give parameters: max_n_regions"
-            )
-            assert max_region_sizes is not None, (
-                "If a resampler is not given must give parameters: max_n_regions"
-            )
+            assert (
+                max_n_regions is not None
+            ), "If a resampler is not given must give parameters: max_n_regions"
+            assert (
+                max_region_sizes is not None
+            ), "If a resampler is not given must give parameters: max_n_regions"
 
             self.max_n_regions = max_n_regions
             self.max_region_sizes = max_region_sizes

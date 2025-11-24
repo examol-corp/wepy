@@ -58,7 +58,7 @@ class LayoutGraph:
         the viz_graph, which has all node and edge attributes removed
         but keeps the topology.
 
-        Arguments
+        Arguments:
         ---------
         graph : any networkx graph
 
@@ -252,13 +252,13 @@ class LayoutGraph:
 
         """
 
-        assert all([
-            True if (color <= 255 and color >= 0) else False for color in color_vec
-        ]), "invalid color values, must be between 0 and 255"
+        assert all(
+            [True if (color <= 255 and color >= 0) else False for color in color_vec]
+        ), "invalid color values, must be between 0 and 255"
 
-        return "#" + "".join(["{:02x}" for _ in color_vec]).format(*[
-            color for color in color_vec
-        ])
+        return "#" + "".join(["{:02x}" for _ in color_vec]).format(
+            *[color for color in color_vec]
+        )
 
     # methods for setting gexf visualization attributes
     @classmethod
