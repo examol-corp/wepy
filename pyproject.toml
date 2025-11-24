@@ -1,6 +1,3 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [project]
 name = "wepy"
@@ -16,7 +13,7 @@ authors = [
   { name = "Robert Hall" },
   { name = "Nicole Roussey" },
 ]
-dynamic = ["version"]
+version = "1.1.0"
 
 classifiers = [
   "Topic :: Utilities",
@@ -66,6 +63,7 @@ graphics = [
   "pillow>=10.0.1",
 ]
 
+
 [project.urls]
 
 Documentation = "https://adicksonlab.github.io/wepy/index.html"
@@ -76,11 +74,36 @@ Issues = "https://github.com/ADicksonLab/wepy/issues"
 
 wepy = "wepy.__main__:cli"
 
-# NOTE: currently disabled since it requires OpenMM currently to work which is
-# not ideal for unit testing
+[build-system]
+requires = ["uv_build>=0.9.11,<0.10.0"]
+build-backend = "uv_build"
 
-# [project.entry-points.pytest11]
-# pytest-wepy = "pytest_wepy"
+[dependency-groups]
+
+dev = [
+  # testing
+  "pytest",
+  "coverage",
+  "pytest-cov",
+  # qa
+  "black",
+  "isort",
+  "ruff",
+  "interrogate",
+  # typechecking
+  "mypy",
+  # interactive
+  "ipython",
+  "pdbpp",
+  # docs
+  "sphinx",
+  "sphinxcontrib-napoleon",
+  "sphinxcontrib-newsfeed",
+  "sphinxcontrib-bibtex",
+  "sphinxcontrib-newsfeed",
+  "nbsphinx",
+  "notebook",
+]
 
 [tool.interrogate]
 
