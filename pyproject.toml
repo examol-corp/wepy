@@ -10,7 +10,7 @@ license = "MIT"
 requires-python = ">=3.11"
 
 authors = [
-  { name = "Samuel Lotz", email = "salotz@salotz.info" },
+  { name = "Samuel Lotz", email = "samuel.lotz@salotz.info" },
   { name = "Alex Dickson", email = "alexrd@msu.edu" },
   { name = "Tom Dixon" },
   { name = "Robert Hall" },

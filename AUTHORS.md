@@ -1,10 +1,10 @@
-* Credits
+# Credits
 
-** Development Lead
+## Development Lead
 
 Samuel D. Lotz <samuel.lotz@salotz.info>
 
-** Contributors
+## Contributors
 
 Alex Dickson
 Nazanin Donyapour
