@@ -18,7 +18,6 @@ class Reporter:
 
     See Also
     --------
-
     wepy.sim_manager : details of calls to reporter methods.
 
     """
@@ -52,7 +51,6 @@ class Reporter:
 
         Parameters
         ----------
-
         init_walkers : list of Walker objects
             The initial walkers for the simulation.
 
@@ -92,7 +90,6 @@ class Reporter:
 
         Parameters
         ----------
-
         cycle_idx : int
 
         new_walkers : list of Walker objects
@@ -159,7 +156,6 @@ class Reporter:
 
         Parameters
         ----------
-
         runner : Runner object
             The runner at the end of the simulation
 
@@ -272,7 +268,6 @@ class FileReporter(Reporter):
 
         Parameters
         ----------
-
         file_paths : list of str
             The list of file paths (in order) to use.
 
@@ -509,7 +504,6 @@ class ProgressiveFileReporter(FileReporter):
 
         Parameters
         ----------
-
         file_paths : list of str
             The list of file paths (in order) to use.
 
@@ -524,7 +518,6 @@ class ProgressiveFileReporter(FileReporter):
 
         See Also
         --------
-
         wepy.reporter.reporter.FileReporter
 
         """

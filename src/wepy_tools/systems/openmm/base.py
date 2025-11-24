@@ -1,14 +1,10 @@
-import os
-import os.path
+# Standard Library
+
+# Third Party Library
 import numpy as np
-
-import scipy
-import scipy.special
-import scipy.integrate
-
 import openmm
-import openmm.unit as unit
 import openmm.app as omma
+import openmm.unit as unit
 
 
 class TestSystem(object):
@@ -28,12 +24,10 @@ class TestSystem(object):
 
     Notes
     -----
-
     Unimplemented methods will default to the base class methods, which raise a NotImplementedException.
 
     Examples
     --------
-
     Create a test system.
 
     >>> testsystem = TestSystem()
@@ -118,6 +112,7 @@ class TestSystem(object):
     @property
     def mdtraj_topology(self):
         """The mdtraj.Topology object corresponding to the test system (read-only)."""
+        # Third Party Library
         import mdtraj as md
 
         if self._mdtraj_topology is None:

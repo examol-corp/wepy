@@ -3,13 +3,11 @@ information on the progress of a simulation.
 """
 
 # Standard Library
-import itertools as it
 import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
 import time
-from collections import defaultdict
 from copy import copy
 from datetime import datetime
 
@@ -84,8 +82,7 @@ Average Cycle Time: {{ avg_cycle_time }}
 """
 
     def __init__(self, resampler_dash=None, runner_dash=None, bc_dash=None, **kwargs):
-        """
-        Parameters
+        """Parameters
         ----------
         resampler_dash
         runner_dash
@@ -459,9 +456,9 @@ Cumulative Boundary Crossed Weight: {{ total_crossed_weight }}
             self.bc_discontinuities = copy(bc.DISCONTINUITY_TARGET_IDXS)
 
         else:
-            assert discontinuities is not None, (
-                "If the bc is not given must give parameter: discontinuities"
-            )
+            assert (
+                discontinuities is not None
+            ), "If the bc is not given must give parameter: discontinuities"
             self.bc_discontinuities = discontinuities
 
         self.warp_records = []

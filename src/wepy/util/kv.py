@@ -164,9 +164,9 @@ def gen_uri(db_url, mode_spec):
     # otherwise do the whole thing
     else:
         # build the query substring
-        query = SQLITE3_QUERY_JOIN_CHAR.join([
-            "{}={}".format(key, value) for key, value in queries.items()
-        ])
+        query = SQLITE3_QUERY_JOIN_CHAR.join(
+            ["{}={}".format(key, value) for key, value in queries.items()]
+        )
 
         # build the URI string
         db_uri = SQLITE3_QUERY_URI_TEMPLATE.format(
@@ -317,9 +317,9 @@ class KV(MutableMapping):
         # translation
 
         if self.value_types is not None:
-            assert isinstance(value, self.value_types), (
-                "Value must be a value supported by this kv"
-            )
+            assert isinstance(
+                value, self.value_types
+            ), "Value must be a value supported by this kv"
 
         self.lockless_set(key, value)
 
@@ -366,7 +366,7 @@ class KV(MutableMapping):
         return query
 
     def lockless_set(self, key, value):
-        """an implementation of the __setitem__ without the lock context
+        """An implementation of the __setitem__ without the lock context
         manager which turns on the DEFERRED isolation level. The
         isolation level of the KV is set to autocommit so now lock is
         needed anyhow.

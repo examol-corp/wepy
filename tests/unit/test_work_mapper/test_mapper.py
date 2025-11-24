@@ -3,9 +3,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-import multiprocessing as mp
 import time
-from copy import deepcopy
 
 # Third Party Library
 import pytest
@@ -15,10 +13,9 @@ from wepy.walker import Walker, WalkerState
 from wepy.work_mapper.mapper import Mapper, TaskException
 from wepy.work_mapper.task_mapper import (
     TaskMapper,
-    TaskProcessException,
     WalkerTaskProcess,
 )
-from wepy.work_mapper.worker import Worker, WorkerException, WorkerMapper
+from wepy.work_mapper.worker import Worker, WorkerMapper
 
 ARGS = (0, 1, 2)
 

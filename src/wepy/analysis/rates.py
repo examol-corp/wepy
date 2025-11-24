@@ -15,7 +15,6 @@ def calc_warp_rate(warping_records, total_sampling_time):
 
     Parameters
     ----------
-
     warping_records : list of namedtuples implementing the warping interface
         The list of warping records for which events will be used to
         calculate the rates.
@@ -26,7 +25,6 @@ def calc_warp_rate(warping_records, total_sampling_time):
 
     Returns
     -------
-
     target_weights_rates : dict of int : tuple of (float, float, float)
         A dictionary where each key is for a target present in the
         warping records and each value is a tuple giving the total
@@ -36,7 +34,6 @@ def calc_warp_rate(warping_records, total_sampling_time):
 
     See Also
     --------
-
     wepy.boundary_conditions.boundary.Boundary : for specs on fields
                                                  necessary for warping_records
 
@@ -85,7 +82,6 @@ def contig_warp_rates(contig, cycle_time, time_points=None):
 
     Parameters
     ----------
-
     contig : analysis.contig_tree.Contig
         Underlying WepyHDF5 must be open for reading.
 
@@ -98,7 +94,6 @@ def contig_warp_rates(contig, cycle_time, time_points=None):
 
     Returns
     -------
-
     run_target_weights_rates : list of dict of int : tuple of (float, float, float)
 
         List where each value of a run is a list of outputs from
@@ -107,7 +102,6 @@ def contig_warp_rates(contig, cycle_time, time_points=None):
 
     See Also
     --------
-
     wepy.analysis.rates.calc_warp_rate
 
     wepy.boundary_conditions.boundary.Boundary : for specs on fields

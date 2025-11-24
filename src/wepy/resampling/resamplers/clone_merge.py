@@ -41,7 +41,6 @@ class CloneMergeResampler(Resampler):
 
         Parameters
         ----------
-
         pmin : float
             The minimum probability any walker is allowed to have.
 
@@ -71,13 +70,11 @@ class CloneMergeResampler(Resampler):
 
         Parameters
         ----------
-
         n_walkers : int
             The number of walkers to generate records for
 
         Returns
         -------
-
         decision_records : list of dict of str: value
             A list of default decision records for one step of
             resampling.
@@ -159,7 +156,6 @@ class CloneMergeResampler(Resampler):
 
         Returns
         -------
-
         walker_actions : list of dict of str: values
             List of resampling record like dictionaries. These are not
             completely normalized for consumption by reporters, since
@@ -217,9 +213,9 @@ class CloneMergeResampler(Resampler):
 
                 # if there are any free slots, then we use those first
                 if len(free_slots) > 0:
-                    clone_targets.extend([
-                        free_slots.pop() for clone in range(num_clones)
-                    ])
+                    clone_targets.extend(
+                        [free_slots.pop() for clone in range(num_clones)]
+                    )
 
                 # if there are more slots needed then we will have to
                 # create them

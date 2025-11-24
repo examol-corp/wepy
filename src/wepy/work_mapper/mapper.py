@@ -17,9 +17,6 @@ import time
 import traceback
 from warnings import warn
 
-# First Party Library
-from wepy.util.util import set_loglevel
-
 PY_MAP = map
 
 
@@ -123,7 +120,6 @@ class Mapper(ABCMapper):
 
         Examples
         --------
-
         >>> Mapper(segment_func=sum).map([(0,1,2), (3,4,5)])
         [3, 12]
 
@@ -259,7 +255,6 @@ class ABCWorkerMapper(ABCMapper):
         self, num_workers=None, segment_func=None, proc_start_method="fork", **kwargs
     ):
         """Constructor for WorkerMapper.
-
 
         Parameters
         ----------
@@ -398,7 +393,6 @@ class WorkerMapper(ABCWorkerMapper):
         **kwargs,
     ):
         """Constructor for WorkerMapper.
-
 
         Parameters
         ----------

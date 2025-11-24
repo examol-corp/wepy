@@ -43,8 +43,8 @@ to be determined adaptively (e.g. according to some time limit).
 """
 
 # Standard Library
-from typing import Final, Any
 import logging
+from typing import Final
 
 logger = logging.getLogger(__name__)
 # Standard Library
@@ -52,13 +52,12 @@ import time
 from copy import deepcopy
 
 # First Party Library
+from wepy.boundary_conditions.boundary import BoundaryConditions
+from wepy.reporter.reporter import Reporter
+from wepy.resampling.resamplers.resampler import Resampler
+from wepy.runners.runner import Runner
 from wepy.walker import Walker
 from wepy.work_mapper.mapper import Mapper
-from wepy.runners.runner import Runner
-from wepy.resampling.resamplers.resampler import Resampler
-from wepy.reporter.reporter import Reporter
-from wepy.work_mapper.mapper import WorkerMapper
-from wepy.boundary_conditions.boundary import BoundaryConditions
 
 
 class Manager:
@@ -125,9 +124,8 @@ class Manager:
     ):
         """Constructor for Manager.
 
-        Arguments
+        Arguments:
         ---------
-
         init_walkers : list of walkers
             The list of the initial walkers that will be run.
 
@@ -147,15 +145,14 @@ class Manager:
         reporters : list of objects implenting the Reporter interface, optional
             Reporters to be used. You should provide these if you want to keep data.
 
-        Warnings
+        Warnings:
         --------
-
         While reporters are strictly optional, you probably want to
         provide some because the simulation manager provides no
         utilities for saving data from the simulations except for the
         walkers at the end of a cycle or simulation.
 
-        See Also
+        See Also:
         --------
         wepy.reporter.hdf5 : The standard reporter for molecular simulations in wepy.
 
@@ -220,7 +217,6 @@ class Manager:
 
         Returns
         -------
-
         new_walkers : list[Walker]
            The walkers after the segment of sampling simulation.
         """
@@ -312,7 +308,6 @@ class Manager:
 
         Returns
         -------
-
         new_walkers : list of walkers
             The resulting walkers of the cycle
 
@@ -350,7 +345,7 @@ class Manager:
             runner_opts = {}
 
         if self.runner is None:
-            raise RuntimeError(f"'runner' is None")
+            raise RuntimeError("'runner' is None")
 
         # run the runner pre-cycle hook
         start = time.time()

@@ -1,4 +1,13 @@
-# Contributing 
+# CONTRIBUTING
+
+```
+uv sync --all-extras
+```
+
+
+
+
+# Contributing (OLD)
 
 Developing on wepy
 

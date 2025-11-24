@@ -7,6 +7,8 @@ from scipy.spatial.distance import euclidean
 from wepy.boundary_conditions.receptor import UnbindingBC
 from wepy.resampling.distances.distance import Distance
 from wepy.runners.openmm import GET_STATE_KWARG_DEFAULTS
+
+# Local Modules
 from .sim_maker import OpenMMToolsTestSysSimMaker
 
 

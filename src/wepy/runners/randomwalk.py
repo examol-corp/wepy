@@ -24,7 +24,6 @@ logger = logging.getLogger(__name__)
 import random as rand
 
 # Third Party Library
-import numpy as np
 from pint import UnitRegistry
 
 # First Party Library
@@ -51,7 +50,6 @@ class RandomWalkRunner(Runner):
 
         Parameters
         ----------
-
         probabilty : float
             "Probability" is defined here as the forward-move
              probability only. The backward-move probability is

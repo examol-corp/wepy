@@ -3,15 +3,12 @@ import openmm as omm
 import pytest
 from openmm_systems.test_systems import LennardJonesPair
 
+# First Party Library
 from wepy.runners.openmm import (
-    GET_STATE_KWARG_DEFAULTS,
-    UNIT_NAMES,
     OpenMMRunner,
     gen_walker_state,
 )
-
 from wepy_tools.sim_makers.openmm.sim_maker import OpenMMSimMaker
-
 
 ### Constants
 

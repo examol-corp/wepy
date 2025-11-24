@@ -9,11 +9,11 @@ Contig
 """
 
 # Standard Library
-from typing import Final
 import warnings
 from collections import deque
 from copy import copy
 from operator import attrgetter
+from typing import Final
 
 # Third Party Library
 import networkx as nx
@@ -26,13 +26,10 @@ except ModuleNotFoundError:
     warnings.warn("Matplotlib not installed, these features will not work")
 
 # Third Party Library
+import pandas as pd
 from geomm.free_energy import free_energy as calc_free_energy
 
 # First Party Library
-from wepy.hdf5 import WepyHDF5
-from wepy.resampling.decisions.decision import Decision
-from wepy.boundary_conditions.boundary import BoundaryConditions
-
 from wepy.analysis.network_layouts.layout_graph import LayoutGraph
 from wepy.analysis.network_layouts.tree import ResamplingTreeLayout
 from wepy.analysis.parents import (
@@ -43,9 +40,9 @@ from wepy.analysis.parents import (
     parent_panel,
     sliding_window,
 )
-
-import pandas as pd
-
+from wepy.boundary_conditions.boundary import BoundaryConditions
+from wepy.hdf5 import WepyHDF5
+from wepy.resampling.decisions.decision import Decision
 
 # the groups of run records
 RESAMPLING: Final = "resampling"
@@ -133,7 +130,6 @@ class BaseContigTree:
 
         Warnings
         --------
-
         Only set `continuations` if you know what you are doing.
 
         A `decision_class` must be given to be able to detect cloning and
@@ -416,7 +412,6 @@ class BaseContigTree:
 
         Returns
         -------
-
         run_trace : list of tuples of ints (run_idx, traj_idx, cycle_idx)
 
         """
@@ -445,12 +440,10 @@ class BaseContigTree:
 
         Parameters
         ----------
-
         contig_walker_trace : list of tuples of ints (traj_idx, cycle_idx)
 
         Returns
         -------
-
         run_trace : list of tuples of ints (run_idx, traj_idx, cycle_idx)
 
         See Also
@@ -462,18 +455,14 @@ class BaseContigTree:
         return self.contig_trace_to_run_trace(self.contig_trace, contig_walker_trace)
 
     def run_trace_to_contig_trace(self, run_trace):
-        """
-
-        Assumes that the run trace goes along a valid contig.
+        """Assumes that the run trace goes along a valid contig.
 
         Parameters
         ----------
-
         run_trace : list of tuples of ints (run_idx, traj_idx, cycle_idx)
 
         Returns
         -------
-
         contig_walker_trace : list of tuples of ints (traj_idx, contig_cycle_idx)
 
 
@@ -501,7 +490,6 @@ class BaseContigTree:
 
         Returns
         -------
-
         contig_cycle_idx : int
             The cycle idx in the contig
 
@@ -530,7 +518,6 @@ class BaseContigTree:
 
         Returns
         -------
-
         contig_trace : list of tuples of ints (run_idx, cycle_idx)
 
         """
@@ -825,7 +812,6 @@ class BaseContigTree:
 
         Returns
         -------
-
         windows : list of list of tuples of ints (traj_idx, cycle_idx)
             List of contig walker traces
 
@@ -1017,7 +1003,6 @@ class BaseContigTree:
 
         Returns
         -------
-
         spanning_paths : list of edges
 
         """
@@ -1079,15 +1064,12 @@ class BaseContigTree:
     #     return root_sources
 
     def _spanning_paths(self, root):
-        """
-
-        Parameters
+        """Parameters
         ----------
         root : node_id
 
         Returns
         -------
-
         spanning_paths : list of list of edges
 
         """
@@ -1193,7 +1175,7 @@ class BaseContigTree:
 
         contig_runs = []
         for run_idx, cycle_idx in contig_trace:
-            if not run_idx in contig_runs:
+            if run_idx not in contig_runs:
                 contig_runs.append(run_idx)
             else:
                 pass
@@ -1484,7 +1466,6 @@ class ContigTree(BaseContigTree):
 
         Parameters
         ----------
-
         decision_id : int
             The string ID of the decision you want to match on and get
             lineages for.
@@ -1516,7 +1497,8 @@ class ContigTree(BaseContigTree):
 
     def lineages(self, trace, discontinuities=True):
         """Get the ancestry lineage for each element of the trace as a run
-        trace."""
+        trace.
+        """
 
         lines = []
         # for each element of the trace we need to get it's lineage
@@ -1817,13 +1799,11 @@ class Contig(ContigTree):
 
         Notes
         -----
-
         This requires the decision class to be given to the Contig at
         construction.
 
         Warnings
         --------
-
         If the simulation was run with boundary conditions that result
         in discontinuous warping events and that class is not provided
         at construction time to this class these discontinuities will
@@ -1854,7 +1834,8 @@ class Contig(ContigTree):
 
     def lineages(self, contig_trace, discontinuities=True):
         """Get the ancestry lineage for each element of the trace as a run
-        trace."""
+        trace.
+        """
 
         return [
             self.walker_trace_to_run_trace(trace)
@@ -1883,7 +1864,6 @@ class Contig(ContigTree):
 
         Parameters
         ----------
-
         decision_id : int
             The integer ID of the decision you want to match on and get
             lineages for. This is the integer value of the decision
@@ -1928,7 +1908,6 @@ class Contig(ContigTree):
 
         Parameters
         ----------
-
         decision_id : int
             The string ID of the decision you want to match on and get
             lineages for.

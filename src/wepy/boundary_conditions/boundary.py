@@ -10,7 +10,6 @@ import logging
 logger = logging.getLogger(__name__)
 # Standard Library
 import random
-import sys
 from collections import defaultdict
 from copy import deepcopy
 
@@ -276,7 +275,6 @@ class BoundaryConditions:
 
         Returns
         -------
-
         record_specs : list of tuple
             A list of the specs for each field, a spec is a tuple of
             type (field_name, shape_spec, dtype_spec)
@@ -306,7 +304,6 @@ class BoundaryConditions:
 
         Returns
         -------
-
         record_specs : list of tuple
             A list of the specs for each field, a spec is a tuple of
             type (field_name, shape_spec, dtype_spec)
@@ -340,7 +337,6 @@ class BoundaryConditions:
 
         Returns
         -------
-
         record_specs : list of tuple
             A list of the specs for each field, a spec is a tuple of
             type (field_name, shape_spec, dtype_spec)
@@ -516,7 +512,7 @@ class WarpBC(BoundaryConditions):
         If the initial weights for each initial state are not given
         uniform weights are assigned to them.
 
-        Arguments
+        Arguments:
         ---------
         initial_states : list of objects implementing the State interface
             The list of possible states that warped walkers will assume.
@@ -526,7 +522,7 @@ class WarpBC(BoundaryConditions):
             provided. If not given, uniform probabilities will be
             used.
 
-        Raises
+        Raises:
         ------
         AssertionError
             If any of the following kwargs are not given:
@@ -656,17 +652,15 @@ class WarpBC(BoundaryConditions):
         """Test the progress of all the walkers, warp if required, and update
         the boundary conditions.
 
-        Arguments
+        Arguments:
         ---------
-
         walkers : list of objects implementing the Walker interface
 
         cycle : int
             The index of the cycle.
 
-        Returns
+        Returns:
         -------
-
         new_walkers : list of objects implementing the Walker interface
             The new set of walkers that may have been warped.
 
@@ -745,13 +739,11 @@ class WarpBC(BoundaryConditions):
 
         Parameters
         ----------
-
         warping_record : tuple
             The WARPING type record.
 
         Returns
         -------
-
         is_discontinuous : bool
             True if a discontinuous warp False if continuous.
 

@@ -1,10 +1,8 @@
 # Standard Library
-import itertools as it
 import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-from collections import defaultdict
 from warnings import warn
 
 # Third Party Library
@@ -16,7 +14,8 @@ from wepy.resampling.decisions.decision import Decision, NoDecision
 
 class ResamplerError(Exception):
     """Error raised when some constraint on resampling properties is
-    violated."""
+    violated.
+    """
 
     pass
 
@@ -290,7 +289,6 @@ class Resampler:
 
         Parameters
         ----------
-
         min_num_walkers : int or None or Ellipsis
             The minimum number of walkers allowed to have. None is
             unbounded, and Ellipsis preserves whatever number of
@@ -363,7 +361,6 @@ class Resampler:
 
         Returns
         -------
-
         record_specs : list of tuple
             A list of the specs for each field, a spec is a tuple of
             type (field_name, shape_spec, dtype_spec)
@@ -397,7 +394,6 @@ class Resampler:
 
         Returns
         -------
-
         record_specs : list of tuple
             A list of the specs for each field, a spec is a tuple of
             type (field_name, shape_spec, dtype_spec)
@@ -420,9 +416,7 @@ class Resampler:
         return self._debug_mode
 
     def set_debug_mode(self, mode):
-        """
-
-        Parameters
+        """Parameters
         ----------
         mode
 
@@ -601,7 +595,6 @@ class Resampler:
 
         Returns
         -------
-
         resampled_walkers : list of Walker objects
             The set of resampled walkers
 
@@ -615,7 +608,7 @@ class Resampler:
 
         """
 
-        raise NotImplemented
+        raise NotImplementedError
 
         self._resample_init(walkers, debug_mode=debug_mode)
 
@@ -676,13 +669,11 @@ class NoResampler(Resampler):
 
         Parameters
         ----------
-
         n_walkers : int
             The number of walkers to generate records for
 
         Returns
         -------
-
         decision_records : list of dict of str: value
             A list of default decision records for one step of
             resampling.

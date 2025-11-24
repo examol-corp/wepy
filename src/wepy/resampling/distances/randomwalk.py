@@ -35,7 +35,6 @@ class RandomWalkDistance(Distance):
 
         Parameters
         ----------
-
         state : object implementing WalkerState
             A walker state object with positions in a numpy array
             of shape (N), where N is the the dimension of the random
@@ -43,7 +42,6 @@ class RandomWalkDistance(Distance):
 
         Returns
         -------
-
         randomwalk_image : array of floats of shape (N)
             The positions of a walker in the N-dimensional space.
 
@@ -53,9 +51,8 @@ class RandomWalkDistance(Distance):
     def image_distance(self, image_a, image_b):
         """Compute the distance between the image of the two walkers.
 
-         Parameters
+        Parameters
          ----------
-
          image_a : array of float of shape (1, N)
              Position of the first walker's state.
 
@@ -64,7 +61,6 @@ class RandomWalkDistance(Distance):
 
         Returns
          -------
-
          distance: float
              The normalized Manhattan distance.
 

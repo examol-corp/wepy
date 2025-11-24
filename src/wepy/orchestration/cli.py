@@ -34,9 +34,7 @@ def settle_run_options(
     configuration=None,
     start_hash=None,
 ):
-    """
-
-    Parameters
+    """Parameters
     ----------
     n_workers :
          (Default value = None)
@@ -48,6 +46,7 @@ def settle_run_options(
          (Default value = None)
 
     \b
+
     Returns
     -------
 
@@ -140,9 +139,8 @@ def run_snapshot(
     configuration,
     snapshot,
 ):
-    """
+    """\b
 
-    \b
     Parameters
     ----------
     log :
@@ -169,6 +167,7 @@ def run_snapshot(
 
 
     \b
+
     Returns
     -------
 
@@ -262,9 +261,8 @@ def run_orch(
     start_hash,
     orchestrator,
 ):
-    """
+    """\b
 
-    \b
     Parameters
     ----------
     log :
@@ -289,6 +287,7 @@ def run_orch(
 
 
     \b
+
     Returns
     -------
 
@@ -344,9 +343,8 @@ def run_orch(
 
 
 def combine_orch_wepy_hdf5s(new_orch, new_hdf5_path, run_ids=None):
-    """
+    """\b
 
-    \b
     Parameters
     ----------
     new_orch :
@@ -355,6 +353,7 @@ def combine_orch_wepy_hdf5s(new_orch, new_hdf5_path, run_ids=None):
 
 
     \b
+
     Returns
     -------
 
@@ -495,9 +494,9 @@ def combine_orch_wepy_hdf5s(new_orch, new_hdf5_path, run_ids=None):
             # map the hash id to the new run idx created. There should
             # only be one run in an HDF5 if we are following the
             # orchestration workflow.
-            assert len(new_run_idxs) < 2, (
-                "Cannot be more than 1 run per HDF5 file in orchestration workflow"
-            )
+            assert (
+                len(new_run_idxs) < 2
+            ), "Cannot be more than 1 run per HDF5 file in orchestration workflow"
 
             run_mapping[run_id] = new_run_idxs[0]
 
@@ -560,6 +559,7 @@ def reconcile_hdf5(orchestrator, hdf5, run_ids):
     files.
 
     \b
+
     Parameters
     ----------
     orchestrator : Path
@@ -573,6 +573,7 @@ def reconcile_hdf5(orchestrator, hdf5, run_ids):
         e.g. 'd0cb2e6fbcc8c2d66d67c845120c7f6b,b4b96580ae57f133d5f3b6ce25affa6d'
 
     \b
+
     Returns
     -------
 
@@ -597,9 +598,8 @@ def reconcile_hdf5(orchestrator, hdf5, run_ids):
 @click.argument("output", nargs=1, type=click.Path(exists=False))
 @click.argument("orchestrators", nargs=-1, type=click.Path(exists=True))
 def reconcile_orch(hdf5, output, orchestrators):
-    """
+    """\b
 
-    \b
     Parameters
     ----------
     hdf5 : Path
@@ -610,6 +610,7 @@ def reconcile_orch(hdf5, output, orchestrators):
         Paths to the orchestrators to reconcile.
 
     \b
+
     Returns
     -------
 
@@ -629,15 +630,15 @@ def reconcile_orch(hdf5, output, orchestrators):
 
 
 def hash_listing_formatter(hashes):
-    """
+    """\b
 
-    \b
     Parameters
     ----------
     hashes :
 
 
     \b
+
     Returns
     -------
 
@@ -649,15 +650,15 @@ def hash_listing_formatter(hashes):
 @click.argument("orchestrator", type=click.Path(exists=True))
 @click.command()
 def ls_snapshots(orchestrator):
-    """
+    """\b
 
-    \b
     Parameters
     ----------
     orchestrator :
 
 
     \b
+
     Returns
     -------
 
@@ -675,15 +676,15 @@ def ls_snapshots(orchestrator):
 @click.argument("orchestrator", type=click.Path(exists=True))
 @click.command()
 def ls_runs(orchestrator):
-    """
+    """\b
 
-    \b
     Parameters
     ----------
     orchestrator :
 
 
     \b
+
     Returns
     -------
 
@@ -703,15 +704,15 @@ def ls_runs(orchestrator):
 @click.argument("orchestrator", type=click.Path(exists=True))
 @click.command()
 def ls_configs(orchestrator):
-    """
+    """\b
 
-    \b
     Parameters
     ----------
     orchestrator :
 
 
     \b
+
     Returns
     -------
 
@@ -732,7 +733,8 @@ def ls_configs(orchestrator):
 @click.argument("target", type=click.Path(exists=False))
 def hdf5_copy(no_expand_external, source, target):
     """Copy a WepyHDF5 file, except links to other runs will optionally be
-    expanded and truly duplicated if symbolic inter-file links are present."""
+    expanded and truly duplicated if symbolic inter-file links are present.
+    """
 
     # arg clusters to pass to subprocess for the files
     input_f_args = ["-i", source]

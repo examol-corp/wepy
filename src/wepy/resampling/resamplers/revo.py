@@ -11,9 +11,7 @@ import random as rand
 import numpy as np
 
 # First Party Library
-from wepy.resampling.decisions.clone_merge import MultiCloneMergeDecision
 from wepy.resampling.resamplers.clone_merge import CloneMergeResampler
-from wepy.resampling.resamplers.resampler import Resampler
 
 
 class REVOResampler(CloneMergeResampler):
@@ -144,7 +142,6 @@ class REVOResampler(CloneMergeResampler):
 
         Parameters
         ----------
-
         dist_exponent : int
           The distance exponent that modifies distance and weight novelty
           relative to each other in the variation equation.
@@ -235,7 +232,6 @@ class REVOResampler(CloneMergeResampler):
 
         Parameters
         ----------
-
         walker_weight : float
             The weight of the walker.
 
@@ -266,7 +262,6 @@ class REVOResampler(CloneMergeResampler):
 
         Parameters
         ----------
-
         walker_weights : list of float
             The weights of all walkers. The sum of all weights should be 1.0.
 
@@ -291,10 +286,12 @@ class REVOResampler(CloneMergeResampler):
         num_walkers = len(walker_weights)
 
         # set the novelty values
-        walker_novelties = np.array([
-            self._novelty(walker_weights[i], num_walker_copies[i])
-            for i in range(num_walkers)
-        ])
+        walker_novelties = np.array(
+            [
+                self._novelty(walker_weights[i], num_walker_copies[i])
+                for i in range(num_walkers)
+            ]
+        )
 
         # the value to be optimized
         variation = 0
@@ -331,7 +328,6 @@ class REVOResampler(CloneMergeResampler):
 
         Parameters
         ----------
-
         walker_variations : arraylike of shape (num_walkers)
            The Vi value of each walker.
 
@@ -343,7 +339,6 @@ class REVOResampler(CloneMergeResampler):
 
         Returns
         -------
-
         variation_loss_list : tuple
             A tuple of the walker merge pair indicies that meet the criteria
             for merging and minimize variation loss.
@@ -379,7 +374,6 @@ class REVOResampler(CloneMergeResampler):
 
         Parameters
         ----------
-
         weights : list of float
             The weights of all walkers. The sum of all weights should be 1.0.
 
@@ -393,9 +387,9 @@ class REVOResampler(CloneMergeResampler):
         num_walker_copies : list of int                                                                                                                                                                                 The number of copies of each walker.
              0 means the walker is not exists anymore.
              1 means there is one of the this walker.                                                                                                                                                                   >1 means it should be cloned to this number of walkers.
+
         Returns
         -------
-
         eligible_pairs : list of tuples
             Pairs of walker indexes that meet the criteria for merging.
 
@@ -418,7 +412,6 @@ class REVOResampler(CloneMergeResampler):
 
         Parameters
         ----------
-
         walker_weights : list of float
             The weights of all walkers. The sum of all weights should be 1.0.
 

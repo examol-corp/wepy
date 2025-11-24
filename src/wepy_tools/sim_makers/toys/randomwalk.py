@@ -27,12 +27,8 @@ Using the Weighted Ensemble Algorithm" and
 """
 
 # Standard Library
-import json
-import os
-import sys
 
 # Third Party Library
-import h5py
 import mdtraj as mdj
 import numpy as np
 import pandas as pd
@@ -40,7 +36,6 @@ import pandas as pd
 # First Party Library
 from wepy.hdf5 import WepyHDF5
 from wepy.reporter.hdf5 import WepyHDF5Reporter
-from wepy.resampling.resamplers.resampler import NoResampler
 from wepy.runners.randomwalk import UNIT_NAMES, RandomWalkRunner
 from wepy.sim_manager import Manager
 from wepy.util.mdtraj import mdtraj_to_json_topology
@@ -285,7 +280,6 @@ class RandomwalkProfiler(object):
 
         Returns
         -------
-
         accuracy: float
             The value that specifies how accurate the resampler is at point x.
             The highest accuracy is achived when P(X) = Pt(x).
@@ -305,13 +299,11 @@ class RandomwalkProfiler(object):
 
         Parameters
         ----------
-
         x: int
             The position.
 
         Returns
         -------
-
         accuracy : float
             The value of the target probability when the
             forward-move probability p.
@@ -341,7 +333,6 @@ class RandomwalkProfiler(object):
 
         Returns
         -------
-
         max_range: int
             The maximum range that is visited by all walkers in
             all dimensions.

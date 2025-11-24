@@ -54,7 +54,6 @@ class ReceptorDistance(Distance):
 
         Parameters
         ----------
-
         ligand_idxs : arraylike of int
             The indices of the atoms from the 'positions' attribute of
             states that correspond to the ligand molecule.
@@ -148,7 +147,6 @@ class ReceptorDistance(Distance):
 
         Returns
         -------
-
         receptor_image : array of float
             The positions of binding site and ligand after
             preprocessing.

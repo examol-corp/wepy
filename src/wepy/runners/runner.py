@@ -17,6 +17,7 @@ See the openmm.py module for an example.
 
 """
 
+# Standard Library
 from typing import Protocol
 
 
@@ -30,7 +31,6 @@ class Runner(Protocol):
 
         Parameters
         ----------
-
         kwargs : key-word arguments
             Key-value pairs to be interpreted by each runner implementation.
 
@@ -48,7 +48,6 @@ class Runner(Protocol):
 
         Parameters
         ----------
-
         kwargs : key-word arguments
             Key-value pairs to be interpreted by each runner implementation.
 

@@ -62,7 +62,6 @@ def transition_counts(assignments, transitions, weights=None):
 
     Parameters
     ----------
-
     assignments: mixed array_like of dim (n_run, n_traj, n_cycle) type int
         Assignment of microstates to macrostate labels, where N_runs
         is the number of runs, N_traj is the number of trajectories,
