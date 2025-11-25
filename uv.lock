@@ -3123,6 +3123,7 @@ name = "wepy"
 version = "1.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "attrs" },
     { name = "click" },
     { name = "dill" },
     { name = "geomm" },
@@ -3177,6 +3178,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "attrs" },
     { name = "click" },
     { name = "dask", extras = ["bag"], marker = "extra == 'distributed'" },
     { name = "dill" },
