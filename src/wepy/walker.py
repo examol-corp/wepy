@@ -60,7 +60,7 @@ class WalkerState:
 
     """
 
-    def __init__(self, **kwargs: dict[str, Any]) -> Self:
+    def __init__(self, **kwargs: dict[str, Any]) -> None:
         """Constructor for WalkerState.
 
         All key-word arguments passed in will be set as the key-value
@@ -72,8 +72,12 @@ class WalkerState:
     def __getitem__(self, key: str) -> Any:
         return self._data[key]
 
-    def __eq__(self, other: Self) -> bool:
-        return self._data == other._data
+    def __eq__(self, other: object) -> bool:
+
+        if not isinstance(other, WalkerState):
+            return False
+        else:
+            return self._data == other._data
 
     def dict(self) -> dict[str, Any]:
         """Return all key-value pairs as a dictionary."""
@@ -140,7 +144,7 @@ class Walker:
         new_weight = self.weight + merge_target.weight
         return type(self)(merge_target.state, new_weight)
 
-    def merge(self, other_walkers: list[Self]) -> Self:
+    def merge(self, other_walkers: list["Walker"]) -> "Walker":
         """Merge a set of other walkers into this one using the merge function.
 
         Parameters
@@ -210,7 +214,7 @@ def keep_merge(walkers: list[Walker], keep_idx: int) -> Walker:
     return new_walker
 
 
-def merge(walkers: list[Walker]) -> Walker:
+def merge(walkers: list[Walker]) -> tuple[Walker, int]:
     """Merge this walker with another keeping the state of one of them
     and adding the weights.
 
@@ -219,12 +223,12 @@ def merge(walkers: list[Walker]) -> Walker:
 
     Parameters
     ----------
-    walkers : list of objects implementing the Walker interface
-        The walkers that will be merged together
+    walkers : The walkers that will be merged together
 
     Returns
     -------
-    merged_walker : object implementing the Walker interface
+    merged_walker : Final merged walker
+    keep_idx: Index of the walker whose state was retained.
 
     """
 
