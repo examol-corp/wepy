@@ -2,7 +2,7 @@
 [project]
 name = "wepy"
 description = "Weighted Ensemble Framework"
-readme = { "file" = "README.org", "content-type" = "text/plain" }
+readme = { "file" = "README.md", "content-type" = "text/plain" }
 license = "MIT"
 requires-python = ">=3.11"
 
