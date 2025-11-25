@@ -10,7 +10,19 @@ import pytest
 
 # First Party Library
 from wepy.walker import Walker, WalkerState
-from wepy.work_mapper.mapper import Mapper, TaskException
+from wepy.work_mapper.mapper import (
+    ABCMapper,
+    Mapper,
+    TaskException,
+    Task,
+    WrapperException,
+    TaskException,
+    ABCWorkerMapper,
+    WorkerException,
+    WorkerKilledError,
+    WorkerMapper,
+    Worker,
+)
 from wepy.work_mapper.task_mapper import (
     TaskMapper,
     WalkerTaskProcess,
@@ -33,6 +45,35 @@ def task_pass(walker):
 
 TASK_PASS_ANSWER = [n + 1 for n in ARGS]
 
+class TestABCMapper:
+    def test___init__(self):
+
+        no_mapper = ABCMapper()
+        assert no_mapper.segment_func is None
+        assert no_mapper.attributes == {}
+
+        mapper = ABCMapper(
+            segment_func=(lambda x: )
+        )
+        assert no_mapper.segment_func is None
+        assert no_mapper.attributes == {}
+        
+
+    def test_init(self):
+        assert False
+
+    def test_cleanup(self):
+        assert False
+        
+class TestMapper:
+    def test___init__(self):
+        assert False
+
+    def test_map(self):
+        assert False
+    def test_worker_segment_times(self):
+        assert False
+        
 
 class TestWorkMappers:
     def test_mapper(self):
@@ -78,7 +119,77 @@ class TestWorkMappers:
 
         time.sleep(1)
 
+class TestTask:
 
+    def test___init__(self):
+        assert False
+
+    def test___call__(self):
+        assert False
+
+class TestWrapperException:
+
+    def test___init__(self):
+        assert False
+
+
+class TestABCWorkerMapper:
+
+    def test___init__(self):
+        assert False
+
+    def test_init(self):
+        assert False
+
+    def test_cleanup(self):
+        assert False
+
+    def test__make_task(self):
+        assert False
+
+class TestWorkerMapper:
+
+    def test___init__(self):
+        assert False
+        
+    def test_init(self):
+        assert False
+
+    def test__sigterm_shutdown(self):
+        assert False
+
+    def test_force_shutdown(self):
+        assert False
+
+    def test_cleanup(self):
+        assert False
+
+    def test_map(self):
+        assert False
+
+class TestWorker:
+
+    def test___init__(self):
+        assert False
+
+    def test_run(self):
+        assert False
+
+    def test__sigterm_shutdown(self):
+        assert False
+
+    def test__shutdown(self):
+        assert False
+
+    def test__run_worker(self):
+        assert False
+
+    def test_run_task(self):
+        assert False
+
+    def test__run_task(self):
+        assert False
+        
 # test that task failures are passed up properly
 def task_fail(walker):
     n = walker.state["num"]

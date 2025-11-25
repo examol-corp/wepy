@@ -125,7 +125,7 @@ def merge(walkers):
     return new_walker, keep_idx
 
 
-class Walker(object):
+class Walker:
     """Reference implementation of the Walker interface.
 
     A container for:
@@ -211,7 +211,7 @@ class Walker(object):
         return merge([self] + other_walkers)
 
 
-class WalkerState(object):
+class WalkerState:
     """Reference implementation of the WalkerState interface.
 
     Access all key-value pairs as a dictionary with the dict() method.

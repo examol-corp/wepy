@@ -583,7 +583,7 @@ We see that ReceptorDistance is inheriting from the ~Distance~ class,
 which is defined as such:
 
 #+BEGIN_SRC python
-  class Distance(object):
+  class Distance:
       """Abstract Base class for Distance classes."""
 
       def __init__(self):
@@ -615,7 +615,7 @@ as being equivalent to:
 We notice that the ~Distance~ class defines this method ~distance~:
 
 #+BEGIN_SRC python
-  class Distance(object):
+  class Distance:
       ...
 
       def distance(self, state_a, state_b):
@@ -634,7 +634,7 @@ it still has access to it.
 We notice that ~Distance~ also defines the method ~image_distance~:
 
 #+BEGIN_SRC python
-  class Distance(object):
+  class Distance:
 
       ...
 
@@ -1040,7 +1040,7 @@ weights of walkers in an ensemble (a simple list container).
 The implementation is very simple:
 
 #+begin_src python
-class Walker(object):
+class Walker:
 
     def __init__(self, state, weight):
 
@@ -1077,7 +1077,7 @@ it doesn't directly inherit from the actual ~WalkerState~ class.
 The implementation is very simple:
 
 #+begin_src python
-  class WalkerState(object):
+  class WalkerState:
 
       def __init__(self, **kwargs):
           self._data = kwargs
@@ -1524,7 +1524,7 @@ then using a simple for-loop to sequentially compute the segments:
 
 #+begin_src python
 
-  class Mapper(object):
+  class Mapper:
 
       def init(self, segment_func):
 

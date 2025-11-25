@@ -20,7 +20,7 @@ from warnings import warn
 PY_MAP = map
 
 
-class ABCMapper(object):
+class ABCMapper:
     """Abstract base class for a Mapper."""
 
     def __init__(self, segment_func=None, **kwargs):

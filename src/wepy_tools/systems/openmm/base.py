@@ -7,7 +7,7 @@ import openmm.app as omma
 import openmm.unit as unit
 
 
-class TestSystem(object):
+class TestSystem:
     """Abstract base class for test systems, demonstrating how to implement a test system.
 
     Parameters
