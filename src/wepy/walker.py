@@ -28,103 +28,59 @@ magic method for the accessor syntax, i.e. walker.state['positions'].
 
 # Standard Library
 import logging
+from typing import Protocol, Hashable, Any, Self
 
-logger = logging.getLogger(__name__)
 # Standard Library
 import random as rand
 from copy import deepcopy
 
+import attrs
 
-def split(walker, number=2):
-    """Split (AKA make multiple clones) of a single walker.
+logger = logging.getLogger(__name__)
 
-    Creates multiple new walkers that have the same state as the given
-    walker with weight evenly divided between them.
+class WalkerStateProtocol(Protocol):
 
-    Parameters
-    ----------
-    walker : object implementing the Walker interface
-        The walker to split/clone
-    number : int
-        The number of clones to make of the walker
-         (Default value = 2)
+    def __getitem__(self, key: str) -> Any:
+        ...
 
-    Returns
-    -------
-    cloned_walkers : list of objects implementing the Walker interface
-
-    """
-    # calculate the weight of all child walkers split uniformly
-    split_prob = walker.weight / (number)
-    # make the clones
-    clones = []
-    for i in range(number):
-        clones.append(type(walker)(walker.state, split_prob))
-
-    return clones
+    def dict(self) -> dict[str, Any]:
+        ...
 
 
-def keep_merge(walkers, keep_idx):
-    """Merge a set of walkers using the state of one of them.
+class WalkerState:
+    """Reference implementation of the WalkerState interface.
 
-    Parameters
-    ----------
-    walkers : list of objects implementing the Walker interface
-        The walkers that will be merged together
-    keep_idx : int
-        The index of the walker in the walkers list that will be used
-        to set the state of the new merged walker.
+    Access all key-value pairs as a dictionary with the dict() method.
 
-    Returns
-    -------
-    merged_walker : object implementing the Walker interface
+    Access individual values using the accessor syntax similar to
+    dictionaries:
+
+    >>> WalkerState(my_key='value')['my_key']
+    'value'
 
     """
 
-    weights = [walker.weight for walker in walkers]
-    # but we add their weight to the new walker
-    new_weight = sum(weights)
-    # create a new walker with the keep_walker state
-    new_walker = type(walkers[0])(walkers[keep_idx].state, new_weight)
+    def __init__(self, **kwargs: dict[str, Any]) -> Self:
+        """Constructor for WalkerState.
 
-    return new_walker
+        All key-word arguments passed in will be set as the key-value
+        pairs for the state.
 
+        """
+        self._data = kwargs
 
-def merge(walkers):
-    """Merge this walker with another keeping the state of one of them
-    and adding the weights.
+    def __getitem__(self, key: str) -> Any:
+        return self._data[key]
 
-    The walker that has it's state kept is a random choice weighted by
-    the walkers weights.
+    def __eq__(self, other: Self) -> bool:
+        return self._data == other._data
 
-    Parameters
-    ----------
-    walkers : list of objects implementing the Walker interface
-        The walkers that will be merged together
+    def dict(self) -> dict[str, Any]:
+        """Return all key-value pairs as a dictionary."""
+        return deepcopy(self._data)
 
-    Returns
-    -------
-    merged_walker : object implementing the Walker interface
-
-    """
-
-    weights = [walker.weight for walker in walkers]
-    # choose a walker according to their weights to keep its state
-    keep_walker = rand.choices(walkers, weights=weights)
-    keep_idx = walkers.index(keep_walker)
-
-    # TODO do we need this?
-    # the others are "squashed" and we lose their state
-    # squashed_walkers = set(walkers).difference(keep_walker)
-
-    # but we add their weight to the new walker
-    new_weight = sum(weights)
-    # create a new walker with the keep_walker state
-    new_walker = type(walkers[0])(keep_walker.state, new_weight)
-
-    return new_walker, keep_idx
-
-
+    
+@attrs.define
 class Walker:
     """Reference implementation of the Walker interface.
 
@@ -135,21 +91,10 @@ class Walker:
 
     """
 
-    def __init__(self, state, weight):
-        """Constructor for Walker.
+    state: WalkerStateProtocol
+    weight: float
 
-        Parameters
-        ----------
-        state : object implementing the WalkerState interface
-
-        weight : float
-
-        """
-
-        self.state = state
-        self.weight = weight
-
-    def clone(self, number=1):
+    def clone(self, number: int = 1) -> list[Self]:
         """Clone this walker by making a copy with the same state and split
         the probability uniformly between clones.
 
@@ -179,7 +124,7 @@ class Walker:
 
         return clones
 
-    def squash(self, merge_target):
+    def squash(self, merge_target: Self) -> Self:
         """Add the weight of this walker to another.
 
         Parameters
@@ -195,7 +140,7 @@ class Walker:
         new_weight = self.weight + merge_target.weight
         return type(self)(merge_target.state, new_weight)
 
-    def merge(self, other_walkers):
+    def merge(self, other_walkers: list[Self]) -> Self:
         """Merge a set of other walkers into this one using the merge function.
 
         Parameters
@@ -208,34 +153,93 @@ class Walker:
         merged_walker : object implementing the Walker interface
 
         """
-        return merge([self] + other_walkers)
+        return merge([self] + other_walkers)[0]
+
+def split(walker: Walker, number: int = 2) -> list[Walker]:
+    """Split (AKA make multiple clones) of a single walker.
+
+    Creates multiple new walkers that have the same state as the given
+    walker with weight evenly divided between them.
+
+    Parameters
+    ----------
+    walker : object implementing the Walker interface
+        The walker to split/clone
+    number : int
+        The number of clones to make of the walker
+         (Default value = 2)
+
+    Returns
+    -------
+    cloned_walkers : list of objects implementing the Walker interface
+
+    """
+    # calculate the weight of all child walkers split uniformly
+    split_prob = walker.weight / (number)
+    # make the clones
+    clones = []
+    for i in range(number):
+        clones.append(type(walker)(walker.state, split_prob))
+
+    return clones
 
 
-class WalkerState:
-    """Reference implementation of the WalkerState interface.
+def keep_merge(walkers: list[Walker], keep_idx: int) -> Walker:
+    """Merge a set of walkers using the state of one of them.
 
-    Access all key-value pairs as a dictionary with the dict() method.
+    Parameters
+    ----------
+    walkers : list of objects implementing the Walker interface
+        The walkers that will be merged together
+    keep_idx : int
+        The index of the walker in the walkers list that will be used
+        to set the state of the new merged walker.
 
-    Access individual values using the accessor syntax similar to
-    dictionaries:
-
-    >>> WalkerState(my_key='value')['my_key']
-    'value'
+    Returns
+    -------
+    merged_walker : object implementing the Walker interface
 
     """
 
-    def __init__(self, **kwargs):
-        """Constructor for WalkerState.
+    weights = [walker.weight for walker in walkers]
+    # but we add their weight to the new walker
+    new_weight = sum(weights)
+    # create a new walker with the keep_walker state
+    new_walker = type(walkers[0])(walkers[keep_idx].state, new_weight)
 
-        All key-word arguments passed in will be set as the key-value
-        pairs for the state.
+    return new_walker
 
-        """
-        self._data = kwargs
 
-    def __getitem__(self, key):
-        return self._data[key]
+def merge(walkers: list[Walker]) -> Walker:
+    """Merge this walker with another keeping the state of one of them
+    and adding the weights.
 
-    def dict(self):
-        """Return all key-value pairs as a dictionary."""
-        return deepcopy(self._data)
+    The walker that has it's state kept is a random choice weighted by
+    the walkers weights.
+
+    Parameters
+    ----------
+    walkers : list of objects implementing the Walker interface
+        The walkers that will be merged together
+
+    Returns
+    -------
+    merged_walker : object implementing the Walker interface
+
+    """
+
+    weights = [walker.weight for walker in walkers]
+    # choose a walker according to their weights to keep its state
+    keep_walker = next(iter(rand.choices(walkers, weights=weights)))
+    keep_idx = walkers.index(keep_walker)
+
+    # TODO do we need this?
+    # the others are "squashed" and we lose their state
+    # squashed_walkers = set(walkers).difference(keep_walker)
+
+    # but we add their weight to the new walker
+    new_weight = sum(weights)
+    # create a new walker with the keep_walker state
+    new_walker = type(walkers[0])(keep_walker.state, new_weight)
+
+    return new_walker, keep_idx
