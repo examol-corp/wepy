@@ -30,6 +30,7 @@ magic method for the accessor syntax, i.e. walker.state['positions'].
 import logging
 from typing import Protocol, Hashable, Any, Self
 from abc import ABC
+import math
 
 # Standard Library
 import random as rand
@@ -159,8 +160,8 @@ class Walker(WalkerABC):
 
     """
 
-    state: WalkerStateProtocol
-    weight: float
+    state: WalkerState
+    weight: float = attrs.field(eq=attrs.cmp_using(eq=math.isclose))
 
 
 def split(walker: Walker, number: int = 2) -> list[Walker]:
