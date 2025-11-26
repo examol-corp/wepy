@@ -18,13 +18,15 @@ See the openmm.py module for an example.
 """
 
 # Standard Library
-from typing import Protocol
+from typing import Protocol, Any
+import attrs
+from wepy.walker import Walker
 
 
 class Runner(Protocol):
     """Abstract base class for the Runner interface."""
 
-    def pre_cycle(self, **kwargs):
+    def pre_cycle(self) -> None:
         """Perform pre-cycle behavior. run_segment will be called for each
         walker so this allows you to perform changes of state on a
         per-cycle basis.
@@ -35,13 +37,9 @@ class Runner(Protocol):
             Key-value pairs to be interpreted by each runner implementation.
 
         """
+        ...
 
-        # by default just pass since subclasses need not implement this
-        # TODO: this should not be run if it is an abstract class. But it is running
-        # raise NotImplementedError(f"In {self.__class__.__name__}")
-        pass
-
-    def post_cycle(self, **kwargs):
+    def post_cycle(self) -> None:
         """Perform post-cycle behavior. run_segment will be called for each
         walker so this allows you to perform changes of state on a
         per-cycle basis.
@@ -56,15 +54,19 @@ class Runner(Protocol):
         # by default just pass since subclasses need not implement this
         pass
 
-    def run_segment(self, walker, segment_length, **kwargs):
+    def run_segment(
+        self,
+        walker: Walker,
+        segment_length: int | float,
+        **kwargs: dict[str, Any],
+    ) -> Walker:
         """Run dynamics for the walker.
 
         Parameters
         ----------
-        walker : object implementing the Walker interface
-            The walker for which dynamics will be propagated.
-        segment_length : int or float
-            The numerical value that specifies how much dynamics are to be run.
+        walker : The walker for which dynamics will be propagated.
+        segment_length : The numerical value that specifies how much dynamics are to be run.
+
 
         Returns
         -------
@@ -72,16 +74,21 @@ class Runner(Protocol):
             Walker after dynamics was run, only the state should be modified.
 
         """
+        ...
 
-        raise NotImplementedError
 
-
-class NoRunner(Runner):
+@attrs.define
+class NoRunner:
     """Stub Runner that just returns the walkers back with the same state.
 
     May be useful for testing.
     """
 
-    def run_segment(self, walker, segment_length, **kwargs):
+    def run_segment(
+        self,
+        walker: Walker,
+        segment_length: int | float,
+        **kwargs: dict[str, Any],
+    ) -> Walker:
         # documented in superclass
         return walker

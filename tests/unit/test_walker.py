@@ -1,4 +1,3 @@
-
 import math
 from wepy.walker import (
     split,
@@ -8,6 +7,7 @@ from wepy.walker import (
     WalkerState,
 )
 
+
 class TestWalkerState:
 
     def test___init__(self):
@@ -16,19 +16,20 @@ class TestWalkerState:
 
     def test___getitem__(self):
 
-        assert WalkerState(a=1, b="hello")['a'] == 1
-        assert WalkerState(a=1, b="hello")['b'] == "hello"
+        assert WalkerState(a=1, b="hello")["a"] == 1
+        assert WalkerState(a=1, b="hello")["b"] == "hello"
 
     def test___eq__(self):
 
         assert WalkerState(a=1, b="hello") == WalkerState(a=1, b="hello")
         assert WalkerState(a=1, b="hello") != WalkerState(a=100, b="hello")
-        
+
     def test_dict(self):
         assert WalkerState(a=1, b="hello").dict() == {
-            "a" : 1,
-            "b" : "hello",
+            "a": 1,
+            "b": "hello",
         }
+
 
 class TestWalker:
 
@@ -67,7 +68,7 @@ class TestWalker:
             state=WalkerState(a=1, b="hello"),
             weight=0.05,
         )
-        
+
     def test_clone(self):
         state = WalkerState(a=1, b="hello")
         walker = Walker(
@@ -86,8 +87,6 @@ class TestWalker:
             state=state,
             weight=0.05,
         )
-
-
 
     def test_squash(self):
 
@@ -111,9 +110,6 @@ class TestWalker:
             weight=0.2,
         )
 
-        
-        
-
     def test_merge(self):
         walker_a = Walker(
             state=WalkerState(a=1),
@@ -133,7 +129,6 @@ class TestWalker:
 
         assert math.isclose(walker_a.merge(other_walkers).weight, 0.3)
 
-        
 
 def test_split():
 
@@ -150,9 +145,9 @@ def test_split():
         Walker(
             state=WalkerState(a=1),
             weight=0.05,
-        )
+        ),
     ]
-    
+
 
 def test_keep_merge():
     walkers = [
@@ -167,15 +162,16 @@ def test_keep_merge():
     ]
 
     assert keep_merge(walkers, 0) == Walker(
-            state=WalkerState(a=10),
-            weight=0.2,
-        )
+        state=WalkerState(a=10),
+        weight=0.2,
+    )
 
     assert keep_merge(walkers, 1) == Walker(
-            state=WalkerState(a=20),
-            weight=0.2,
-        )
-    
+        state=WalkerState(a=20),
+        weight=0.2,
+    )
+
+
 def test_merge():
     walkers = [
         Walker(

@@ -29,6 +29,7 @@ magic method for the accessor syntax, i.e. walker.state['positions'].
 # Standard Library
 import logging
 from typing import Protocol, Hashable, Any, Self
+from abc import ABC
 
 # Standard Library
 import random as rand
@@ -38,13 +39,12 @@ import attrs
 
 logger = logging.getLogger(__name__)
 
+
 class WalkerStateProtocol(Protocol):
 
-    def __getitem__(self, key: str) -> Any:
-        ...
+    def __getitem__(self, key: str) -> Any: ...
 
-    def dict(self) -> dict[str, Any]:
-        ...
+    def dict(self) -> dict[str, Any]: ...
 
 
 class WalkerState:
@@ -83,20 +83,8 @@ class WalkerState:
         """Return all key-value pairs as a dictionary."""
         return deepcopy(self._data)
 
-    
-@attrs.define
-class Walker:
-    """Reference implementation of the Walker interface.
 
-    A container for:
-
-    - state
-    - weight
-
-    """
-
-    state: WalkerStateProtocol
-    weight: float
+class WalkerABC(ABC):
 
     def clone(self, number: int = 1) -> list[Self]:
         """Clone this walker by making a copy with the same state and split
@@ -158,6 +146,22 @@ class Walker:
 
         """
         return merge([self] + other_walkers)[0]
+
+
+@attrs.define
+class Walker(WalkerABC):
+    """Reference implementation of the Walker interface.
+
+    A container for:
+
+    - state
+    - weight
+
+    """
+
+    state: WalkerStateProtocol
+    weight: float
+
 
 def split(walker: Walker, number: int = 2) -> list[Walker]:
     """Split (AKA make multiple clones) of a single walker.
