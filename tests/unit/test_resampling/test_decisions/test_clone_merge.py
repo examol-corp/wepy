@@ -1,0 +1,188 @@
+import pytest
+import attrs
+
+from wepy.walker import Walker, WalkerState
+from wepy.resampling.decisions.clone_merge import (
+    MultiCloneMergeDecision,
+    CloneMergeDecisionEnum,
+)
+
+
+class TestMultiCloneMergeDecision:
+
+    def test_action(self):
+        walker_1 = Walker(
+            state=WalkerState(a=1),
+            weight=1.0,
+        )
+
+        walker_2 = Walker(
+            state=WalkerState(a=2),
+            weight=1.0,
+        )
+        walker_3 = Walker(
+            state=WalkerState(a=3),
+            weight=1.0,
+        )
+
+        walkers = [
+            walker_1,
+            walker_2,
+        ]
+
+        # unknown decision number
+        with pytest.raises(ValueError):
+            MultiCloneMergeDecision.action(
+                walkers,
+                [
+                    [
+                        {
+                            "decision_id": 1000,
+                            "target_idxs": [0],
+                        },
+                        {
+                            "decision_id": CloneMergeDecisionEnum.NOTHING,
+                            "target_idxs": [1],
+                        },
+                    ]
+                ],
+            )
+
+        assert (
+            MultiCloneMergeDecision.action(
+                walkers,
+                [
+                    [
+                        {
+                            "decision_id": CloneMergeDecisionEnum.NOTHING,
+                            "target_idxs": [0],
+                        },
+                        {
+                            "decision_id": CloneMergeDecisionEnum.NOTHING,
+                            "target_idxs": [1],
+                        },
+                    ]
+                ],
+            )
+            == walkers
+        )
+
+        # reorder
+        assert MultiCloneMergeDecision.action(
+            walkers,
+            [
+                [
+                    {
+                        "decision_id": CloneMergeDecisionEnum.NOTHING,
+                        "target_idxs": [1],
+                    },
+                    {
+                        "decision_id": CloneMergeDecisionEnum.NOTHING,
+                        "target_idxs": [0],
+                    },
+                ]
+            ],
+        ) == [walker_2, walker_1]
+
+        # multiple assignment to same slot
+        with pytest.raises(ValueError):
+            MultiCloneMergeDecision.action(
+                walkers,
+                [
+                    [
+                        {
+                            "decision_id": CloneMergeDecisionEnum.NOTHING,
+                            "target_idxs": [0],
+                        },
+                        {
+                            "decision_id": CloneMergeDecisionEnum.NOTHING,
+                            "target_idxs": [0],
+                        },
+                    ]
+                ],
+            )
+
+        # TODO: this should be a more explicit error
+        #
+        # squashing without filling a slot is an error
+        with pytest.raises(KeyError):
+            MultiCloneMergeDecision.action(
+                walkers,
+                [
+                    [
+                        {
+                            "decision_id": CloneMergeDecisionEnum.NOTHING,
+                            "target_idxs": [0],
+                        },
+                        {
+                            "decision_id": CloneMergeDecisionEnum.SQUASH,
+                            "target_idxs": [1],
+                        },
+                    ]
+                ],
+            )
+        with pytest.raises(KeyError):
+            MultiCloneMergeDecision.action(
+                walkers,
+                [
+                    [
+                        {
+                            "decision_id": CloneMergeDecisionEnum.NOTHING,
+                            "target_idxs": [0],
+                        },
+                        {
+                            "decision_id": CloneMergeDecisionEnum.SQUASH,
+                            "target_idxs": [0],
+                        },
+                    ]
+                ],
+            )
+
+        # provide a keep merge target, but leave a slot open...
+        with pytest.raises(ValueError):
+            MultiCloneMergeDecision.action(
+                walkers,
+                [
+                    [
+                        {
+                            "decision_id": CloneMergeDecisionEnum.KEEP_MERGE,
+                            "target_idxs": [0],
+                        },
+                        {
+                            "decision_id": CloneMergeDecisionEnum.SQUASH,
+                            "target_idxs": [0],
+                        },
+                    ]
+                ],
+            )
+
+        assert MultiCloneMergeDecision.action(
+            [
+                walker_1,
+                walker_2,
+                walker_3,
+            ],
+            [
+                [
+                    {
+                        "decision_id": CloneMergeDecisionEnum.CLONE,
+                        "target_idxs": [0, 2],
+                    },
+                    {
+                        "decision_id": CloneMergeDecisionEnum.KEEP_MERGE,
+                        "target_idxs": [1],
+                    },
+                    {
+                        "decision_id": CloneMergeDecisionEnum.SQUASH,
+                        "target_idxs": [1],
+                    },
+                ]
+            ],
+        ) == [
+            attrs.evolve(walker_1, weight=0.5),
+            attrs.evolve(
+                walker_2,
+                weight=2.0,
+            ),
+            attrs.evolve(walker_1, weight=0.5),
+        ]

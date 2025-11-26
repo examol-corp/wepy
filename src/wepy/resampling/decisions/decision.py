@@ -46,24 +46,36 @@ perform them on the collection of walkers.
 """
 
 # Standard Library
+from typing import TypedDict, Required, Any, Union
 import logging
 
-logger = logging.getLogger(__name__)
 # Standard Library
-from enum import Enum
+from enum import IntEnum
+
+from wepy.walker import Walker
+
+logger = logging.getLogger(__name__)
+
+
+class DecisionRecord(TypedDict):
+
+    decision_id: int
+
+
+DecisionFieldDtype = Union[int,]
 
 
 # ABC for the Decision class
 class Decision:
     """Represents and provides methods for a set of decision values."""
 
-    ENUM = None
+    ENUM: IntEnum
     """The enumeration of the decision types. Maps them to integers."""
 
-    DEFAULT_DECISION = None
+    DEFAULT_DECISION: int
     """The default decision to choose."""
 
-    FIELDS = ("decision_id",)
+    FIELDS: tuple[str, ...] = ("decision_id",)
     """The names of the fields that go into the decision record."""
 
     # suggestion for subclassing, FIELDS and others
@@ -72,16 +84,16 @@ class Decision:
 
     #  An Ellipsis instead of fields indicate there is a variable
     # number of fields.
-    SHAPES = ((1,),)
+    SHAPES: tuple[tuple[int | type(Ellipsis), ...], ...] = ((1,),)
     """Field data shapes."""
 
-    DTYPES = (int,)
+    DTYPES: tuple[DecisionFieldDtype, ...] = (int,)
     """Field data types."""
 
-    RECORD_FIELDS = ("decision_id",)
+    RECORD_FIELDS: tuple[str] = ("decision_id",)
     """The fields that could be used in a reduced table-like representation."""
 
-    ANCESTOR_DECISION_IDS = None
+    ANCESTOR_DECISION_IDS: tuple[int, ...]
     """Specify the enum values where their walker state sample value is
     passed on in the next generation, i.e. after performing the action."""
 
@@ -177,37 +189,41 @@ class Decision:
         d = cls.enum_dict_by_name()
         return d[enum_name]
 
+    # @classmethod
+    # def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord:
+    #     """Generate a record for the enum_value and the other fields.
+
+    #     Parameters
+    #     ----------
+    #     enum_value : int
+
+    #     Returns
+    #     -------
+    #     rec : dict of str: value
+
+    #     """
+
+    #     assert (
+    #         enum_value in cls.enum_dict_by_value()
+    #     ), "value is not a valid Enumerated value"
+
+    #     for field_key in fields.keys():
+    #         assert (
+    #             field_key in cls.FIELDS
+    #         ), "The field {} is not a field for that decision".format(field_key)
+    #         assert field_key != "decision_id", "'decision_id' cannot be an extra field"
+
+    #     rec = {"decision_id": enum_value}
+    #     rec.update(fields)
+
+    #     return rec
+
     @classmethod
-    def record(cls, enum_value, **fields):
-        """Generate a record for the enum_value and the other fields.
-
-        Parameters
-        ----------
-        enum_value : int
-
-        Returns
-        -------
-        rec : dict of str: value
-
-        """
-
-        assert (
-            enum_value in cls.enum_dict_by_value()
-        ), "value is not a valid Enumerated value"
-
-        for field_key in fields.keys():
-            assert (
-                field_key in cls.FIELDS
-            ), "The field {} is not a field for that decision".format(field_key)
-            assert field_key != "decision_id", "'decision_id' cannot be an extra field"
-
-        rec = {"decision_id": enum_value}
-        rec.update(fields)
-
-        return rec
-
-    @classmethod
-    def action(cls, walkers, decisions):
+    def action(
+        cls,
+        walkers: list[Walker],
+        decisions: list[list[DecisionRecord]],
+    ) -> list[Walker]:
         """Perform the instructions for a set of resampling records on
         walkers.
 
@@ -244,7 +260,7 @@ class Decision:
         raise NotImplementedError
 
     @classmethod
-    def parents(cls, step):
+    def parents(cls, step: list[DecisionRecord]) -> list[int]:
         """Given a step of resampling records (for a single resampling step)
         returns the parents of the children of this step.
 
@@ -277,49 +293,3 @@ class Decision:
                     step_parents[child_idx] = parent_idx
 
         return step_parents
-
-
-class NothingDecisionEnum(Enum):
-    """Enumeration of the decision values for doing nothing."""
-
-    NOTHING = 0
-    """Do nothing with the walker."""
-
-
-class NoDecision(Decision):
-    """Decision for a resampling process that does no resampling."""
-
-    ENUM = NothingDecisionEnum
-    DEFAULT_DECISION = ENUM.NOTHING
-
-    FIELDS = Decision.FIELDS + ("target_idxs",)
-    SHAPES = Decision.SHAPES + (Ellipsis,)
-    DTYPES = Decision.DTYPES + (int,)
-
-    RECORD_FIELDS = Decision.RECORD_FIELDS + ("target_idxs",)
-
-    ANCESTOR_DECISION_IDS = (ENUM.NOTHING.value,)
-
-    @classmethod
-    def action(cls, walkers, decisions):
-        # list for the modified walkers
-        mod_walkers = [None for i in range(len(walkers))]
-        # go through each decision and perform the decision
-        # instructions
-        for walker_idx, decision in enumerate(decisions):
-            decision_value, instruction = decision
-            if decision_value == cls.ENUM.NOTHING.value:
-                # check to make sure a walker doesn't already exist
-                # where you are going to put it
-                if mod_walkers[instruction[0]] is not None:
-                    raise ValueError(
-                        "Multiple walkers assigned to position {}".format(
-                            instruction[0]
-                        )
-                    )
-
-                # put the walker in the position specified by the
-                # instruction
-                mod_walkers[instruction[0]] = walkers[walker_idx]
-
-        return mod_walkers

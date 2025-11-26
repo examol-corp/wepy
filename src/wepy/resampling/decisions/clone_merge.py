@@ -1,19 +1,21 @@
 # Standard Library
+from typing import TypedDict
 import logging
 
-logger = logging.getLogger(__name__)
 # Standard Library
 from collections import defaultdict
-from enum import Enum
+from enum import IntEnum
 
 # First Party Library
 from wepy.resampling.decisions.decision import Decision
-from wepy.walker import keep_merge, split
+from wepy.walker import keep_merge, split, Walker
+
+logger = logging.getLogger(__name__)
 
 
 # the possible types of decisions that can be made enumerated for
 # storage, these each correspond to specific instruction type
-class CloneMergeDecisionEnum(Enum):
+class CloneMergeDecisionEnum(IntEnum):
     """Enum definition for cloning and merging decision values."
 
     - NOTHING : 1
@@ -36,6 +38,11 @@ class CloneMergeDecisionEnum(Enum):
     KEEP_MERGE = 4
     """Do nothing with the sample value (state) but squashed walkers will
     donate their weight to it."""
+
+
+class CloneMergeDecisionRecord(TypedDict):
+    decision_id: int
+    target_idxs: list[int]
 
 
 class MultiCloneMergeDecision(Decision):
@@ -76,16 +83,10 @@ class MultiCloneMergeDecision(Decision):
         ENUM.CLONE.value,
     )
 
-    # TODO deprecate in favor of Decision implementation
     @classmethod
-    def record(cls, enum_value, target_idxs):
-        record = super().record(enum_value)
-        record["target_idxs"] = target_idxs
-
-        return record
-
-    @classmethod
-    def action(cls, walkers, decisions):
+    def action(
+        cls, walkers: list[Walker], decisions: list[CloneMergeDecisionRecord]
+    ) -> list[Walker]:
         # list for the modified walkers
         mod_walkers = [None for i in range(len(walkers))]
 
