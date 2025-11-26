@@ -25,6 +25,7 @@ use.
 """
 
 # Standard Library
+from typing import Any, Annotated, TypedDict, NotRequired
 import logging
 
 logger = logging.getLogger(__name__)
@@ -34,13 +35,20 @@ from copy import copy
 from warnings import warn
 
 # Third Party Library
+import attrs
 import numpy as np
+from nptyping import NDArray, Shape, Floating
+
+try:
+    import mdtraj
+except ModuleNotFoundError:
+    warn("Module 'mdtraj' not found, those features will not be available.")
 
 try:
     # Third Party Library
-    import openmm as omm
-    import openmm.app as omma
-    import openmm.unit as unit
+    import openmm
+    import openmm.app
+    import openmm.unit
 except ModuleNotFoundError:
     raise ModuleNotFoundError(
         "OpenMM has not been installed, which this runner requires."
@@ -49,13 +57,16 @@ except ModuleNotFoundError:
 # First Party Library
 from wepy.runners.runner import Runner
 from wepy.util.util import box_vectors_to_lengths_angles
-from wepy.walker import Walker, WalkerState
+from wepy.walker import Walker, WalkerState, WalkerABC
 from wepy.work_mapper.task_mapper import WalkerTaskProcess
 from wepy.work_mapper.worker import Worker
 
+AtomNDArray = NDArray[Shape["N atoms, 3 dimensions"], Floating]
+BoxVectorsNDArray = NDArray[Shape["3, 3"], Floating]
+
 ## Constants
 
-KEYS = (
+KEYS: tuple[str] = (
     "positions",
     "velocities",
     "forces",
@@ -73,7 +84,7 @@ KEYS = (
 # can pass options for what kind of data to get, this is the default
 # to get all the data. TODO not really sure what the 'groups' keyword
 # is for though
-GET_STATE_KWARG_DEFAULTS = (
+GET_STATE_KWARG_DEFAULTS: tuple[tuple[str, bool]] = (
     ("getPositions", True),
     ("getVelocities", True),
     ("getForces", True),
@@ -89,7 +100,7 @@ them is handled by the OpenMMState.
 
 """
 
-STATE_DATA_TYPE_ENUM_NAMES = {
+STATE_DATA_TYPE_ENUM_NAMES: dict[str, str] = {
     "positions": "Positions",
     "velocities": "Velocities",
     "forces": "Forces",
@@ -99,28 +110,17 @@ STATE_DATA_TYPE_ENUM_NAMES = {
     "integrator_parameters": "IntegratorParameters",
 }
 
-# STATE_DATA_TYPE_ENUM_VALUES = (
-#     ("positions", 1),
-#     ("velocities", 2),
-#     ("forces", 4),
-#     ("energy", 8),
-#     ("parameters", 16),
-#     ("parameter_derivatives", 32),
-#     ("integrator_parameters", 64),
-# )
-# """Enum values for the state data field flags."""
 
-
-def resolve_state_data_type_enum_values():
+def resolve_state_data_type_enum_values() -> dict[str, int]:
     enum_values = {}
     for our_name, enum_name in STATE_DATA_TYPE_ENUM_NAMES.items():
-        enum_values[our_name] = getattr(omm.State, enum_name)
+        enum_values[our_name] = getattr(openmm.State, enum_name)
 
     return enum_values
 
 
 # reversed since that is the order we check them in and is a frequent operation
-STATE_DATA_TYPE_ENUM_VALUES = list(
+STATE_DATA_TYPE_ENUM_VALUES: list[int] = list(
     sorted(
         [(k, v) for k, v in resolve_state_data_type_enum_values().items()],
         key=lambda x: x[1],
@@ -129,14 +129,14 @@ STATE_DATA_TYPE_ENUM_VALUES = list(
 )
 
 
-def get_state_fields_present(sim_state):
+def get_state_fields_present(sim_state: openmm.State) -> list[str]:
     """For a state returns a set of the field data types present in it."""
 
     flag_sum = sim_state.getDataTypes()
 
-    flag_fields = []
-    flag_values = []
-    flag_cum = flag_sum
+    flag_fields: list[str] = []
+    flag_values: list[int] = []
+    flag_cum: int = flag_sum
     for field_name, flag_value in STATE_DATA_TYPE_ENUM_VALUES:
         if flag_value > flag_cum:
             continue
@@ -160,32 +160,35 @@ def get_state_fields_present(sim_state):
 # simulation data
 
 # TODO: this is never used and we only need the unit names. Its okay
-# to use simtk.units here but other runners should use a units sytem
+# to use openmm.units here but other runners should use a units sytem
 # like pint which is easier to install. So we should remove this since
 # its not used.
 
-# UNITS = (('positions_unit', unit.nanometer),
-#          ('time_unit', unit.picosecond),
-#          ('box_vectors_unit', unit.nanometer),
-#          ('velocities_unit', unit.nanometer/unit.picosecond),
-#          ('forces_unit', unit.kilojoule / (unit.nanometer * unit.mole)),
-#          ('box_volume_unit', unit.nanometer),
-#          ('kinetic_energy_unit', unit.kilojoule / unit.mole),
-#          ('potential_energy_unit', unit.kilojoule / unit.mole),
+# UNITS = (('positions_unit', openmm.unit.nanometer),
+#          ('time_unit', openmm.unit.picosecond),
+#          ('box_vectors_unit', openmm.unit.nanometer),
+#          ('velocities_unit', openmm.unit.nanometer/openmm.unit.picosecond),
+#          ('forces_unit', openmm.unit.kilojoule / (openmm.unit.nanometer * openmm.unit.mole)),
+#          ('box_volume_unit', openmm.unit.nanometer),
+#          ('kinetic_energy_unit', openmm.unit.kilojoule / openmm.unit.mole),
+#          ('potential_energy_unit', openmm.unit.kilojoule / openmm.unit.mole),
 #         )
-# """Mapping of units identifiers to the corresponding simtk.units Unit objects."""
+# """Mapping of units identifiers to the corresponding openmm.units Unit objects."""
 
 # the names of the units from the units objects above. This is used
 # for saving them to files
-UNIT_NAMES = (
-    ("positions_unit", unit.nanometer.get_name()),
-    ("time_unit", unit.picosecond.get_name()),
-    ("box_vectors_unit", unit.nanometer.get_name()),
-    ("velocities_unit", (unit.nanometer / unit.picosecond).get_name()),
-    ("forces_unit", (unit.kilojoule / (unit.nanometer * unit.mole)).get_name()),
-    ("box_volume_unit", unit.nanometer.get_name()),
-    ("kinetic_energy_unit", (unit.kilojoule / unit.mole).get_name()),
-    ("potential_energy_unit", (unit.kilojoule / unit.mole).get_name()),
+UNIT_NAMES: tuple[tuple[str, str]] = (
+    ("positions_unit", openmm.unit.nanometer.get_name()),
+    ("time_unit", openmm.unit.picosecond.get_name()),
+    ("box_vectors_unit", openmm.unit.nanometer.get_name()),
+    ("velocities_unit", (openmm.unit.nanometer / openmm.unit.picosecond).get_name()),
+    (
+        "forces_unit",
+        (openmm.unit.kilojoule / (openmm.unit.nanometer * openmm.unit.mole)).get_name(),
+    ),
+    ("box_volume_unit", openmm.unit.nanometer.get_name()),
+    ("kinetic_energy_unit", (openmm.unit.kilojoule / openmm.unit.mole).get_name()),
+    ("potential_energy_unit", (openmm.unit.kilojoule / openmm.unit.mole).get_name()),
 )
 """Mapping of unit identifier strings to the serialized string spec of the unit."""
 
@@ -197,34 +200,721 @@ UNIT_NAMES = (
 # RAND_SEED_RANGE_MAX = 1000000
 
 
+class OpenMMStateDict(TypedDict, total=False):
+    positions: AtomNDArray
+    velocities: AtomNDArray
+    forces: AtomNDArray
+    kinetic_energy: float
+    potential_energy: float
+    time: float
+    box_vectors: BoxVectorsNDArray
+    box_volume: float
+    # TODO: parameters
+
+
+class OpenMMState(WalkerState):
+    """Walker state that wraps an openmm.State object.
+
+    The keys for which values in the state are available are given by
+    the KEYS module constant (accessible through the class constant of
+    the same name as well).
+
+    Additional fields can be added to these states through passing
+    extra kwargs to the constructor. These will be automatically given
+    a suffix of "_OTHER" to avoid name clashes.
+
+    """
+
+    KEYS: tuple[str] = KEYS
+    """The provided attribute keys for the state."""
+
+    OTHER_KEY_TEMPLATE: str = "{}_OTHER"
+    """String formatting template for attributes not set in KEYS."""
+
+    def __init__(
+        self,
+        sim_state: openmm.State,
+        **kwargs: dict[str, Any],
+    ) -> None:
+        """Constructor for OpenMMState.
+
+        Parameters
+        ----------
+        state : openmm.State object
+            The simulation state retrieved from the simulation constant.
+
+        kwargs : optional
+
+            Additional attributes to set for the state. Will add the
+        "_OTHER" suffix to the keys
+
+        """
+
+        # save the simulation state
+        self._sim_state = sim_state
+
+        # probe which data fields it has
+        self._sim_state_fields_present = get_state_fields_present(self.sim_state)
+
+        # save additional data if given
+        self._data = {}
+        for key, value in kwargs.items():
+            # if the key is already in the sim_state keys we need to
+            # modify it and raise a warning
+            if key in self.KEYS:
+                warn(
+                    "Key {} in kwargs is already taken by this class, renaming to {}".format(
+                        self.OTHER_KEY_TEMPLATE
+                    ).format(
+                        key
+                    )
+                )
+
+                # make a new key
+                new_key = self.OTHER_KEY_TEMPLATE.format(key)
+
+                # set it in the data
+                self._data[new_key] = value
+
+            # otherwise just set it
+            else:
+                self._data[key] = value
+
+    @property
+    def sim_state(self) -> openmm.State:
+        """The underlying openmm.State object this is wrapping."""
+        return self._sim_state
+
+    def __getitem__(self, key: str) -> Any:
+        # if this was a key for data not mapped from the OpenMM.State
+        # object we use the _data attribute
+        if (key not in self.KEYS) and (
+            (not key.startswith("parameters"))
+            and (not key.startswith("parameter_derivatives"))
+        ):
+            return self._data[key]
+
+        # otherwise we have to specifically get the correct data and
+        # process it into an array from the OpenMM.State
+        else:
+            if key == "positions":
+                return self.positions_values()
+            elif key == "velocities":
+                return self.velocities_values()
+            elif key == "forces":
+                return self.forces_values()
+            elif key == "kinetic_energy":
+                return self.kinetic_energy_value()
+            elif key == "potential_energy":
+                return self.potential_energy_value()
+            elif key == "time":
+                return self.time_value()
+            elif key == "box_vectors":
+                return self.box_vectors_values()
+            elif key == "box_volume":
+                return self.box_volume_value()
+
+            # handle the parameters differently since they are dictionaries of values
+            elif key.startswith("parameters"):
+                parameters_dict = self.parameters_values()
+                if parameters_dict is None:
+                    return None
+                else:
+                    # TODO: this was an attempt at a general way to do
+                    # this but it doesn't work and I only ever need
+                    # one nested level, so for now we just implement it that way
+                    # return self._get_nested_attr_from_compound_key(key, parameters_dict)
+
+                    param_key = key.split("/")[-1]
+                    return parameters_dict[param_key]
+
+            elif key.startswith("parameter_derivatives"):
+                pd_dict = self.parameter_derivatives_values()
+                if pd_dict is None:
+                    return None
+                else:
+                    return self._get_nested_attr_from_compound_key(key, pd_dict)
+
+    ## Array properties
+
+    # Positions
+    @property
+    def positions(self) -> Annotated[
+        openmm.unit.Quantity | None,
+        AtomNDArray,
+    ]:
+        """The positions of the state as a numpy array openmm.unit.Quantity object."""
+
+        if "positions" in self._sim_state_fields_present:
+            return self.sim_state.getPositions(asNumpy=True)
+        else:
+            return None
+
+    @property
+    def positions_unit(self) -> openmm.unit.Unit:
+        """The units (as a openmm.unit.Unit object) the positions are in."""
+        return self.positions.unit
+
+    def positions_values(self) -> AtomNDArray | None:
+        """The positions of the state as a numpy array in the positions_unit
+        openmm.unit.Unit. This is what is returned by the __getitem__
+        accessor.
+
+        """
+        return self.positions.value_in_unit(self.positions_unit)
+
+    # Velocities
+    @property
+    def velocities(self) -> Annotated[openmm.unit.Quantity | None, AtomNDArray]:
+        """The velocities of the state as a numpy array openmm.unit.Quantity object."""
+
+        if "velocities" in self._sim_state_fields_present:
+            return self.sim_state.getVelocities(asNumpy=True)
+        else:
+            return None
+
+    @property
+    def velocities_unit(self) -> openmm.unit.Unit:
+        """The units (as a openmm.unit.Unit object) the velocities are in."""
+        return self.velocities.unit
+
+    def velocities_values(self) -> AtomNDArray | None:
+        """The velocities of the state as a numpy array in the velocities_unit
+        openmm.unit.Unit. This is what is returned by the __getitem__
+        accessor.
+
+        """
+
+        velocities = self.velocities
+        if velocities is None:
+            return None
+        else:
+            return self.velocities.value_in_unit(self.velocities_unit)
+
+    # Forces
+    @property
+    def forces(self) -> Annotated[
+        openmm.unit.Quantity | None,
+        AtomNDArray,
+    ]:
+        """The forces of the state as a numpy array openmm.unit.Quantity object."""
+
+        if "forces" in self._sim_state_fields_present:
+            return self.sim_state.getForces(asNumpy=True)
+        else:
+            return None
+
+    @property
+    def forces_unit(self) -> openmm.unit.Unit:
+        """The units (as a openmm.unit.Unit object) the forces are in."""
+        return self.forces.unit
+
+    def forces_values(self) -> AtomNDArray | None:
+        """The forces of the state as a numpy array in the forces_unit
+        openmm.unit.Unit. This is what is returned by the __getitem__
+        accessor.
+
+        """
+
+        forces = self.forces
+        if forces is None:
+            return None
+        else:
+            return self.forces.value_in_unit(self.forces_unit)
+
+    # Box Vectors
+    @property
+    def box_vectors(self) -> Annotated[
+        openmm.unit.Quantity | None,
+        BoxVectorsNDArray,
+    ]:
+        """The box vectors of the state as a numpy array openmm.unit.Quantity object."""
+        try:
+            return self.sim_state.getPeriodicBoxVectors(asNumpy=True)
+        except:
+            warn(
+                "Unknown exception handled from `self.sim_state.getPeriodicBoxVectors()`, "
+                "this is probably because this attribute is not in the State."
+            )
+            return None
+
+    @property
+    def box_vectors_unit(self) -> openmm.unit.Unit:
+        """The units (as a openmm.unit.Unit object) the box vectors are in."""
+        return self.box_vectors.unit
+
+    def box_vectors_values(self) -> AtomNDArray | None:
+        """The box vectors of the state as a numpy array in the
+        box_vectors_unit openmm.unit.Unit. This is what is returned by
+        the __getitem__ accessor.
+
+        """
+
+        box_vectors = self.box_vectors
+        if box_vectors is None:
+            return None
+        else:
+            return self.box_vectors.value_in_unit(self.box_vectors_unit)
+
+    ## non-array properties
+
+    # Kinetic Energy
+    @property
+    def kinetic_energy(self) -> Annotated[
+        openmm.unit.Quantity | None,
+        AtomNDArray,
+    ]:
+        """The kinetic energy of the state as a numpy array openmm.unit.Quantity object."""
+        try:
+            return self.sim_state.getKineticEnergy()
+        except:
+            warn(
+                "Unknown exception handled from `self.sim_state.getKineticEnergy()`, "
+                "this is probably because this attribute is not in the State."
+            )
+            return None
+
+    @property
+    def kinetic_energy_unit(self) -> openmm.unit.Unit:
+        """The units (as a openmm.unit.Unit object) the kinetic energy is in."""
+        return self.kinetic_energy.unit
+
+    def kinetic_energy_value(self) -> AtomNDArray | None:
+        """The kinetic energy of the state as a numpy array in the kinetic_energy_unit
+        openmm.unit.Unit. This is what is returned by the __getitem__
+        accessor.
+
+        """
+
+        kinetic_energy = self.kinetic_energy
+        if kinetic_energy is None:
+            return None
+        else:
+            return np.array(
+                [self.kinetic_energy.value_in_unit(self.kinetic_energy_unit)]
+            )
+
+    # Potential Energy
+    @property
+    def potential_energy(self) -> Annotated[
+        openmm.unit.Quantity | None,
+        AtomNDArray,
+    ]:
+        """The potential energy of the state as a numpy array openmm.unit.Quantity object."""
+        try:
+            return self.sim_state.getPotentialEnergy()
+        except:
+            warn(
+                "Unknown exception handled from `self.sim_state.getPotentialEnergy()`, "
+                "this is probably because this attribute is not in the State."
+            )
+            return None
+
+    @property
+    def potential_energy_unit(self) -> openmm.unit.Unit:
+        """The units (as a openmm.unit.Unit object) the potential energy is in."""
+        return self.potential_energy.unit
+
+    def potential_energy_value(self) -> AtomNDArray | None:
+        """The potential energy of the state as a numpy array in the potential_energy_unit
+        openmm.unit.Unit. This is what is returned by the __getitem__
+        accessor.
+
+        """
+
+        potential_energy = self.potential_energy
+        if potential_energy is None:
+            return None
+        else:
+            return np.array(
+                [self.potential_energy.value_in_unit(self.potential_energy_unit)]
+            )
+
+    # Time
+    @property
+    def time(self) -> openmm.unit.Quantity | None:
+        """The time of the state as a numpy array openmm.unit.Quantity object."""
+        try:
+            return self.sim_state.getTime()
+        except:
+            warn(
+                "Unknown exception handled from `self.sim_state.getTime()`, "
+                "this is probably because this attribute is not in the State."
+            )
+            return None
+
+    @property
+    def time_unit(self) -> openmm.unit.Unit:
+        """The units (as a openmm.unit.Unit object) the time is in."""
+        return self.time.unit
+
+    def time_value(self) -> AtomNDArray | None:
+        """The time of the state as a numpy array in the time_unit
+        openmm.unit.Unit. This is what is returned by the __getitem__
+        accessor.
+
+        """
+
+        time = self.time
+        if time is None:
+            return None
+        else:
+            return np.array([self.time.value_in_unit(self.time_unit)])
+
+    # Box Volume
+    @property
+    def box_volume(self) -> openmm.unit.Quantity | None:
+        """The box volume of the state as a numpy array openmm.unit.Quantity object."""
+        try:
+            return self.sim_state.getPeriodicBoxVolume()
+        except:
+            warn(
+                "Unknown exception handled from `self.sim_state.getPeriodicBoxVolume()`, "
+                "this is probably because this attribute is not in the State."
+            )
+            return None
+
+    @property
+    def box_volume_unit(self) -> openmm.unit.Unit:
+        """The units (as a openmm.unit.Unit object) the box volume is in."""
+        return self.box_volume.unit
+
+    def box_volume_value(self) -> NDArray[Shape["1"], Floating] | None:
+        """The box volume of the state as a numpy array in the box_volume_unit
+        openmm.unit.Unit. This is what is returned by the __getitem__
+        accessor.
+
+        """
+
+        box_volume = self.box_volume
+        if box_volume is None:
+            return None
+        else:
+            return np.array([self.box_volume.value_in_unit(self.box_volume_unit)])
+
+    ## Dictionary properties
+    ## Unitless
+
+    # Parameters
+    @property
+    def parameters(self) -> dict[str, openmm.unit.Quantity] | None:
+        """The parameters of the state as a dictionary mapping the names of
+        the parameters to their values which are numpy array
+        openmm.unit.Quantity objects.
+
+        """
+
+        if "parameters" in self._sim_state_fields_present:
+            return self.sim_state.getParameters()
+        else:
+            return None
+
+    @property
+    def parameters_unit(self) -> dict[str, openmm.unit.Unit]:
+        """The units for each parameter as a dictionary mapping parameter
+        names to their corresponding unit as a openmm.unit.Unit
+        object.
+
+        """
+        param_units = {key: None for key, val in self.parameters.items()}
+        return param_units
+
+    def parameters_values(self) -> dict[str, NDArray] | None:
+        """The parameters of the state as a dictionary mapping the name of the
+        parameter to a numpy array in the unit for the parameter of the
+        same name in the parameters_unit corresponding
+        openmm.unit.Unit object. This is what is returned by the
+        __getitem__ accessor using the compound key syntax with the
+        prefix 'parameters', e.g. state['parameter/paramA'] for the
+        parameter 'paramA'.
+
+        """
+
+        if self.parameters is None:
+            return None
+
+        param_arrs = {key: np.array(val) for key, val in self.parameters.items()}
+
+        # return None if there is nothing in this
+        if len(param_arrs) == 0:
+            return None
+        else:
+            return param_arrs
+
+    # Parameter Derivatives
+    @property
+    def parameter_derivatives(self) -> dict[str, openmm.unit.Quantity] | None:
+        """The parameter derivatives of the state as a dictionary mapping the
+        names of the parameters to their values which are numpy array
+        openmm.unit.Quantity objects.
+
+        """
+
+        if "parameter_derivatives" in self._sim_state_fields_present:
+            return self.sim_state.getEnergyParameterDerivatives()
+        else:
+            return None
+
+    @property
+    def parameter_derivatives_unit(self) -> dict[str, openmm.unit.Unit]:
+        """The units for each parameter derivative as a dictionary mapping
+        parameter names to their corresponding unit as a
+        openmm.unit.Unit object.
+
+        """
+
+        param_units = {key: None for key, val in self.parameter_derivatives.items()}
+        return param_units
+
+    def parameter_derivatives_values(self) -> dict[str, NDArray] | None:
+        """The parameter derivatives of the state as a dictionary mapping the
+        name of the parameter to a numpy array in the unit for the
+        parameter of the same name in the parameters_unit
+        corresponding openmm.unit.Unit object. This is what is
+        returned by the __getitem__ accessor using the compound key
+        syntax with the prefix 'parameter_derivatives',
+        e.g. state['parameter_derivatives/paramA'] for the parameter
+        'paramA'.
+
+        """
+
+        if self.parameter_derivatives is None:
+            return None
+
+        param_arrs = {
+            key: np.array(val) for key, val in self.parameter_derivatives.items()
+        }
+
+        # return None if there is nothing in this
+        if len(param_arrs) == 0:
+            return None
+        else:
+            return param_arrs
+
+    # for the dict attributes we need to transform the keys for making
+    # a proper state where all __getitem__ things are arrays
+    def _dict_attr_to_compound_key_dict(
+        self,
+        root_key: str,
+        attr_dict: dict[str:Any],
+    ) -> dict[str, Any]:
+        """Transform a dictionary of values within the compound key 'root_key'
+        to a dictionary mapping compound keys to values.
+
+        For example give the root_key 'parameters' and the parameters
+        dictionary {'paramA' : 1.234} returns {'parameters/paramA' : 1.234}.
+
+        Parameters
+        ----------
+        root_key : str
+            The compound key prefix
+        attr_dict : dict of str : value
+            The dictionary with simple keys within the root key namespace.
+
+        Returns
+        -------
+        compound_key_dict : dict of str : value
+            The dictionary with the compound keys.
+
+        """
+
+        key_template = "{}/{}"
+        cmpd_key_d = {}
+        for key, value in attr_dict.items():
+            new_key = key_template.format(root_key, key)
+            # if this is a proper feature
+            if type(value) == np.ndarray:
+                cmpd_key_d[new_key] = value
+            elif hasattr(value, "__getitem__"):
+                cmpd_key_d.update(self._dict_attr_to_compound_key_dict(new_key, value))
+            else:
+                raise TypeError("Unsupported attribute type")
+
+        return cmpd_key_d
+
+    def _get_nested_attr_from_compound_key(
+        self,
+        compound_key: str,
+        compound_feat_dict: dict[str, Any],
+    ) -> Any:
+        """Get arbitrarily deeply nested compound keys from the full
+        dictionary tree.
+
+        Parameters
+        ----------
+        compound_key : str
+            Compound key separated by '/' characters
+
+        compound_feat_dict : dict
+            Dictionary of arbitrary depth
+
+        Returns
+        -------
+        value
+            Value requested by the key.
+
+        """
+
+        key_components = compound_key.split("/")
+
+        # if there is only one component of the key then it is not
+        # really compound, we won't complain just return the
+        # "dictionary" if it is not actually a dict like
+        if not hasattr(compound_feat_dict, "__getitem__"):
+            raise TypeError("Must provide a dict-like with the compound key")
+
+        value = compound_feat_dict[key_components[0]]
+
+        # if the value itself is compound recursively fetch the value
+        if hasattr(value, "__getitem__") and len(key_components[1:]) > 0:
+            subgroup_key = "/".join(key_components[1:])
+
+            return self._get_nested_attr_from_compound_key(subgroup_key, value)
+
+        elif hasattr(value, "__getitem__") and len(key_components[1:]) < 1:
+            raise ValueError("Key does not reference a leaf node of attribute")
+
+        # otherwise we have the right key so return the object
+        else:
+            return value
+
+    def parameters_features(self) -> dict[str, Any] | None:
+        """Returns a dictionary of the parameters with their appropriate
+        compound keys. This can be used for placing them in the same namespace
+        as the rest of the attributes.
+        """
+
+        parameters = self.parameters_values()
+        if parameters is None:
+            return None
+        else:
+            return self._dict_attr_to_compound_key_dict("parameters", parameters)
+
+    def parameter_derivatives_features(self) -> dict[str, Any] | None:
+        """Returns a dictionary of the parameter derivatives with their appropriate
+        compound keys. This can be used for placing them in the same namespace
+        as the rest of the attributes.
+        """
+
+        parameter_derivatives = self.parameter_derivatives_values()
+        if parameter_derivatives is None:
+            return None
+        else:
+            return self._dict_attr_to_compound_key_dict(
+                "parameter_derivatives", parameter_derivatives
+            )
+
+    def omm_state_dict(self) -> OpenMMStateDict:
+        """Return a dictionary with all of the default keys from the wrapped
+        openmm.State object
+        """
+
+        feature_d = {
+            "positions": self.positions_values(),
+            "velocities": self.velocities_values(),
+            "forces": self.forces_values(),
+            "kinetic_energy": self.kinetic_energy_value(),
+            "potential_energy": self.potential_energy_value(),
+            "time": self.time_value(),
+            "box_vectors": self.box_vectors_values(),
+            "box_volume": self.box_volume_value(),
+        }
+
+        params = self.parameters_features()
+        if params is not None:
+            feature_d.update(params)
+
+        param_derivs = self.parameter_derivatives_features()
+        if param_derivs is not None:
+            feature_d.update(param_derivs)
+
+        return feature_d
+
+    def dict(self) -> dict[str, Any]:
+        # documented in superclass
+
+        d = {}
+        for key, value in self._data.items():
+            d[key] = value
+        for key, value in self.omm_state_dict().items():
+            d[key] = value
+        return d
+
+    def to_mdtraj(self, topology: mdtraj.Topology) -> mdtraj.Trajectory:
+        """Returns an mdtraj.Trajectory object from this walker's state.
+
+        Parameters
+        ----------
+        topology : mdtraj.Topology object
+            Topology for the state.
+
+        Returns
+        -------
+        state_traj : mdtraj.Trajectory object
+
+        """
+
+        # resize the time to a 1D vector
+        unitcell_lengths, unitcell_angles = box_vectors_to_lengths_angles(
+            self.box_vectors
+        )
+        return mdj.Trajectory(
+            np.array([self.positions_values()]),
+            unitcell_lengths=[unitcell_lengths],
+            unitcell_angles=[unitcell_angles],
+            topology=topology,
+        )
+
+
+@attrs.define
+class OpenMMWalker(WalkerABC):
+
+    state: OpenMMState
+    weight: float
+
+
+PlatformKwargs = dict[str, str]
+
+
 # the runner for the simulation which runs the actual dynamics
 class OpenMMRunner(Runner):
     """Runner for OpenMM simulations."""
 
+    system: openmm.System
+    topology: openmm.app.Topology
+    integrator: openmm.Integrator
+    platform_name: str
+    platform_kwargs: PlatformKwargs
+    enforce_box: bool
+    getState_kwargs: dict[str, bool]
+    # _cycle_platform:
+    # _cycle_platform_kwargs:
+    # _last_cycle_segments_split_times: list[float]
+
     def __init__(
         self,
-        system,
-        topology,
-        integrator,
-        platform=None,
-        platform_kwargs=None,
-        enforce_box=False,
-        get_state_kwargs=None,
-    ):
+        system: openmm.System,
+        topology: openmm.app.Topology,
+        integrator: openmm.Integrator,
+        platform: str | None = None,
+        platform_kwargs: PlatformKwargs | None = None,
+        enforce_box: bool = False,
+        get_state_kwargs: dict[str, bool] | None = None,
+    ) -> None:
         """Constructor for OpenMMRunner.
 
         Parameters
         ----------
-        system : simtk.openmm.System object
+        system :
             The system (forcefields) for the simulation.
 
-        topology : simtk.openmm.app.Topology object
+        topology :
             The topology for you system.
 
-        integrator : subclass simtk.openmm.Integrator object
+        integrator :
             Integrator for propagating dynamics.
 
-        platform : str
+        platform :
             The specification for the default computational platform
             to use. Platform can also be set when run_segment is
             called. If None uses OpenMM default platform, see OpenMM
@@ -232,16 +922,16 @@ class OpenMMRunner(Runner):
             Reference, CUDA, OpenCL. If value is None the automatic
             platform determining mechanism in OpenMM will be used.
 
-        platform_kwargs : dict of str : bool, optional
+        platform_kwargs :
             key-values to set for a platform with
             platform.setPropertyDefaultValue as the default for this
             runner.
 
-        enforce_box : bool
+        enforce_box :
             Calls 'context.getState' with 'enforcePeriodicBox' if True.
              (Default value = False)
 
-        get_state_kwargs : dict of str : bool, optional
+        get_state_kwargs :
             key-values to set for getting the state from the OpenMM context.
             keys not included will use the values in GET_STATE_KWARG_DEFAULTS.
             Will override the enforce_box flag.
@@ -308,7 +998,11 @@ class OpenMMRunner(Runner):
         # performance
         self._last_cycle_segments_split_times = []
 
-    def pre_cycle(self, platform=None, platform_kwargs=None, **kwargs):
+    def pre_cycle(
+        self,
+        platform: str | None = None,
+        platform_kwargs: PlatformKwargs | None = None,
+    ) -> None:
         # choose to use the platform spec in this function call or to
         # use the default one saved in the runner
 
@@ -324,24 +1018,22 @@ class OpenMMRunner(Runner):
 
         # otherwise we just don't set this and let resolution of
         # platform happen at run segment.
-
-        super().pre_cycle(**kwargs)
-
         # each segment split times will get appended to this
         self._last_cycle_segments_split_times = []
 
-    def post_cycle(self, **kwargs):
-        super().post_cycle(**kwargs)
-
+    def post_cycle(self) -> None:
         # remove the platform and kwargs for this cycle
         self._cycle_platform = None
         self._cycle_platform_kwargs = None
 
     def _resolve_platform(
         self,
-        platform,
-        platform_kwargs,
-    ):
+        platform: str | type(Ellipsis) | None,
+        platform_kwargs: PlatformKwargs | None,
+    ) -> tuple[
+        str | None,
+        PlatformKwargs | None,
+    ]:
         # resolve which platform to use
 
         # force usage of environmental one
@@ -377,30 +1069,26 @@ class OpenMMRunner(Runner):
 
     def run_segment(
         self,
-        walker,
-        segment_length,
-        getState_kwargs=None,
-        platform=None,
-        platform_kwargs=None,
-        **kwargs,
-    ):
+        walker: OpenMMWalker,
+        segment_length: int,
+        getState_kwargs: dict[str, bool] | None = None,
+        platform: str | type(Ellipsis) | None = None,
+        platform_kwargs: PlatformKwargs = None,
+    ) -> Walker:
         """Run dynamics for the walker.
 
         Parameters
         ----------
-        walker : object implementing the Walker interface
-            The walker for which dynamics will be propagated.
+        walker : The walker for which dynamics will be propagated.
 
-        segment_length : int or float
-            The numerical value that specifies how much dynamics are to be run.
+        segment_length : The numerical value that specifies how much dynamics are to be run.
 
-        getState_kwargs : dict of str : bool, optional
-            Specify the key-word arguments to pass to
+        getState_kwargs : Specify the key-word arguments to pass to
             simulation.context.getState when getting simulation
             states. If None defaults object values.
 
-        platform : str or None or Ellipsis
-            The specification for the computational platform to
+
+        platform : The specification for the computational platform to
             use. If None will use the default for the runner and
             ignore platform_kwargs. If Ellipsis forces the use of the
             OpenMM default or environmentally defined platform. See
@@ -408,35 +1096,28 @@ class OpenMMRunner(Runner):
             Reference, CUDA, OpenCL. If value is None the automatic
             platform determining mechanism in OpenMM will be used.
 
-        platform_kwargs : dict of str : bool, optional
-            key-values to set for a platform with
+        platform_kwargs : Key-values to set for a platform with
             platform.setPropertyDefaultValue for this segment only.
 
 
         Returns
         -------
-        new_walker : object implementing the Walker interface
-            Walker after dynamics was run, only the state should be modified.
+        new_walker : Walker after dynamics was run, only the state should be modified.
 
         """
 
         run_segment_start = time.time()
 
         # set the kwargs that will be passed to getState
-        tmp_getState_kwargs = getState_kwargs
-
+        _getState_kwargs = (
+            getState_kwargs if getState_kwargs is not None else self.getState_kwargs
+        )
         logger.info(f"Default 'getState_kwargs' in runner: {self.getState_kwargs}")
-
         logger.info(f"'getState_kwargs' passed to 'run_segment' : {getState_kwargs}")
-
-        # start with the object value
-        getState_kwargs = copy(self.getState_kwargs)
-        if tmp_getState_kwargs is not None:
-            getState_kwargs.update(tmp_getState_kwargs)
 
         logger.info(
             "After resolving 'getState_kwargs' that will be used are: "
-            f"{getState_kwargs}"
+            f"{_getState_kwargs}"
         )
 
         gen_sim_start = time.time()
@@ -481,7 +1162,7 @@ class OpenMMRunner(Runner):
             logger.info("Using platform configured in code.")
 
             # get the platform by its name to use
-            platform = omm.Platform.getPlatformByName(platform_name)
+            platform = openmm.Platform.getPlatformByName(platform_name)
             logger.info(f"Platform object created: {platform}")
 
             if platform_kwargs is None:
@@ -500,14 +1181,16 @@ class OpenMMRunner(Runner):
                     )
 
             # make a new simulation object
-            simulation = omma.Simulation(
+            simulation = openmm.app.Simulation(
                 self.topology, self.system, new_integrator, platform
             )
 
         # otherwise just use the default or environmentally defined one
         else:
             logger.info("Using environmental platform.")
-            simulation = omma.Simulation(self.topology, self.system, new_integrator)
+            simulation = openmm.app.Simulation(
+                self.topology, self.system, new_integrator
+            )
 
         # set the state to the context from the walker
         simulation.context.setState(walker.state.sim_state)
@@ -536,9 +1219,7 @@ class OpenMMRunner(Runner):
         logger.info("Getting context state time: {}".format(get_state_time))
 
         # generate the new state/walker
-        new_state = self.generate_state(
-            simulation, segment_length, walker, getState_kwargs
-        )
+        new_state = OpenMMState(simulation.context.getState(**_getState_kwargs))
 
         # create a new walker for this
         new_walker = OpenMMWalker(new_state, walker.weight)
@@ -558,687 +1239,14 @@ class OpenMMRunner(Runner):
 
         return new_walker
 
-    def generate_state(
-        self, simulation, segment_length, starting_walker, getState_kwargs
-    ):
-        """Method for generating a wepy compliant state from an OpenMM
-        simulation object and data about the last segment of dynamics run.
 
-        Parameters
-        ----------
-        simulation : simtk.openmm.app.Simulation object
-            A complete simulation object from which the state will be extracted.
-
-        segment_length : int
-            The number of integration steps run in a segment of simulation.
-
-        starting_walker : wepy.walker.Walker subclass object
-            The walker that was the beginning of this segment of simyulation.
-
-        getState_kwargs : dict of str : bool
-            Specify the key-word arguments to pass to
-            simulation.context.getState when getting simulation
-            states.
-
-        Returns
-        -------
-        new_state : wepy.runners.openmm.OpenMMState object
-            A new state from the simulation state.
-
-        This method is meant to be called from within the
-        `run_segment` method during a simulation. It can be customized
-        in subclasses to allow for the addition of custom attributes
-        for a state, in addition to the base ones implemented in the
-        interface to the openmm simulation state in OpenMMState.
-
-        The extra arguments to this function are data that would allow
-        for the calculation of integral values over the duration of
-        the segment, such as time elapsed and differences from the
-        starting state.
-
-        """
-
-        # save the state of the system with all possible values
-        new_sim_state = simulation.context.getState(**getState_kwargs)
-
-        # make an OpenMMState wrapper with this
-        new_state = OpenMMState(new_sim_state)
-
-        return new_state
-
-
-class OpenMMState(WalkerState):
-    """Walker state that wraps an simtk.openmm.State object.
-
-    The keys for which values in the state are available are given by
-    the KEYS module constant (accessible through the class constant of
-    the same name as well).
-
-    Additional fields can be added to these states through passing
-    extra kwargs to the constructor. These will be automatically given
-    a suffix of "_OTHER" to avoid name clashes.
-
-    """
-
-    KEYS = KEYS
-    """The provided attribute keys for the state."""
-
-    OTHER_KEY_TEMPLATE = "{}_OTHER"
-    """String formatting template for attributes not set in KEYS."""
-
-    def __init__(self, sim_state, **kwargs):
-        """Constructor for OpenMMState.
-
-        Parameters
-        ----------
-        state : simtk.openmm.State object
-            The simulation state retrieved from the simulation constant.
-
-        kwargs : optional
-
-            Additional attributes to set for the state. Will add the
-        "_OTHER" suffix to the keys
-
-        """
-
-        # save the simulation state
-        self._sim_state = sim_state
-
-        # probe which data fields it has
-        self._sim_state_fields_present = get_state_fields_present(self.sim_state)
-
-        # save additional data if given
-        self._data = {}
-        for key, value in kwargs.items():
-            # if the key is already in the sim_state keys we need to
-            # modify it and raise a warning
-            if key in self.KEYS:
-                warn(
-                    "Key {} in kwargs is already taken by this class, renaming to {}".format(
-                        self.OTHER_KEY_TEMPLATE
-                    ).format(
-                        key
-                    )
-                )
-
-                # make a new key
-                new_key = self.OTHER_KEY_TEMPLATE.format(key)
-
-                # set it in the data
-                self._data[new_key] = value
-
-            # otherwise just set it
-            else:
-                self._data[key] = value
-
-    @property
-    def sim_state(self):
-        """The underlying simtk.openmm.State object this is wrapping."""
-        return self._sim_state
-
-    def __getitem__(self, key):
-        # if this was a key for data not mapped from the OpenMM.State
-        # object we use the _data attribute
-        if (key not in self.KEYS) and (
-            (not key.startswith("parameters"))
-            and (not key.startswith("parameter_derivatives"))
-        ):
-            return self._data[key]
-
-        # otherwise we have to specifically get the correct data and
-        # process it into an array from the OpenMM.State
-        else:
-            if key == "positions":
-                return self.positions_values()
-            elif key == "velocities":
-                return self.velocities_values()
-            elif key == "forces":
-                return self.forces_values()
-            elif key == "kinetic_energy":
-                return self.kinetic_energy_value()
-            elif key == "potential_energy":
-                return self.potential_energy_value()
-            elif key == "time":
-                return self.time_value()
-            elif key == "box_vectors":
-                return self.box_vectors_values()
-            elif key == "box_volume":
-                return self.box_volume_value()
-
-            # handle the parameters differently since they are dictionaries of values
-            elif key.startswith("parameters"):
-                parameters_dict = self.parameters_values()
-                if parameters_dict is None:
-                    return None
-                else:
-                    # TODO: this was an attempt at a general way to do
-                    # this but it doesn't work and I only ever need
-                    # one nested level, so for now we just implement it that way
-                    # return self._get_nested_attr_from_compound_key(key, parameters_dict)
-
-                    param_key = key.split("/")[-1]
-                    return parameters_dict[param_key]
-
-            elif key.startswith("parameter_derivatives"):
-                pd_dict = self.parameter_derivatives_values()
-                if pd_dict is None:
-                    return None
-                else:
-                    return self._get_nested_attr_from_compound_key(key, pd_dict)
-
-    ## Array properties
-
-    # Positions
-    @property
-    def positions(self):
-        """The positions of the state as a numpy array simtk.units.Quantity object."""
-
-        if "positions" in self._sim_state_fields_present:
-            return self.sim_state.getPositions(asNumpy=True)
-        else:
-            return None
-
-    @property
-    def positions_unit(self):
-        """The units (as a simtk.units.Unit object) the positions are in."""
-        return self.positions.unit
-
-    def positions_values(self):
-        """The positions of the state as a numpy array in the positions_unit
-        simtk.units.Unit. This is what is returned by the __getitem__
-        accessor.
-
-        """
-        return self.positions.value_in_unit(self.positions_unit)
-
-    # Velocities
-    @property
-    def velocities(self):
-        """The velocities of the state as a numpy array simtk.units.Quantity object."""
-
-        if "velocities" in self._sim_state_fields_present:
-            return self.sim_state.getVelocities(asNumpy=True)
-        else:
-            return None
-
-    @property
-    def velocities_unit(self):
-        """The units (as a simtk.units.Unit object) the velocities are in."""
-        return self.velocities.unit
-
-    def velocities_values(self):
-        """The velocities of the state as a numpy array in the velocities_unit
-        simtk.units.Unit. This is what is returned by the __getitem__
-        accessor.
-
-        """
-
-        velocities = self.velocities
-        if velocities is None:
-            return None
-        else:
-            return self.velocities.value_in_unit(self.velocities_unit)
-
-    # Forces
-    @property
-    def forces(self):
-        """The forces of the state as a numpy array simtk.units.Quantity object."""
-
-        if "forces" in self._sim_state_fields_present:
-            return self.sim_state.getForces(asNumpy=True)
-        else:
-            return None
-
-    @property
-    def forces_unit(self):
-        """The units (as a simtk.units.Unit object) the forces are in."""
-        return self.forces.unit
-
-    def forces_values(self):
-        """The forces of the state as a numpy array in the forces_unit
-        simtk.units.Unit. This is what is returned by the __getitem__
-        accessor.
-
-        """
-
-        forces = self.forces
-        if forces is None:
-            return None
-        else:
-            return self.forces.value_in_unit(self.forces_unit)
-
-    # Box Vectors
-    @property
-    def box_vectors(self):
-        """The box vectors of the state as a numpy array simtk.units.Quantity object."""
-        try:
-            return self.sim_state.getPeriodicBoxVectors(asNumpy=True)
-        except:
-            warn(
-                "Unknown exception handled from `self.sim_state.getPeriodicBoxVectors()`, "
-                "this is probably because this attribute is not in the State."
-            )
-            return None
-
-    @property
-    def box_vectors_unit(self):
-        """The units (as a simtk.units.Unit object) the box vectors are in."""
-        return self.box_vectors.unit
-
-    def box_vectors_values(self):
-        """The box vectors of the state as a numpy array in the
-        box_vectors_unit simtk.units.Unit. This is what is returned by
-        the __getitem__ accessor.
-
-        """
-
-        box_vectors = self.box_vectors
-        if box_vectors is None:
-            return None
-        else:
-            return self.box_vectors.value_in_unit(self.box_vectors_unit)
-
-    ## non-array properties
-
-    # Kinetic Energy
-    @property
-    def kinetic_energy(self):
-        """The kinetic energy of the state as a numpy array simtk.units.Quantity object."""
-        try:
-            return self.sim_state.getKineticEnergy()
-        except:
-            warn(
-                "Unknown exception handled from `self.sim_state.getKineticEnergy()`, "
-                "this is probably because this attribute is not in the State."
-            )
-            return None
-
-    @property
-    def kinetic_energy_unit(self):
-        """The units (as a simtk.units.Unit object) the kinetic energy is in."""
-        return self.kinetic_energy.unit
-
-    def kinetic_energy_value(self):
-        """The kinetic energy of the state as a numpy array in the kinetic_energy_unit
-        simtk.units.Unit. This is what is returned by the __getitem__
-        accessor.
-
-        """
-
-        kinetic_energy = self.kinetic_energy
-        if kinetic_energy is None:
-            return None
-        else:
-            return np.array(
-                [self.kinetic_energy.value_in_unit(self.kinetic_energy_unit)]
-            )
-
-    # Potential Energy
-    @property
-    def potential_energy(self):
-        """The potential energy of the state as a numpy array simtk.units.Quantity object."""
-        try:
-            return self.sim_state.getPotentialEnergy()
-        except:
-            warn(
-                "Unknown exception handled from `self.sim_state.getPotentialEnergy()`, "
-                "this is probably because this attribute is not in the State."
-            )
-            return None
-
-    @property
-    def potential_energy_unit(self):
-        """The units (as a simtk.units.Unit object) the potential energy is in."""
-        return self.potential_energy.unit
-
-    def potential_energy_value(self):
-        """The potential energy of the state as a numpy array in the potential_energy_unit
-        simtk.units.Unit. This is what is returned by the __getitem__
-        accessor.
-
-        """
-
-        potential_energy = self.potential_energy
-        if potential_energy is None:
-            return None
-        else:
-            return np.array(
-                [self.potential_energy.value_in_unit(self.potential_energy_unit)]
-            )
-
-    # Time
-    @property
-    def time(self):
-        """The time of the state as a numpy array simtk.units.Quantity object."""
-        try:
-            return self.sim_state.getTime()
-        except:
-            warn(
-                "Unknown exception handled from `self.sim_state.getTime()`, "
-                "this is probably because this attribute is not in the State."
-            )
-            return None
-
-    @property
-    def time_unit(self):
-        """The units (as a simtk.units.Unit object) the time is in."""
-        return self.time.unit
-
-    def time_value(self):
-        """The time of the state as a numpy array in the time_unit
-        simtk.units.Unit. This is what is returned by the __getitem__
-        accessor.
-
-        """
-
-        time = self.time
-        if time is None:
-            return None
-        else:
-            return np.array([self.time.value_in_unit(self.time_unit)])
-
-    # Box Volume
-    @property
-    def box_volume(self):
-        """The box volume of the state as a numpy array simtk.units.Quantity object."""
-        try:
-            return self.sim_state.getPeriodicBoxVolume()
-        except:
-            warn(
-                "Unknown exception handled from `self.sim_state.getPeriodicBoxVolume()`, "
-                "this is probably because this attribute is not in the State."
-            )
-            return None
-
-    @property
-    def box_volume_unit(self):
-        """The units (as a simtk.units.Unit object) the box volume is in."""
-        return self.box_volume.unit
-
-    def box_volume_value(self):
-        """The box volume of the state as a numpy array in the box_volume_unit
-        simtk.units.Unit. This is what is returned by the __getitem__
-        accessor.
-
-        """
-
-        box_volume = self.box_volume
-        if box_volume is None:
-            return None
-        else:
-            return np.array([self.box_volume.value_in_unit(self.box_volume_unit)])
-
-    ## Dictionary properties
-    ## Unitless
-
-    # Parameters
-    @property
-    def parameters(self):
-        """The parameters of the state as a dictionary mapping the names of
-        the parameters to their values which are numpy array
-        simtk.units.Quantity objects.
-
-        """
-
-        if "parameters" in self._sim_state_fields_present:
-            return self.sim_state.getParameters()
-        else:
-            return None
-
-    @property
-    def parameters_unit(self):
-        """The units for each parameter as a dictionary mapping parameter
-        names to their corresponding unit as a simtk.units.Unit
-        object.
-
-        """
-        param_units = {key: None for key, val in self.parameters.items()}
-        return param_units
-
-    def parameters_values(self):
-        """The parameters of the state as a dictionary mapping the name of the
-        parameter to a numpy array in the unit for the parameter of the
-        same name in the parameters_unit corresponding
-        simtk.units.Unit object. This is what is returned by the
-        __getitem__ accessor using the compound key syntax with the
-        prefix 'parameters', e.g. state['parameter/paramA'] for the
-        parameter 'paramA'.
-
-        """
-
-        if self.parameters is None:
-            return None
-
-        param_arrs = {key: np.array(val) for key, val in self.parameters.items()}
-
-        # return None if there is nothing in this
-        if len(param_arrs) == 0:
-            return None
-        else:
-            return param_arrs
-
-    # Parameter Derivatives
-    @property
-    def parameter_derivatives(self):
-        """The parameter derivatives of the state as a dictionary mapping the
-        names of the parameters to their values which are numpy array
-        simtk.units.Quantity objects.
-
-        """
-
-        if "parameter_derivatives" in self._sim_state_fields_present:
-            return self.sim_state.getEnergyParameterDerivatives()
-        else:
-            return None
-
-    @property
-    def parameter_derivatives_unit(self):
-        """The units for each parameter derivative as a dictionary mapping
-        parameter names to their corresponding unit as a
-        simtk.units.Unit object.
-
-        """
-
-        param_units = {key: None for key, val in self.parameter_derivatives.items()}
-        return param_units
-
-    def parameter_derivatives_values(self):
-        """The parameter derivatives of the state as a dictionary mapping the
-        name of the parameter to a numpy array in the unit for the
-        parameter of the same name in the parameters_unit
-        corresponding simtk.units.Unit object. This is what is
-        returned by the __getitem__ accessor using the compound key
-        syntax with the prefix 'parameter_derivatives',
-        e.g. state['parameter_derivatives/paramA'] for the parameter
-        'paramA'.
-
-        """
-
-        if self.parameter_derivatives is None:
-            return None
-
-        param_arrs = {
-            key: np.array(val) for key, val in self.parameter_derivatives.items()
-        }
-
-        # return None if there is nothing in this
-        if len(param_arrs) == 0:
-            return None
-        else:
-            return param_arrs
-
-    # for the dict attributes we need to transform the keys for making
-    # a proper state where all __getitem__ things are arrays
-    def _dict_attr_to_compound_key_dict(self, root_key, attr_dict):
-        """Transform a dictionary of values within the compound key 'root_key'
-        to a dictionary mapping compound keys to values.
-
-        For example give the root_key 'parameters' and the parameters
-        dictionary {'paramA' : 1.234} returns {'parameters/paramA' : 1.234}.
-
-        Parameters
-        ----------
-        root_key : str
-            The compound key prefix
-        attr_dict : dict of str : value
-            The dictionary with simple keys within the root key namespace.
-
-        Returns
-        -------
-        compound_key_dict : dict of str : value
-            The dictionary with the compound keys.
-
-        """
-
-        key_template = "{}/{}"
-        cmpd_key_d = {}
-        for key, value in attr_dict.items():
-            new_key = key_template.format(root_key, key)
-            # if this is a proper feature
-            if type(value) == np.ndarray:
-                cmpd_key_d[new_key] = value
-            elif hasattr(value, "__getitem__"):
-                cmpd_key_d.update(self._dict_attr_to_compound_key_dict(new_key, value))
-            else:
-                raise TypeError("Unsupported attribute type")
-
-        return cmpd_key_d
-
-    def _get_nested_attr_from_compound_key(self, compound_key, compound_feat_dict):
-        """Get arbitrarily deeply nested compound keys from the full
-        dictionary tree.
-
-        Parameters
-        ----------
-        compound_key : str
-            Compound key separated by '/' characters
-
-        compound_feat_dict : dict
-            Dictionary of arbitrary depth
-
-        Returns
-        -------
-        value
-            Value requested by the key.
-
-        """
-
-        key_components = compound_key.split("/")
-
-        # if there is only one component of the key then it is not
-        # really compound, we won't complain just return the
-        # "dictionary" if it is not actually a dict like
-        if not hasattr(compound_feat_dict, "__getitem__"):
-            raise TypeError("Must provide a dict-like with the compound key")
-
-        value = compound_feat_dict[key_components[0]]
-
-        # if the value itself is compound recursively fetch the value
-        if hasattr(value, "__getitem__") and len(key_components[1:]) > 0:
-            subgroup_key = "/".join(key_components[1:])
-
-            return self._get_nested_attr_from_compound_key(subgroup_key, value)
-
-        elif hasattr(value, "__getitem__") and len(key_components[1:]) < 1:
-            raise ValueError("Key does not reference a leaf node of attribute")
-
-        # otherwise we have the right key so return the object
-        else:
-            return value
-
-    def parameters_features(self):
-        """Returns a dictionary of the parameters with their appropriate
-        compound keys. This can be used for placing them in the same namespace
-        as the rest of the attributes.
-        """
-
-        parameters = self.parameters_values()
-        if parameters is None:
-            return None
-        else:
-            return self._dict_attr_to_compound_key_dict("parameters", parameters)
-
-    def parameter_derivatives_features(self):
-        """Returns a dictionary of the parameter derivatives with their appropriate
-        compound keys. This can be used for placing them in the same namespace
-        as the rest of the attributes.
-        """
-
-        parameter_derivatives = self.parameter_derivatives_values()
-        if parameter_derivatives is None:
-            return None
-        else:
-            return self._dict_attr_to_compound_key_dict(
-                "parameter_derivatives", parameter_derivatives
-            )
-
-    def omm_state_dict(self):
-        """Return a dictionary with all of the default keys from the wrapped
-        simtk.openmm.State object
-        """
-
-        feature_d = {
-            "positions": self.positions_values(),
-            "velocities": self.velocities_values(),
-            "forces": self.forces_values(),
-            "kinetic_energy": self.kinetic_energy_value(),
-            "potential_energy": self.potential_energy_value(),
-            "time": self.time_value(),
-            "box_vectors": self.box_vectors_values(),
-            "box_volume": self.box_volume_value(),
-        }
-
-        params = self.parameters_features()
-        if params is not None:
-            feature_d.update(params)
-
-        param_derivs = self.parameter_derivatives_features()
-        if param_derivs is not None:
-            feature_d.update(param_derivs)
-
-        return feature_d
-
-    def dict(self):
-        # documented in superclass
-
-        d = {}
-        for key, value in self._data.items():
-            d[key] = value
-        for key, value in self.omm_state_dict().items():
-            d[key] = value
-        return d
-
-    def to_mdtraj(self, topology):
-        """Returns an mdtraj.Trajectory object from this walker's state.
-
-        Parameters
-        ----------
-        topology : mdtraj.Topology object
-            Topology for the state.
-
-        Returns
-        -------
-        state_traj : mdtraj.Trajectory object
-
-        """
-
-        # Third Party Library
-        import mdtraj as mdj
-
-        # resize the time to a 1D vector
-        unitcell_lengths, unitcell_angles = box_vectors_to_lengths_angles(
-            self.box_vectors
-        )
-        return mdj.Trajectory(
-            np.array([self.positions_values()]),
-            unitcell_lengths=[unitcell_lengths],
-            unitcell_angles=[unitcell_angles],
-            topology=topology,
-        )
-
-
-def gen_sim_state(positions, system, integrator, getState_kwargs=None):
-    """Convenience function for generating an omm.State object.
+def gen_sim_state(
+    positions: AtomNDArray,
+    system: openmm.System,
+    integrator: openmm.Integrator,
+    getState_kwargs: dict[str, bool] | None = None,
+) -> openmm.State:
+    """Convenience function for generating an openmm.State object.
 
     Parameters
     ----------
@@ -1267,8 +1275,8 @@ def gen_sim_state(positions, system, integrator, getState_kwargs=None):
 
     # generate a throwaway context, using the reference platform so we
     # don't screw up other platform stuff later in the same process
-    platform = omm.Platform.getPlatformByName("Reference")
-    context = omm.Context(system, copy(integrator), platform)
+    platform = openmm.Platform.getPlatformByName("Reference")
+    context = openmm.Context(system, copy(integrator), platform)
 
     # set the positions
     context.setPositions(positions)
@@ -1303,24 +1311,6 @@ def gen_walker_state(positions, system, integrator, getState_kwargs=None):
     )
 
     return state
-
-
-class OpenMMWalker(Walker):
-    """Walker for OpenMMRunner simulations.
-
-    This simply enforces the use of an OpenMMState object for the
-    walker state attribute.
-
-    """
-
-    def __init__(self, state, weight):
-        # documented in superclass
-
-        assert isinstance(
-            state, OpenMMState
-        ), "state must be an instance of class OpenMMState not {}".format(type(state))
-
-        super().__init__(state, weight)
 
 
 class OpenMMCPUWorker(Worker):
