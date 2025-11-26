@@ -662,8 +662,8 @@ class REVOResampler(CloneMergeResampler):
 
         # make images for all the walker states for us to compute distances on
         if self.num_proc > 1:
-            pool = mulproc.Pool(self.num_proc)
-            images = pool.map(self.distance.image, [walker.state for walker in walkers])
+            with mulproc.Pool(self.num_proc) as pool:
+                images = pool.map(self.distance.image, [walker.state for walker in walkers])
         else:
             images = []
             for walker in walkers:
