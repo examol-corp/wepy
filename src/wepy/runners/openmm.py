@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 import time
 from copy import copy
 from warnings import warn
+import copy
 
 # Third Party Library
 import attrs
@@ -876,6 +877,13 @@ class OpenMMWalker(WalkerABC):
 PlatformKwargs = dict[str, str]
 
 
+class OpenMMRunnerSegmentSplitTimes(TypedDict):
+    gen_sim_time: float
+    steps_time: float
+    get_state_time: float
+    run_segment_time: float
+
+
 # the runner for the simulation which runs the actual dynamics
 class OpenMMRunner(Runner):
     """Runner for OpenMM simulations."""
@@ -1238,6 +1246,10 @@ class OpenMMRunner(Runner):
         self._last_cycle_segments_split_times.append(segment_split_times)
 
         return new_walker
+
+    def last_cycle_segments_split_times(self) -> OpenMMRunnerSegmentSplitTimes:
+
+        return copy.deepcopy(self._last_cycle_segments_split_times)
 
 
 def gen_sim_state(
