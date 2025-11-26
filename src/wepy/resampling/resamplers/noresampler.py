@@ -11,7 +11,6 @@ from wepy.resampling.decisions.no_decision import (
 
 
 class NoResamplerResamplingData(TypedDict):
-    walker_idx: NDArray[Shape["1"], Integer]
     step_idx: NDArray[Shape["1"], Integer]
     decision_id: NDArray[Shape["1"], Integer]
     target_idxs: NDArray[Shape["1"], Integer]
