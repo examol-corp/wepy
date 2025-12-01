@@ -4,11 +4,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Third Party Library
+from wepy.monitor import Monitor
 import prometheus_client as prom
 from pympler.asizeof import asizeof
 
 
-class SimMonitor:
+class SimMonitor(Monitor):
     """A simulation monitor using a prometheus http server"""
 
     DEFAULT_PORT = 9001
