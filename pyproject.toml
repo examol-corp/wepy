@@ -34,7 +34,6 @@ dependencies = [
   "tabulate",
   "jinja2",
   "pint",
-  "multiprocessing_logging",
 ]
 
 [project.optional-dependencies]

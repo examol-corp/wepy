@@ -1393,14 +1393,6 @@ wheels = [
 ]
 
 [[package]]
-name = "multiprocessing-logging"
-version = "0.3.4"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/fe/32bd864bcb604b0607924a4cf618ed267a0ef21ac9c3e255109256046e1f/multiprocessing_logging-0.3.4-py2.py3-none-any.whl", hash = "sha256:8a5be02b02edbd6fa6e3e89499af7680db69db9e2d8707fcd28d445fa248f23e", size = 8770, upload-time = "2023-02-05T17:06:20.632Z" },
-]
-
-[[package]]
 name = "mypy"
 version = "1.18.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2874,7 +2866,6 @@ dependencies = [
     { name = "geomm" },
     { name = "h5py" },
     { name = "jinja2" },
-    { name = "multiprocessing-logging" },
     { name = "networkx" },
     { name = "nptyping" },
     { name = "numpy" },
@@ -2936,7 +2927,6 @@ requires-dist = [
     { name = "jinja2" },
     { name = "matplotlib", marker = "extra == 'graphics'" },
     { name = "mdtraj", marker = "extra == 'md'" },
-    { name = "multiprocessing-logging" },
     { name = "networkx" },
     { name = "nptyping" },
     { name = "numpy", specifier = ">=2" },
