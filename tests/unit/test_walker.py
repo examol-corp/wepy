@@ -1,5 +1,9 @@
 import math
+from typing import Literal, TypedDict
+from wepy.missing import MISSING
 from wepy.walker import (
+    clone,
+    squash,
     split,
     keep_merge,
     merge,
@@ -7,25 +11,49 @@ from wepy.walker import (
     WalkerState,
 )
 
+import attrs
+
+# attrs provide the __eq__ method
+
+MockKeys = Literal["a", "b"]
+MockDataValue = int | str
+class MockData(TypedDict):
+    a: int
+    b: str
+
+@attrs.define
+class MockWalkerState(WalkerState):
+    a: int
+    b: str
+
+    def __getitem__(self, key: MockKeys) -> MockDataValue:
+        if (value := getattr(self, key, MISSING)) is MISSING:
+            raise KeyError(f"'key' '{key}' not found")
+        else:
+            return value
+
+    def dict(self) -> MockData:
+        return attrs.asdict(self)
+        
 
 class TestWalkerState:
 
     def test___init__(self):
 
-        WalkerState(a=1, b="hello")
+        MockWalkerState(a=1, b="hello")
 
     def test___getitem__(self):
 
-        assert WalkerState(a=1, b="hello")["a"] == 1
-        assert WalkerState(a=1, b="hello")["b"] == "hello"
+        assert MockWalkerState(a=1, b="hello")["a"] == 1
+        assert MockWalkerState(a=1, b="hello")["b"] == "hello"
 
     def test___eq__(self):
 
-        assert WalkerState(a=1, b="hello") == WalkerState(a=1, b="hello")
-        assert WalkerState(a=1, b="hello") != WalkerState(a=100, b="hello")
+        assert MockWalkerState(a=1, b="hello") == MockWalkerState(a=1, b="hello")
+        assert MockWalkerState(a=1, b="hello") != MockWalkerState(a=100, b="hello")
 
     def test_dict(self):
-        assert WalkerState(a=1, b="hello").dict() == {
+        assert MockWalkerState(a=1, b="hello").dict() == {
             "a": 1,
             "b": "hello",
         }
@@ -35,7 +63,7 @@ class TestWalker:
 
     def test___init__(self):
 
-        state = WalkerState(a=1, b="hello")
+        state = MockWalkerState(a=1, b="hello")
         walker = Walker(
             state=state,
             weight=0.1,
@@ -46,104 +74,84 @@ class TestWalker:
 
     def test___eq__(self):
         assert Walker(
-            state=WalkerState(a=1, b="hello"),
+            state=MockWalkerState(a=1, b="hello"),
             weight=0.1,
         ) == Walker(
-            state=WalkerState(a=1, b="hello"),
+            state=MockWalkerState(a=1, b="hello"),
             weight=0.1,
         )
 
         assert Walker(
-            state=WalkerState(a=1, b="hello"),
+            state=MockWalkerState(a=1, b="hello"),
             weight=0.1,
         ) != Walker(
-            state=WalkerState(a=100, b="hello"),
+            state=MockWalkerState(a=100, b="hello"),
             weight=0.1,
         )
 
         assert Walker(
-            state=WalkerState(a=1, b="hello"),
+            state=MockWalkerState(a=1, b="hello"),
             weight=0.1,
         ) != Walker(
-            state=WalkerState(a=1, b="hello"),
+            state=MockWalkerState(a=1, b="hello"),
             weight=0.05,
         )
 
-    def test_clone(self):
-        state = WalkerState(a=1, b="hello")
-        walker = Walker(
-            state=state,
-            weight=0.1,
-        )
+def test_clone():
+    state = MockWalkerState(a=1, b="hello")
+    walker = Walker(
+        state=state,
+        weight=0.1,
+    )
 
-        clones = walker.clone(1)
-        assert len(clones) == 2
+    clones = clone(walker, 1)
+    assert len(clones) == 2
 
-        assert clones[0] == Walker(
-            state=state,
-            weight=0.05,
-        )
-        assert clones[1] == Walker(
-            state=state,
-            weight=0.05,
-        )
+    assert clones[0] == Walker(
+        state=state,
+        weight=0.05,
+    )
+    assert clones[1] == Walker(
+        state=state,
+        weight=0.05,
+    )
 
-    def test_squash(self):
+def test_squash():
 
-        walker_a = Walker(
-            state=WalkerState(a=1),
-            weight=0.1,
-        )
+    walker_a = Walker(
+        state=MockWalkerState(a=1, b="hello"),
+        weight=0.1,
+    )
 
-        walker_b = Walker(
-            state=WalkerState(a=10),
-            weight=0.1,
-        )
+    walker_b = Walker(
+        state=MockWalkerState(a=10, b="hello"),
+        weight=0.1,
+    )
 
-        assert walker_a.squash(walker_b) == Walker(
-            state=WalkerState(a=10),
-            weight=0.2,
-        )
+    assert squash(walker_a, walker_b) == Walker(
+        state=MockWalkerState(a=10, b="hello"),
+        weight=0.2,
+    )
 
-        assert walker_b.squash(walker_a) == Walker(
-            state=WalkerState(a=1),
-            weight=0.2,
-        )
-
-    def test_merge(self):
-        walker_a = Walker(
-            state=WalkerState(a=1),
-            weight=0.1,
-        )
-
-        other_walkers = [
-            Walker(
-                state=WalkerState(a=10),
-                weight=0.1,
-            ),
-            Walker(
-                state=WalkerState(a=20),
-                weight=0.1,
-            ),
-        ]
-
-        assert math.isclose(walker_a.merge(other_walkers).weight, 0.3)
-
+    assert squash(walker_b, walker_a) == Walker(
+        state=MockWalkerState(a=1, b="hello"),
+        weight=0.2,
+    )
 
 def test_split():
 
     walker = Walker(
-        state=WalkerState(a=1),
+        state=MockWalkerState(a=1, b="hello"),
         weight=0.1,
     )
 
     assert split(walker, 2) == [
         Walker(
-            state=WalkerState(a=1),
+            state=MockWalkerState(a=1, b="hello"),
             weight=0.05,
         ),
         Walker(
-            state=WalkerState(a=1),
+            state=MockWalkerState(a=1, b="hello"),
             weight=0.05,
         ),
     ]
@@ -152,22 +160,22 @@ def test_split():
 def test_keep_merge():
     walkers = [
         Walker(
-            state=WalkerState(a=10),
+            state=MockWalkerState(a=10, b="hello"),
             weight=0.1,
         ),
         Walker(
-            state=WalkerState(a=20),
+            state=MockWalkerState(a=20, b="hello"),
             weight=0.1,
         ),
     ]
 
     assert keep_merge(walkers, 0) == Walker(
-        state=WalkerState(a=10),
+        state=MockWalkerState(a=10, b="hello"),
         weight=0.2,
     )
 
     assert keep_merge(walkers, 1) == Walker(
-        state=WalkerState(a=20),
+        state=MockWalkerState(a=20, b="hello"),
         weight=0.2,
     )
 
@@ -175,11 +183,11 @@ def test_keep_merge():
 def test_merge():
     walkers = [
         Walker(
-            state=WalkerState(a=10),
+            state=MockWalkerState(a=10, b="hello"),
             weight=0.1,
         ),
         Walker(
-            state=WalkerState(a=20),
+            state=MockWalkerState(a=20, b="hello"),
             weight=0.1,
         ),
     ]

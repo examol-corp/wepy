@@ -28,13 +28,11 @@ magic method for the accessor syntax, i.e. walker.state['positions'].
 
 # Standard Library
 import logging
-from typing import Protocol, Hashable, Any, Self, TypeVar, Generic
-from abc import ABC
+from typing import Protocol, Any, TypeVar, Generic
 import math
 
 # Standard Library
 import random as rand
-from copy import deepcopy
 
 import attrs
 
@@ -42,118 +40,21 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-class WalkerStateProtocol(Protocol):
 
-    def __getitem__(self, key: str) -> Any: ...
+class WalkerState(Protocol[T]):
 
-    def dict(self) -> dict[str, Any]: ...
+    def __getitem__(self, key: str) -> T: ...
+
+    def __eq__(self, other: Any) -> bool: ...
+
+    def dict(self) -> dict[str, T]: ...
 
 
-class WalkerState:
-    """Reference implementation of the WalkerState interface.
-
-    Access all key-value pairs as a dictionary with the dict() method.
-
-    Access individual values using the accessor syntax similar to
-    dictionaries:
-
-    >>> WalkerState(my_key='value')['my_key']
-    'value'
-
-    """
-
-    def __init__(self, **kwargs: dict[str, Any]) -> None:
-        """Constructor for WalkerState.
-
-        All key-word arguments passed in will be set as the key-value
-        pairs for the state.
-
-        """
-        self._data = kwargs
-
-    def __getitem__(self, key: str) -> Any:
-        return self._data[key]
-
-    def __eq__(self, other: object) -> bool:
-
-        if not isinstance(other, WalkerState):
-            return False
-        else:
-            return self._data == other._data
-
-    def dict(self) -> dict[str, Any]:
-        """Return all key-value pairs as a dictionary."""
-        return deepcopy(self._data)
-
-# TODO: move all cloning and merging methods and functions to a
-# standalone module or in the clone_merge decision module
-
-class WalkerABC(ABC):
-
-    def clone(self, number: int = 1) -> list[Self]:
-        """Clone this walker by making a copy with the same state and split
-        the probability uniformly between clones.
-
-        The number is the increase in the number of walkers.
-
-        e.g. number=1 will return 2 walkers with the same state as
-        this object but with probability split 50/50 between them
-
-        Parameters
-        ----------
-        number : int
-            Number of extra clones to make
-             (Default value = 1)
-
-        Returns
-        -------
-        cloned_walkers : list of objects implementing the Walker interface
-
-        """
-
-        # calculate the weight of all child walkers split uniformly
-        split_prob = self.weight / (number + 1)
-        # make the clones
-        clones = []
-        for i in range(number + 1):
-            clones.append(type(self)(self.state, split_prob))
-
-        return clones
-
-    def squash(self, merge_target: Self) -> Self:
-        """Add the weight of this walker to another.
-
-        Parameters
-        ----------
-        merge_target : object implementing the Walker interface
-            The walker to add this one's weight to.
-
-        Returns
-        -------
-        merged_walker : object implementing the Walker interface
-
-        """
-        new_weight = self.weight + merge_target.weight
-        return type(self)(merge_target.state, new_weight)
-
-    def merge(self, other_walkers: list["Walker"]) -> "Walker":
-        """Merge a set of other walkers into this one using the merge function.
-
-        Parameters
-        ----------
-        other_walkers : list of objects implementing the Walker interface
-            The walkers that will be merged together
-
-        Returns
-        -------
-        merged_walker : object implementing the Walker interface
-
-        """
-        return merge([self] + other_walkers)[0]
+WalkerState_ = TypeVar("WalkerState_")
 
 
 @attrs.define
-class Walker(WalkerABC, Generic[T]):
+class Walker(Generic[WalkerState_]):
     """Reference implementation of the Walker interface.
 
     A container for:
@@ -163,8 +64,56 @@ class Walker(WalkerABC, Generic[T]):
 
     """
 
-    state: T
+    state: WalkerState_
     weight: float = attrs.field(eq=attrs.cmp_using(eq=math.isclose))
+
+
+def clone(walker: Walker, number: int = 1) -> list[Walker]:
+    """Clone this walker by making a copy with the same state and split
+    the probability uniformly between clones.
+
+    The number is the increase in the number of walkers.
+
+    e.g. number=1 will return 2 walkers with the same state as
+    this object but with probability split 50/50 between them
+
+    Parameters
+    ----------
+    number : int
+        Number of extra clones to make
+         (Default value = 1)
+
+    Returns
+    -------
+    cloned_walkers : list of objects implementing the Walker interface
+
+    """
+
+    # calculate the weight of all child walkers split uniformly
+    split_prob = walker.weight / (number + 1)
+    # make the clones
+    clones = []
+    for i in range(number + 1):
+        clones.append(Walker(walker.state, split_prob))
+
+    return clones
+
+
+def squash(walker: Walker, merge_target: Walker) -> Walker:
+    """Add the weight of this walker to another.
+
+    Parameters
+    ----------
+    merge_target : object implementing the Walker interface
+        The walker to add this one's weight to.
+
+    Returns
+    -------
+    merged_walker : object implementing the Walker interface
+
+    """
+    new_weight = walker.weight + merge_target.weight
+    return Walker(merge_target.state, new_weight)
 
 
 def split(walker: Walker, number: int = 2) -> list[Walker]:
