@@ -44,7 +44,7 @@ to be determined adaptively (e.g. according to some time limit).
 
 # Standard Library
 import logging
-from typing import Final
+from typing import Final, Any, TypedDict, Generic, TypeVar
 
 logger = logging.getLogger(__name__)
 # Standard Library
@@ -57,10 +57,33 @@ from wepy.reporter.reporter import Reporter
 from wepy.resampling.resamplers.resampler import Resampler
 from wepy.runners.runner import Runner
 from wepy.walker import Walker
-from wepy.work_mapper.mapper import Mapper
+from wepy.work_mapper.base import WorkMapper
+from wepy.work_mapper.serial import SerialMapper
+from wepy.monitor import Monitor
 
-
-class Manager:
+class CycleReportDict(TypedDict):
+    cycle_idx: int
+    new_walkers: list[Walker]
+    # TODO: types for all the Anys
+    warp_data: list[Any]
+    bc_data: list[Any]
+    progress_data: dict[Any]
+    resampling_data: Any
+    resampler_data: Any
+    n_segment_steps: int
+    resampled_walkers: list[Walker]
+    runner_precycle_time: float
+    runner_postcycle_time: float
+    sim_manager_segment_overhead_time: float
+    runner_splits_time: dict[str, float] | None
+    worker_segment_times: dict[int, list[float]] | None
+    cycle_sim_manager_segment_time: float
+    cycle_runner_time: float
+    cycle_bc_time: float
+    cycle_resampling_time: float
+    
+State_ = TypeVar("State_")
+class Manager(Generic[State_]):
     """The class that coordinates wepy simulations.
 
     The Manager class is the lynchpin of wepy simulations and is where
@@ -92,7 +115,17 @@ class Manager:
 
     """
 
-    REPORT_ITEM_KEYS: Final = (
+    init_walkers: list[Walker[State_]]
+    n_init_walkers: int
+    runner: Runner
+    resampler: Resampler
+    boundary_conditions: BoundaryConditions | None
+    work_mapper: WorkMapper
+    reporters: list[Reporter]
+    monitor: Monitor | None
+
+
+    REPORT_ITEM_KEYS: Final[tuple[str, ...]] = (
         "cycle_idx",
         "n_segment_steps",
         "new_walkers",
@@ -114,14 +147,14 @@ class Manager:
 
     def __init__(
         self,
-        init_walkers: list[Walker],
-        runner: Runner | None = None,
-        work_mapper=None,
-        resampler: Resampler | None = None,
+        init_walkers: list[Walker[State_]],
+        runner: Runner,
+        resampler: Resampler,
+        work_mapper: WorkMapper | None = None,
         boundary_conditions: BoundaryConditions | None = None,
-        reporters: Reporter | None = None,
-        sim_monitor=None,
-    ):
+        reporters: list[Reporter] | None = None,
+        sim_monitor: Monitor | None = None,
+    ) -> None:
         """Constructor for Manager.
 
         Arguments:
@@ -145,6 +178,9 @@ class Manager:
         reporters : list of objects implenting the Reporter interface, optional
             Reporters to be used. You should provide these if you want to keep data.
 
+        sim_monitor: Monitoring object. Can be used to report metrics
+            outside of simulation data flow.
+
         Warnings:
         --------
         While reporters are strictly optional, you probably want to
@@ -155,10 +191,6 @@ class Manager:
         See Also:
         --------
         wepy.reporter.hdf5 : The standard reporter for molecular simulations in wepy.
-
-        wepy.orchestration.orchestrator.Orchestrator : for running simulations with
-            checkpointing, restarting, reporter localization, and configuration hotswapping
-            with command line interface.
 
         """
 
@@ -179,24 +211,150 @@ class Manager:
             self.reporters = reporters
 
         if work_mapper is None:
-            self.work_mapper = Mapper()
+            self.work_mapper = SerialMapper()
         else:
             self.work_mapper = work_mapper
 
         ## Monitor
-        self.monitor = None
+        self.monitor = sim_monitor
 
         # used to have a record of the last report for the simulation
         # monitor without breaking the API. Ugly but I don't want to
         # break it and no one cares about this anyhow
-        self._last_report = None
+        self._last_report: CycleReportDict | None = None
+
+
+    def init(
+        self,
+        num_workers: int | None = None,
+        continue_run: int | None = None,
+    ) -> None:
+        """Initialize wepy configuration components for use at runtime.
+
+        This `init` method is different than the constructor
+        `__init__` method and instead calls the special `init` method
+        on all wepy components (runner, resampler, boundary
+        conditions, and reporters) at runtime.
+
+        This allows for a things that need to be done at runtime before a
+        simulation begins, e.g. opening files, that you don't want done at
+        construction time.
+
+        It calls the `init` methods on:
+
+        - work_mapper
+        - reporters
+
+        Passes the segment_func of the runner and the number of
+        workers to the work_mapper.
+
+        Passes the following things to each reporter `init` method:
+
+        - init_walkers
+        - runner
+        - resampler
+        - boundary_conditions
+        - work_mapper
+        - reporters
+        - continue_run
+
+        Parameters
+        ----------
+        num_workers : int
+            The number of workers to use in the work mapper.
+             (Default value = None)
+        continue_run : int
+            Index of a run this one is continuing.
+             (Default value = None)
+
+        """
+
+        logger.info("Starting simulation")
+
+        # initialize the monitoring object
+
+        # TODO: do we need to supply the port here? I don't want to
+        # add it to the interface... Should be pre-parametrized
+        if self.monitor is not None:
+            logger.info("Initializing monitoring")
+            self.monitor.init()
+
+        # initialize the work_mapper with the function it will be
+        # mapping and the number of workers, this may include things like starting processes
+        # etc.
+        logger.info("Initializing work_mapper")
+        self.work_mapper.init(
+            segment_func=self.runner.run_segment,
+            num_workers=num_workers,
+        )
+
+        # init the reporter
+        for reporter in self.reporters:
+            logger.info(f"Initializing reporter: {reporter}")
+            reporter.init(
+                init_walkers=self.init_walkers,
+                runner=self.runner,
+                resampler=self.resampler,
+                boundary_conditions=self.boundary_conditions,
+                work_mapper=self.work_mapper,
+                reporters=self.reporters,
+                continue_run=continue_run,
+            )
+
+        logger.info("Finished sim_manager initialization")
+
+    def cleanup(self) -> None:
+        """Perform cleanup actions for wepy configuration components.
+
+        Allow components to perform actions before ending the main
+        simulation manager process.
+
+        Calls the `cleanup` method on:
+
+        - work_mapper
+        - reporters
+
+        Passes nothing to the work mapper.
+
+        Passes the following to each reporter:
+
+        - runner
+        - work_mapper
+        - resampler
+        - boundary_conditions
+        - reporters
+
+        """
+
+        logger.info("Running cleanup")
+
+        if self.monitor is not None:
+            logger.info("Cleaning up monitoring")
+            self.monitor.cleanup()
+
+        # cleanup the mapper
+        logger.info("Cleaning up work_mapper")
+        self.work_mapper.cleanup()
+
+        # cleanup things associated with the reporter
+        for reporter in self.reporters:
+            logger.info(f"Cleaning up reporter: {reporter}")
+            reporter.cleanup(
+                runner=self.runner,
+                work_mapper=self.work_mapper,
+                resampler=self.resampler,
+                boundary_conditions=self.boundary_conditions,
+                reporters=self.reporters,
+            )
+
+        logger.info("Finished cleanup")
 
     def run_segment(
         self,
-        walkers: list[Walker],
+        states: list[State_],
         segment_length: int,
         cycle_idx: int,
-    ) -> list[Walker]:
+    ) -> list[State_]:
         """Run a time segment for all walkers using the available workers.
 
         Maps the work for running each segment for each walker using
@@ -221,41 +379,49 @@ class Manager:
            The walkers after the segment of sampling simulation.
         """
 
-        num_walkers = len(walkers)
+        num_walkers = len(states)
 
         logger.info("Starting segment")
 
+        segment_lengths = [segment_length for i in range(num_walkers)]
+        cycle_idxs = [cycle_idx for i in range(num_walkers)]
+        walker_idxs = [walker_idx for walker_idx in range(num_walkers)]
         try:
-            new_walkers = list(
+            new_states = list(
                 self.work_mapper.map(
                     # args, which must be supported by the map function
-                    walkers,
-                    (segment_length for i in range(num_walkers)),
+                    states,
+                    segment_lengths,
                     # kwargs which are optionally recognized by the map function
-                    cycle_idx=(cycle_idx for i in range(num_walkers)),
-                    walker_idx=(walker_idx for walker_idx in range(num_walkers)),
+                    cycle_idx=cycle_idxs,
+                    walker_idx=walker_idxs,
                 )
             )
 
         except Exception as exception:
+            logger.info("Exception encountered in segment calculations. Cleaning up before raising.")
             # get the errors from the work mapper error queue
             self.cleanup()
+
+            logger.info("Failure cleanup complete, reraising error.")
 
             # report on all of the errors that occured
             raise exception
 
         logger.info("Ending segment")
 
-        return new_walkers
+        return new_states
 
     def run_cycle(
         self,
-        walkers: list[Walker],
+        walkers: list[Walker[State_]],
         n_segment_steps: int,
         cycle_idx: int,
         runner_opts=None,
-    ) -> tuple[list[Walker], list[Runner | BoundaryConditions | Resampler]]:
-        # TODO: Replace list of Runner | BoundaryConditions | Resampler with tuple
+    ) -> tuple[
+        list[Walker[State_]],
+        tuple[Runner, BoundaryConditions | None, Resampler],
+    ]:
         """Run a full cycle of weighted ensemble simulation using each
         component.
 
@@ -322,59 +488,50 @@ class Manager:
 
         """
 
-        # this one is called to just easily be able to catch all the
-        # errors from it so we can cleanup if an error is caught
-
-        return self._run_cycle(
-            walkers,
-            n_segment_steps,
-            cycle_idx,
-            runner_opts=runner_opts,
-        )
-
-    def _run_cycle(
-        self,
-        walkers,
-        n_segment_steps,
-        cycle_idx,
-        runner_opts=None,
-    ):
-        """See run_cycle."""
+        logger.info("Running simulation cycle")
 
         if runner_opts is None:
             runner_opts = {}
 
-        if self.runner is None:
-            raise RuntimeError("'runner' is None")
-
         # run the runner pre-cycle hook
         start = time.time()
 
+        logger.info("Running Runner.pre_cycle hook")
         self.runner.pre_cycle(
-            walkers=walkers,
-            n_segment_steps=n_segment_steps,
-            cycle_idx=cycle_idx,
             **runner_opts,
         )
 
         end = time.time()
         runner_precycle_time = end - start
+        logger.info(f"Precycle time: {runner_precycle_time}")
 
         # run the segment
         start = time.time()
 
-        new_walkers = self.run_segment(walkers, n_segment_steps, cycle_idx)
+        logger.info("Running state propagation segment")
+        new_states = self.run_segment(
+            [walker.state for walker in walkers],
+            n_segment_steps,
+            cycle_idx,
+        )
+        logger.info("Finished state propagation segment")
+
+        new_walkers = [
+            Walker(
+                state=new_state,
+                weight=walker.weight
+            )
+            for walker, new_state
+            in zip(walkers, new_states, strict=True)
+        ]
 
         end = time.time()
         sim_manager_segment_time = end - start
+        logger.info(f"Segment duration: {sim_manager_segment_time}")
 
-        if hasattr(self.runner, "_last_cycle_segments_split_times"):
-            runner_splits = deepcopy(self.runner._last_cycle_segments_split_times)
+        runner_splits = self.runner.get_last_cycle_segments_split_times()
 
-        else:
-            runner_splits = None
-
-        logger.info("Starting post cycle")
+        logger.info("Running Runner.post_cycle hook")
         # run post-cycle hook
         start = time.time()
 
@@ -383,7 +540,7 @@ class Manager:
         end = time.time()
         runner_postcycle_time = end - start
 
-        logger.info("End cycle {}".format(cycle_idx))
+        logger.info(f"Post cycle duration: {runner_postcycle_time}")
 
         # boundary conditions should be optional;
 
@@ -395,9 +552,10 @@ class Manager:
         progress_data = {}
         bc_time = 0.0
         if self.boundary_conditions is not None:
+            logger.info("Boundary conditions were provided, applying.")
             # apply rules of boundary conditions and warp walkers through space
             start = time.time()
-            logger.info("Starting boundary conditions")
+            logger.info("Starting boundary conditions calculations")
             bc_results = self.boundary_conditions.warp_walkers(new_walkers, cycle_idx)
             end = time.time()
             bc_time = end - start
@@ -408,60 +566,53 @@ class Manager:
             bc_data = bc_results[2]
             progress_data = bc_results[3]
 
+            logger.info(f"Boundary condition duration: {bc_time}")
+
             if len(warp_data) > 0:
-                logger.info("Returned warp record in cycle {}".format(cycle_idx))
+                logger.info(f"Returned warp record in cycle {cycle_idx}")
 
         # resample walkers
+        logger.info("Starting resampler phase.")
         start = time.time()
-        logger.info("Starting resampler")
 
         resampling_results = self.resampler.resample(warped_walkers)
 
         end = time.time()
         resampling_time = end - start
 
+        logger.info(f"Resampling duration: {resampling_time}")
+
         resampled_walkers = resampling_results[0]
         resampling_data = resampling_results[1]
         resampler_data = resampling_results[2]
-
-        # log the weights of the walkers after resampling
-
-        # DEBUG: commenting this out to make mocking easier. But really I
-        # don't even care if it stays. as its mostly noise.
-        # result_template_str = "|".join(["{:^5}" for i in range(self.n_init_walkers + 1)])
-        # walker_weight_str = result_template_str.format("weight",
-        #     *[round(walker.weight, 3) for walker in resampled_walkers])
-        # logger.info(walker_weight_str)
 
         # make a dictionary of all the results that will be reported
         seg_times = {}
         sampling_time = None
 
-        if hasattr(self.work_mapper, "worker_segment_times"):
-            seg_times = deepcopy(self.work_mapper.worker_segment_times)
+        if (seg_times := self.work_mapper.get_worker_segment_times()) is not None:
+            logger.info("Segment timings provided by work mapper, recording.")
 
             # count up the total sampling time from the segments
-            sampling_time = 0
+            sampling_time = 0.
             for (
                 worker_id,
                 segments_times,
-            ) in self.work_mapper.worker_segment_times.items():
+            ) in seg_times.items():
                 for seg_time in segments_times:
                     sampling_time += seg_time
 
             # calculate the overhead for logging
             sim_manager_segment_overhead_time = sim_manager_segment_time - sampling_time
 
-            # logger.info(
-            #     "Runner time = {}; Sampling = ({}); Overhead = ({})".format(
-            #         runner_time, sampling_time, overhead_time))
+            logger.info(f"Simulation manager overhead time: {sim_manager_segment_overhead_time}")
+
 
         else:
+            logger.info("Worker segment times not provided")
             sim_manager_segment_overhead_time = 0.0
-            # logger.info("No worker segment times given")
-            # logger.info("Runner time = {}".format(runner_time))
 
-        report = {
+        report = CycleReportDict({
             "cycle_idx": cycle_idx,
             "new_walkers": new_walkers,
             "warp_data": warp_data,
@@ -481,15 +632,9 @@ class Manager:
             "cycle_runner_time": sim_manager_segment_time,
             "cycle_bc_time": bc_time,
             "cycle_resampling_time": resampling_time,
-        }
+        })
 
         self._last_report = report
-
-        # check that all of the keys that are specified for this sim
-        # manager are present
-        assert all(
-            [True if rep_key in report else False for rep_key in self.REPORT_ITEM_KEYS]
-        )
 
         logger.info("Starting reporting")
         # report results to the reporters
@@ -497,143 +642,23 @@ class Manager:
             logger.info(f"Reporting with reporter: {reporter}")
             reporter.report(**report)
 
-        # prepare resampled walkers for running new state changes
-        walkers = resampled_walkers
-
         # run the simulation monitor to get metrics on everything
         if self.monitor is not None:
-            logger.info("Running monitoring")
-            self.monitor.cycle_monitor(self, walkers)
-
-        # we also return a list of the "filters" which are the
-        # classes that are run on the initial walkers to produce
-        # the final walkers. THis is to satisfy a future looking
-        # interface in which the order and components of these
-        # filters are completely parametrizable. This may or may
-        # not be implemented in a future release of wepy but this
-        # interface is assumed by the orchestration classes for
-        # making snapshots of the simulations. The receiver of
-        # these should perform the copy to make sure they aren't
-        # mutated. We don't do this here for efficiency.
-        filters = [self.runner, self.boundary_conditions, self.resampler]
+            logger.info("Running cycle monitoring")
+            self.monitor.cycle_monitor(self, resampled_walkers)
 
         logger.info("Done: returning walkers")
-        return walkers, filters
+        return resampled_walkers, (self.runner, self.boundary_conditions, self.resampler)
 
-    def init(
-        self,
-        num_workers=None,
-        continue_run=None,
-    ):
-        """Initialize wepy configuration components for use at runtime.
-
-        This `init` method is different than the constructor
-        `__init__` method and instead calls the special `init` method
-        on all wepy components (runner, resampler, boundary
-        conditions, and reporters) at runtime.
-
-        This allows for a things that need to be done at runtime before a
-        simulation begins, e.g. opening files, that you don't want done at
-        construction time.
-
-        It calls the `init` methods on:
-
-        - work_mapper
-        - reporters
-
-        Passes the segment_func of the runner and the number of
-        workers to the work_mapper.
-
-        Passes the following things to each reporter `init` method:
-
-        - init_walkers
-        - runner
-        - resampler
-        - boundary_conditions
-        - work_mapper
-        - reporters
-        - continue_run
-
-        Parameters
-        ----------
-        num_workers : int
-            The number of workers to use in the work mapper.
-             (Default value = None)
-        continue_run : int
-            Index of a run this one is continuing.
-             (Default value = None)
-
-        """
-
-        logger.info("Starting simulation")
-
-        # initialize the monitoring object
-
-        # TODO: do we need to supply the port here? I don't want to
-        # add it to the interface... Should be pre-parametrized
-        if self.monitor is not None:
-            self.monitor.init()
-
-        # initialize the work_mapper with the function it will be
-        # mapping and the number of workers, this may include things like starting processes
-        # etc.
-        self.work_mapper.init(
-            segment_func=self.runner.run_segment,
-            num_workers=num_workers,
-        )
-
-        # init the reporter
-        for reporter in self.reporters:
-            reporter.init(
-                init_walkers=self.init_walkers,
-                runner=self.runner,
-                resampler=self.resampler,
-                boundary_conditions=self.boundary_conditions,
-                work_mapper=self.work_mapper,
-                reporters=self.reporters,
-                continue_run=continue_run,
-            )
-
-    def cleanup(self):
-        """Perform cleanup actions for wepy configuration components.
-
-        Allow components to perform actions before ending the main
-        simulation manager process.
-
-        Calls the `cleanup` method on:
-
-        - work_mapper
-        - reporters
-
-        Passes nothing to the work mapper.
-
-        Passes the following to each reporter:
-
-        - runner
-        - work_mapper
-        - resampler
-        - boundary_conditions
-        - reporters
-
-        """
-
-        if self.monitor is not None:
-            self.monitor.cleanup()
-
-        # cleanup the mapper
-        self.work_mapper.cleanup()
-
-        # cleanup things associated with the reporter
-        for reporter in self.reporters:
-            reporter.cleanup(
-                runner=self.runner,
-                work_mapper=self.work_mapper,
-                resampler=self.resampler,
-                boundary_conditions=self.boundary_conditions,
-                reporters=self.reporters,
-            )
-
-    def run_simulation_by_time(self, run_time, segments_length, num_workers=None):
+    def run_simulation_by_time(
+            self,
+            run_time: float,
+            segments_length: int,
+            num_workers: int | None = None,
+    ) -> tuple[
+        list[Walker[State_]],
+        tuple[Runner, BoundaryConditions | None, Resampler],
+    ]:
         """Run a simulation for a certain amount of time.
 
         This starts timing as soon as this is called. If the time
@@ -667,11 +692,6 @@ class Manager:
             Deep copies of the runner, resampler, and boundary
             conditions objects at the end of the cycle.
 
-        See Also
-        --------
-        wepy.orchestration.orchestrator.Orchestrator : for running simulations with
-            checkpointing, restarting, reporter localization, and configuration hotswapping
-            with command line interface.
 
         """
         start_time = time.time()
@@ -700,10 +720,14 @@ class Manager:
 
     def run_simulation(
         self,
-        n_cycles,
-        segment_lengths,
-        num_workers=None,
-    ):
+        n_cycles: int,
+        segment_lengths: int,
+        num_workers: int | None = None,
+        continue_run_idx: int | None = None,
+    ) -> tuple[
+        list[Walker[State_]],
+        tuple[Runner, BoundaryConditions, Resampler],
+    ]:
         """Run a simulation for an explicit number of cycles.
 
         Parameters
@@ -718,6 +742,8 @@ class Manager:
             The number of workers to use for the work mapper.
              (Default value = None)
 
+        continue_run_idx: Index of the run you are continuing, optional.
+
 
         Returns
         -------
@@ -728,99 +754,47 @@ class Manager:
             Deep copies of the runner, boundary conditions, and
             resampler objects at the end of the simulation.
 
-        See Also
-        --------
-        wepy.orchestration.orchestrator.Orchestrator : for running simulations with
-            checkpointing, restarting, reporter localization, and configuration hotswapping
-            with command line interface.
-
         """
 
-        self.init(num_workers=num_workers)
+        logger.info("Running simulation init hook")
+        self.init(num_workers=num_workers, continue_run=continue_run_idx)
 
         if type(segment_lengths) == int:
+            logger.info("Single number of steps provided for simulation, using this for all cycles.")
             segment_lengths = [segment_lengths for _ in range(n_cycles)]
 
         walkers = self.init_walkers
 
+        logger.info("Starting main simulation loop over cycles")
         # the main cycle loop
         for cycle_idx in range(n_cycles):
+            logger.info(f"Running cycle: {cycle_idx}")
             walkers, filters = self.run_cycle(
-                walkers, segment_lengths[cycle_idx], cycle_idx
+                walkers, segment_lengths[cycle_idx], cycle_idx,
             )
+            logger.info(f"Finished running cycle: {cycle_idx}")
 
             # run the simulation monitor to get metrics on everything
             if self.monitor is not None:
+                logger.info("Running monitoring cycle_monitor hook")
                 self.monitor.cycle_monitor(self, walkers)
 
+        logger.info("Running simulation cleanup")
         self.cleanup()
+        logger.info("Simulation cleanup complete")
 
-        return walkers, deepcopy(filters)
+        return walkers, deepcopy(tuple(filters))
 
-    def continue_run_simulation(
+    def run_simulation_by_time(
         self,
-        run_idx,
-        n_cycles,
-        segment_lengths,
-        num_workers=None,
-    ):
-        """Continue a simulation. All this does is provide a run idx to the
-        reporters, which is the run that is intended to be
-        continued. This simulation manager knows no details and is
-        left up to the reporters to handle this appropriately.
-
-        Parameters
-        ----------
-        run_idx : int
-            Index of the run you are continuing.
-
-        n_cycles : int
-            Number of cycles to perform.
-
-        segment_lengths : int
-            The number of steps for each runner segment.
-
-        num_workers : int
-            The number of workers to use for the work mapper.
-             (Default value = None)
-
-        Returns
-        -------
-        new_walkers : list of walkers
-            The resulting walkers of the cycle
-
-        sim_components : list
-            Deep copies of the runner, resampler, and boundary
-            conditions objects at the end of the cycle.
-
-        See Also
-        --------
-        wepy.orchestration.orchestrator.Orchestrator : for running simulations with
-            checkpointing, restarting, reporter localization, and configuration hotswapping
-            with command line interface.
-
-        """
-
-        self.init(num_workers=num_workers, continue_run=run_idx)
-
-        walkers = self.init_walkers
-        # the main cycle loop
-        for cycle_idx in range(n_cycles):
-            walkers, filters = self.run_cycle(
-                walkers, segment_lengths[cycle_idx], cycle_idx
-            )
-
-            # run the simulation monitor to get metrics on everything
-            if self.monitor is not None:
-                self.monitor.cycle_monitor(self, walkers)
-
-        self.cleanup()
-
-        return walkers, filters
-
-    def continue_run_simulation_by_time(
-        self, run_idx, run_time, segments_length, num_workers=None
-    ):
+        run_time: int,
+        segments_length: int,
+        num_workers: int | None = None,
+        continue_run_idx: int | None = None,
+    ) -> tuple[
+        list[Walker[State_]],
+        tuple[Runner, BoundaryConditions | None, Resampler],
+    ]:
         """Continue a simulation with a separate run by time.
 
         This starts timing as soon as this is called. If the time
@@ -833,24 +807,13 @@ class Manager:
         manager knows no details and is left up to the reporters to
         handle this appropriately.
 
-        Parameters
-        ----------
-        run_idx : int
-            Deep copies of the runner, resampler, and boundary
-            conditions objects at the end of the cycle.
-
-
-        See Also
-        --------
-        wepy.orchestration.orchestrator.Orchestrator : for running simulations with
-            checkpointing, restarting, reporter localization, and configuration hotswapping
-            with command line interface.
-
         """
 
         start_time = time.time()
+        logger.info(f"Simulation start time: {start_time}")
 
-        self.init(num_workers=num_workers, continue_run=run_idx)
+        logger.info("Running simulation init hook")
+        self.init(num_workers=num_workers, continue_run=continue_run_idx)
 
         cycle_idx = 0
         walkers = self.init_walkers
@@ -869,10 +832,13 @@ class Manager:
 
             # run the simulation monitor to get metrics on everything
             if self.monitor is not None:
+                logger.info("Running cycle_monitor hook")
                 self.monitor.cycle_monitor(self, walkers)
 
             cycle_idx += 1
 
+        logger.info("Running simulation cleanup")
         self.cleanup()
+        logger.info("Simulation cleanup complete")
 
         return walkers, filters
