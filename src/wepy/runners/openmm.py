@@ -1071,6 +1071,9 @@ class OpenMMRunner(Runner[OpenMMState]):
         getState_kwargs: dict[str, bool] | None = None,
         platform: str | type(Ellipsis) | None = None,
         platform_kwargs: PlatformKwargs = None,
+        # UGLY: here to satisfy the interface
+        cycle_idx: int = 0,
+        walker_idx: int = 0
     ) -> OpenMMState:
         """Run dynamics for the walker.
 
