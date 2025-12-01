@@ -2413,7 +2413,7 @@ class WExploreResampler(CloneMergeResampler):
         # resampler state, which is addition of new regions
         return assignments, resampler_data
 
-    def decide(self, delta_walkers=0):
+    def decide(self, delta_walkers: int = 0):
         """Make decisions for resampling for a single step.
 
         Parameters

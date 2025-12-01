@@ -5,12 +5,10 @@ from wepy.runners.openmm import (
     OpenMMRunner,
     OpenMMState,
     gen_sim_state,
-    gen_walker_state,
-    OpenMMWalker,
-    OpenMMCPUWorker,
-    OpenMMGPUWorker,
-    OpenMMCPUWalkerTaskProcess,
-    OpenMMGPUWalkerTaskProcess,
+    # OpenMMCPUWorker,
+    # OpenMMGPUWorker,
+    # OpenMMCPUWalkerTaskProcess,
+    # OpenMMGPUWalkerTaskProcess,
 )
 
 import pytest
@@ -153,15 +151,6 @@ def test_gen_sim_state():
     )
 
 
-def test_gen_walker_state():
-
-    gen_walker_state(
-        positions=particle_line(2),
-        system=n_lj_system(2),
-        integrator=openmm.VerletIntegrator(0.002),
-    )
-
-
 class TestOpenMMState:
 
     # TODO: this whole class needs overhauled but I want the other
@@ -267,11 +256,11 @@ class TestOpenMMRunner:
 
         runner.pre_cycle(
             platform="CPU",
-            platform_kwargs={"Threads": 1},
+            platform_kwargs={"Threads": "1"},
         )
 
         assert runner._cycle_platform == "CPU"
-        assert runner._cycle_platform_kwargs == {"Threads": 1}
+        assert runner._cycle_platform_kwargs == {"Threads": "1"}
 
     def test_post_cycle(self):
 
@@ -304,11 +293,11 @@ class TestOpenMMRunner:
 
         runner.pre_cycle(
             platform="CPU",
-            platform_kwargs={"Threads": 1},
+            platform_kwargs={"Threads": "1"},
         )
 
         assert runner._cycle_platform == "CPU"
-        assert runner._cycle_platform_kwargs == {"Threads": 1}
+        assert runner._cycle_platform_kwargs == {"Threads": "1"}
 
         runner.post_cycle()
 
@@ -336,7 +325,7 @@ class TestOpenMMRunner:
             None,
         )
         assert runner._resolve_platform(
-            platform=Ellipsis, platform_kwargs={"Threads": 1}
+            platform=Ellipsis, platform_kwargs={"Threads": "1"}
         ) == (None, None)
 
         assert runner._resolve_platform(platform="CPU", platform_kwargs=None) == (
@@ -344,8 +333,8 @@ class TestOpenMMRunner:
             None,
         )
         assert runner._resolve_platform(
-            platform="CPU", platform_kwargs={"Threads": 1}
-        ) == ("CPU", {"Threads": 1})
+            platform="CPU", platform_kwargs={"Threads": "1"}
+        ) == ("CPU", {"Threads": "1"})
 
         runner = OpenMMRunner(
             system=system,
@@ -355,12 +344,12 @@ class TestOpenMMRunner:
 
         runner.pre_cycle(
             platform="CPU",
-            platform_kwargs={"Threads": 1},
+            platform_kwargs={"Threads": "1"},
         )
 
         assert runner._resolve_platform(platform=None, platform_kwargs=None) == (
             "CPU",
-            {"Threads": 1},
+            {"Threads": "1"},
         )
 
         runner = OpenMMRunner(
@@ -389,7 +378,6 @@ class TestOpenMMRunner:
         )
 
         state = OpenMMState(state)
-        walker = OpenMMWalker(state, 0.1)
 
         runner = OpenMMRunner(
             system=system,
@@ -398,13 +386,13 @@ class TestOpenMMRunner:
         )
 
         runner.run_segment(
-            walker,
+            state,
             2,
         )
 
-        walker = runner.run_segment(walker, 2, getState_kwargs={"positions": True})
-        assert walker.state["positions"] is not None
-        assert walker.state["velocities"] is None
+        new_state = runner.run_segment(state, 2, getState_kwargs={"positions": True})
+        assert new_state["positions"] is not None
+        assert new_state["velocities"] is None
 
         runner = OpenMMRunner(
             system=system,
@@ -413,24 +401,24 @@ class TestOpenMMRunner:
         )
 
         runner.run_segment(
-            walker,
+            new_state,
             2,
             platform="Reference",
         )
 
 
-class TestOpenMMCPUWorker:
+# class TestOpenMMCPUWorker:
 
-    pass
-
-
-class TestOpenMMGPUWorker:
-    pass
+#     pass
 
 
-class TestOpenMMCPUWalkerTaskProcess:
-    pass
+# class TestOpenMMGPUWorker:
+#     pass
 
 
-class TestOpenMMGPUWalkerTaskProcess:
-    pass
+# class TestOpenMMCPUWalkerTaskProcess:
+#     pass
+
+
+# class TestOpenMMGPUWalkerTaskProcess:
+#     pass

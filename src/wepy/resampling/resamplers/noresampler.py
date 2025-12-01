@@ -1,6 +1,5 @@
 from typing import TypedDict
 import numpy as np
-from nptyping import NDArray, Floating, Shape, Integer
 from wepy.walker import Walker
 from wepy.resampling.resamplers.resampler import Resampler
 from wepy.resampling.decisions.no_decision import (
@@ -11,9 +10,8 @@ from wepy.resampling.decisions.no_decision import (
 
 
 class NoResamplerResamplingData(TypedDict):
-    step_idx: NDArray[Shape["1"], Integer]
-    decision_id: NDArray[Shape["1"], Integer]
-    target_idxs: NDArray[Shape["1"], Integer]
+    decision_id: int
+    target_idxs: tuple[int, ...]
 
 
 class NoResamplerResamplerData(TypedDict):

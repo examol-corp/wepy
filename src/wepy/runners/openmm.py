@@ -31,14 +31,12 @@ import logging
 logger = logging.getLogger(__name__)
 # Standard Library
 import time
-from copy import copy
 from warnings import warn
 import copy
 
 # Third Party Library
 import attrs
 import numpy as np
-from nptyping import NDArray, Shape, Floating
 
 try:
     import mdtraj
@@ -58,12 +56,12 @@ except ModuleNotFoundError:
 # First Party Library
 from wepy.runners.runner import Runner
 from wepy.util.util import box_vectors_to_lengths_angles
-from wepy.walker import Walker, WalkerState, WalkerABC
-from wepy.work_mapper.task_mapper import WalkerTaskProcess
-from wepy.work_mapper.worker import Worker
+from wepy.walker import WalkerState
+# from wepy.work_mapper.task_mapper import WalkerTaskProcess
+# from wepy.work_mapper.worker import Worker
 
-AtomNDArray = NDArray[Shape["N atoms, 3 dimensions"], Floating]
-BoxVectorsNDArray = NDArray[Shape["3, 3"], Floating]
+# AtomNDArray = NDArray[Shape["N atoms, 3 dimensions"], Floating]
+# BoxVectorsNDArray = NDArray[Shape["3, 3"], Floating]
 
 ## Constants
 
@@ -202,13 +200,13 @@ UNIT_NAMES: tuple[tuple[str, str]] = (
 
 
 class OpenMMStateDict(TypedDict, total=False):
-    positions: AtomNDArray
-    velocities: AtomNDArray
-    forces: AtomNDArray
+    positions: np.typing.ArrayLike
+    velocities: np.typing.ArrayLike
+    forces: np.typing.ArrayLike
     kinetic_energy: float
     potential_energy: float
     time: float
-    box_vectors: BoxVectorsNDArray
+    box_vectors: np.typing.ArrayLike
     box_volume: float
     # TODO: parameters
 
@@ -342,7 +340,7 @@ class OpenMMState(WalkerState):
     @property
     def positions(self) -> Annotated[
         openmm.unit.Quantity | None,
-        AtomNDArray,
+        np.typing.ArrayLike,
     ]:
         """The positions of the state as a numpy array openmm.unit.Quantity object."""
 
@@ -356,7 +354,7 @@ class OpenMMState(WalkerState):
         """The units (as a openmm.unit.Unit object) the positions are in."""
         return self.positions.unit
 
-    def positions_values(self) -> AtomNDArray | None:
+    def positions_values(self) -> np.typing.ArrayLike | None:
         """The positions of the state as a numpy array in the positions_unit
         openmm.unit.Unit. This is what is returned by the __getitem__
         accessor.
@@ -366,7 +364,7 @@ class OpenMMState(WalkerState):
 
     # Velocities
     @property
-    def velocities(self) -> Annotated[openmm.unit.Quantity | None, AtomNDArray]:
+    def velocities(self) -> Annotated[openmm.unit.Quantity | None, np.typing.ArrayLike]:
         """The velocities of the state as a numpy array openmm.unit.Quantity object."""
 
         if "velocities" in self._sim_state_fields_present:
@@ -379,7 +377,7 @@ class OpenMMState(WalkerState):
         """The units (as a openmm.unit.Unit object) the velocities are in."""
         return self.velocities.unit
 
-    def velocities_values(self) -> AtomNDArray | None:
+    def velocities_values(self) -> np.typing.ArrayLike | None:
         """The velocities of the state as a numpy array in the velocities_unit
         openmm.unit.Unit. This is what is returned by the __getitem__
         accessor.
@@ -396,7 +394,7 @@ class OpenMMState(WalkerState):
     @property
     def forces(self) -> Annotated[
         openmm.unit.Quantity | None,
-        AtomNDArray,
+        np.typing.ArrayLike,
     ]:
         """The forces of the state as a numpy array openmm.unit.Quantity object."""
 
@@ -410,7 +408,7 @@ class OpenMMState(WalkerState):
         """The units (as a openmm.unit.Unit object) the forces are in."""
         return self.forces.unit
 
-    def forces_values(self) -> AtomNDArray | None:
+    def forces_values(self) -> np.typing.ArrayLike | None:
         """The forces of the state as a numpy array in the forces_unit
         openmm.unit.Unit. This is what is returned by the __getitem__
         accessor.
@@ -427,7 +425,7 @@ class OpenMMState(WalkerState):
     @property
     def box_vectors(self) -> Annotated[
         openmm.unit.Quantity | None,
-        BoxVectorsNDArray,
+        np.typing.ArrayLike,
     ]:
         """The box vectors of the state as a numpy array openmm.unit.Quantity object."""
         try:
@@ -444,7 +442,7 @@ class OpenMMState(WalkerState):
         """The units (as a openmm.unit.Unit object) the box vectors are in."""
         return self.box_vectors.unit
 
-    def box_vectors_values(self) -> AtomNDArray | None:
+    def box_vectors_values(self) -> np.typing.ArrayLike | None:
         """The box vectors of the state as a numpy array in the
         box_vectors_unit openmm.unit.Unit. This is what is returned by
         the __getitem__ accessor.
@@ -463,7 +461,7 @@ class OpenMMState(WalkerState):
     @property
     def kinetic_energy(self) -> Annotated[
         openmm.unit.Quantity | None,
-        AtomNDArray,
+        np.typing.ArrayLike,
     ]:
         """The kinetic energy of the state as a numpy array openmm.unit.Quantity object."""
         try:
@@ -480,7 +478,7 @@ class OpenMMState(WalkerState):
         """The units (as a openmm.unit.Unit object) the kinetic energy is in."""
         return self.kinetic_energy.unit
 
-    def kinetic_energy_value(self) -> AtomNDArray | None:
+    def kinetic_energy_value(self) -> np.typing.ArrayLike | None:
         """The kinetic energy of the state as a numpy array in the kinetic_energy_unit
         openmm.unit.Unit. This is what is returned by the __getitem__
         accessor.
@@ -499,7 +497,7 @@ class OpenMMState(WalkerState):
     @property
     def potential_energy(self) -> Annotated[
         openmm.unit.Quantity | None,
-        AtomNDArray,
+        np.typing.ArrayLike,
     ]:
         """The potential energy of the state as a numpy array openmm.unit.Quantity object."""
         try:
@@ -516,7 +514,7 @@ class OpenMMState(WalkerState):
         """The units (as a openmm.unit.Unit object) the potential energy is in."""
         return self.potential_energy.unit
 
-    def potential_energy_value(self) -> AtomNDArray | None:
+    def potential_energy_value(self) -> np.typing.ArrayLike | None:
         """The potential energy of the state as a numpy array in the potential_energy_unit
         openmm.unit.Unit. This is what is returned by the __getitem__
         accessor.
@@ -549,7 +547,7 @@ class OpenMMState(WalkerState):
         """The units (as a openmm.unit.Unit object) the time is in."""
         return self.time.unit
 
-    def time_value(self) -> AtomNDArray | None:
+    def time_value(self) -> np.typing.ArrayLike | None:
         """The time of the state as a numpy array in the time_unit
         openmm.unit.Unit. This is what is returned by the __getitem__
         accessor.
@@ -580,7 +578,7 @@ class OpenMMState(WalkerState):
         """The units (as a openmm.unit.Unit object) the box volume is in."""
         return self.box_volume.unit
 
-    def box_volume_value(self) -> NDArray[Shape["1"], Floating] | None:
+    def box_volume_value(self) -> np.typing.ArrayLike | None:
         """The box volume of the state as a numpy array in the box_volume_unit
         openmm.unit.Unit. This is what is returned by the __getitem__
         accessor.
@@ -620,7 +618,7 @@ class OpenMMState(WalkerState):
         param_units = {key: None for key, val in self.parameters.items()}
         return param_units
 
-    def parameters_values(self) -> dict[str, NDArray] | None:
+    def parameters_values(self) -> dict[str, np.typing.ArrayLike] | None:
         """The parameters of the state as a dictionary mapping the name of the
         parameter to a numpy array in the unit for the parameter of the
         same name in the parameters_unit corresponding
@@ -667,7 +665,7 @@ class OpenMMState(WalkerState):
         param_units = {key: None for key, val in self.parameter_derivatives.items()}
         return param_units
 
-    def parameter_derivatives_values(self) -> dict[str, NDArray] | None:
+    def parameter_derivatives_values(self) -> dict[str, np.typing.ArrayLike] | None:
         """The parameter derivatives of the state as a dictionary mapping the
         name of the parameter to a numpy array in the unit for the
         parameter of the same name in the parameters_unit
@@ -866,16 +864,7 @@ class OpenMMState(WalkerState):
             topology=topology,
         )
 
-
-@attrs.define
-class OpenMMWalker(WalkerABC):
-
-    state: OpenMMState
-    weight: float
-
-
 PlatformKwargs = dict[str, str]
-
 
 class OpenMMRunnerSegmentSplitTimes(TypedDict):
     gen_sim_time: float
@@ -885,7 +874,7 @@ class OpenMMRunnerSegmentSplitTimes(TypedDict):
 
 
 # the runner for the simulation which runs the actual dynamics
-class OpenMMRunner(Runner):
+class OpenMMRunner(Runner[OpenMMState]):
     """Runner for OpenMM simulations."""
 
     system: openmm.System
@@ -1077,12 +1066,12 @@ class OpenMMRunner(Runner):
 
     def run_segment(
         self,
-        walker: OpenMMWalker,
+        walker_state: OpenMMState,
         segment_length: int,
         getState_kwargs: dict[str, bool] | None = None,
         platform: str | type(Ellipsis) | None = None,
         platform_kwargs: PlatformKwargs = None,
-    ) -> Walker:
+    ) -> OpenMMState:
         """Run dynamics for the walker.
 
         Parameters
@@ -1110,7 +1099,7 @@ class OpenMMRunner(Runner):
 
         Returns
         -------
-        new_walker : Walker after dynamics was run, only the state should be modified.
+        new_walker_state : Walker after dynamics was run, only the state should be modified.
 
         """
 
@@ -1131,7 +1120,7 @@ class OpenMMRunner(Runner):
         gen_sim_start = time.time()
 
         # make a copy of the integrator for this particular segment
-        new_integrator = copy(self.integrator)
+        new_integrator = copy.copy(self.integrator)
         # force setting of random seed to 0, which is a special
         # value that forces the integrator to choose another
         # random number
@@ -1201,7 +1190,7 @@ class OpenMMRunner(Runner):
             )
 
         # set the state to the context from the walker
-        simulation.context.setState(walker.state.sim_state)
+        simulation.context.setState(walker_state.sim_state)
 
         gen_sim_end = time.time()
         gen_sim_time = gen_sim_end - gen_sim_start
@@ -1226,11 +1215,8 @@ class OpenMMRunner(Runner):
         get_state_time = get_state_end - get_state_start
         logger.info("Getting context state time: {}".format(get_state_time))
 
-        # generate the new state/walker
+        # generate the new state
         new_state = OpenMMState(simulation.context.getState(**_getState_kwargs))
-
-        # create a new walker for this
-        new_walker = OpenMMWalker(new_state, walker.weight)
 
         run_segment_end = time.time()
         run_segment_time = run_segment_end - run_segment_start
@@ -1245,7 +1231,7 @@ class OpenMMRunner(Runner):
 
         self._last_cycle_segments_split_times.append(segment_split_times)
 
-        return new_walker
+        return new_state
 
     def last_cycle_segments_split_times(self) -> OpenMMRunnerSegmentSplitTimes:
 
@@ -1253,7 +1239,7 @@ class OpenMMRunner(Runner):
 
 
 def gen_sim_state(
-    positions: AtomNDArray,
+    positions: np.typing.ArrayLike,
     system: openmm.System,
     integrator: openmm.Integrator,
     getState_kwargs: dict[str, bool] | None = None,
@@ -1288,7 +1274,7 @@ def gen_sim_state(
     # generate a throwaway context, using the reference platform so we
     # don't screw up other platform stuff later in the same process
     platform = openmm.Platform.getPlatformByName("Reference")
-    context = openmm.Context(system, copy(integrator), platform)
+    context = openmm.Context(system, copy.copy(integrator), platform)
 
     # set the positions
     context.setPositions(positions)
@@ -1299,141 +1285,115 @@ def gen_sim_state(
     return sim_state
 
 
-def gen_walker_state(positions, system, integrator, getState_kwargs=None):
-    """Convenience function for generating a wepy walker State object for
-    an openmm simulation state.
+# class OpenMMCPUWorker(Worker):
+#     """Worker for OpenMM GPU simulations (CUDA or OpenCL platforms).
 
-    Parameters
-    ----------
-    positions : arraylike of float
-        The positions for the system you want to set
+#     This is intended to be used with the wepy.work_mapper.WorkerMapper
+#     work mapper class.
 
-    system : openmm.app.System object
+#     This class must be used in order to ensure OpenMM runs jobs on the
+#     appropriate GPU device.
 
-    integrator : openmm.Integrator object
+#     """
 
-    Returns
-    -------
-    walker_state : wepy.runners.openmm.OpenMMState object
+#     NAME_TEMPLATE = "OpenMMCPUWorker-{}"
+#     """The name template the worker processes are named to substituting in
+#     the process number."""
 
-    """
+#     DEFAULT_NUM_THREADS = 1
 
-    state = OpenMMState(
-        gen_sim_state(positions, system, integrator, getState_kwargs=getState_kwargs)
-    )
+#     def __init__(self, *args, **kwargs):
+#         if "num_threads" not in kwargs:
+#             num_threads = self.DEFAULT_NUM_THREADS
+#         else:
+#             num_threads = kwargs.pop("num_threads")
 
-    return state
+#         super().__init__(*args, num_threads=num_threads, **kwargs)
 
+#     def run_task(self, task):
+#         # documented in superclass
 
-class OpenMMCPUWorker(Worker):
-    """Worker for OpenMM GPU simulations (CUDA or OpenCL platforms).
+#         # make the platform kwargs dictionary
+#         platform_options = {"Threads": str(self.attributes["num_threads"])}
 
-    This is intended to be used with the wepy.work_mapper.WorkerMapper
-    work mapper class.
-
-    This class must be used in order to ensure OpenMM runs jobs on the
-    appropriate GPU device.
-
-    """
-
-    NAME_TEMPLATE = "OpenMMCPUWorker-{}"
-    """The name template the worker processes are named to substituting in
-    the process number."""
-
-    DEFAULT_NUM_THREADS = 1
-
-    def __init__(self, *args, **kwargs):
-        if "num_threads" not in kwargs:
-            num_threads = self.DEFAULT_NUM_THREADS
-        else:
-            num_threads = kwargs.pop("num_threads")
-
-        super().__init__(*args, num_threads=num_threads, **kwargs)
-
-    def run_task(self, task):
-        # documented in superclass
-
-        # make the platform kwargs dictionary
-        platform_options = {"Threads": str(self.attributes["num_threads"])}
-
-        # run the task and pass in the DeviceIndex for OpenMM to
-        # assign work to the correct GPU
-        return task(platform_kwargs=platform_options)
+#         # run the task and pass in the DeviceIndex for OpenMM to
+#         # assign work to the correct GPU
+#         return task(platform_kwargs=platform_options)
 
 
-class OpenMMGPUWorker(Worker):
-    """Worker for OpenMM GPU simulations (CUDA or OpenCL platforms).
+# class OpenMMGPUWorker(Worker):
+#     """Worker for OpenMM GPU simulations (CUDA or OpenCL platforms).
 
-    This is intended to be used with the wepy.work_mapper.WorkerMapper
-    work mapper class.
+#     This is intended to be used with the wepy.work_mapper.WorkerMapper
+#     work mapper class.
 
-    This class must be used in order to ensure OpenMM runs jobs on the
-    appropriate GPU device.
+#     This class must be used in order to ensure OpenMM runs jobs on the
+#     appropriate GPU device.
 
-    """
+#     """
 
-    NAME_TEMPLATE = "OpenMMGPUWorker-{}"
-    """The name template the worker processes are named to substituting in
-    the process number."""
+#     NAME_TEMPLATE = "OpenMMGPUWorker-{}"
+#     """The name template the worker processes are named to substituting in
+#     the process number."""
 
-    def run_task(self, task):
-        # get the platform
-        platform = self.mapper_attributes["platform"]
+#     def run_task(self, task):
+#         # get the platform
+#         platform = self.mapper_attributes["platform"]
 
-        # get the device index from the attributes
-        device_id = self.mapper_attributes["device_ids"][self._worker_idx]
+#         # get the device index from the attributes
+#         device_id = self.mapper_attributes["device_ids"][self._worker_idx]
 
-        # make the platform kwargs dictionary
-        platform_options = {"DeviceIndex": str(device_id)}
+#         # make the platform kwargs dictionary
+#         platform_options = {"DeviceIndex": str(device_id)}
 
-        logger.info(f"platform={platform}, platform_options={platform_options}")
+#         logger.info(f"platform={platform}, platform_options={platform_options}")
 
-        return task(
-            platform=platform,
-            platform_kwargs=platform_options,
-        )
-
-
-class OpenMMCPUWalkerTaskProcess(WalkerTaskProcess):
-    NAME_TEMPLATE = "OpenMM_CPU_Walker_Task-{}"
-
-    def run_task(self, task):
-        print("CPU Walker Task ---->", self.mapper_attributes, task, task.func)
-        if "num_threads" in self.mapper_attributes:
-            num_threads = self.mapper_attributes["num_threads"]
-
-            # make the platform kwargs dictionary
-            platform_options = {"Threads": str(num_threads)}
-
-            logger.info(f"Threads={num_threads}")
-
-        else:
-            platform_options = {}
-
-        return task(
-            platform_kwargs=platform_options,
-        )
+#         return task(
+#             platform=platform,
+#             platform_kwargs=platform_options,
+#         )
 
 
-class OpenMMGPUWalkerTaskProcess(WalkerTaskProcess):
-    NAME_TEMPLATE = "OpenMM_GPU_Walker_Task-{}"
+# class OpenMMCPUWalkerTaskProcess(WalkerTaskProcess):
+#     NAME_TEMPLATE = "OpenMM_CPU_Walker_Task-{}"
 
-    def run_task(self, task):
-        logger.info(f"Starting to run a task as worker {self._worker_idx}")
+#     def run_task(self, task):
+#         print("CPU Walker Task ---->", self.mapper_attributes, task, task.func)
+#         if "num_threads" in self.mapper_attributes:
+#             num_threads = self.mapper_attributes["num_threads"]
 
-        logger.info(f"GPU Walker Task ----> {self.mapper_attributes}")
-        # get the platform
-        platform = self.mapper_attributes["platform"]
+#             # make the platform kwargs dictionary
+#             platform_options = {"Threads": str(num_threads)}
 
-        # get the device index from the attributes
-        device_id = self.mapper_attributes["device_ids"][self._worker_idx]
+#             logger.info(f"Threads={num_threads}")
 
-        # make the platform kwargs dictionary
-        platform_options = {"DeviceIndex": str(device_id)}
+#         else:
+#             platform_options = {}
 
-        logger.info(f"platform={platform}, platform_options={platform_options}")
+#         return task(
+#             platform_kwargs=platform_options,
+#         )
 
-        return task(
-            platform=platform,
-            platform_kwargs=platform_options,
-        )
+
+# class OpenMMGPUWalkerTaskProcess(WalkerTaskProcess):
+#     NAME_TEMPLATE = "OpenMM_GPU_Walker_Task-{}"
+
+#     def run_task(self, task):
+#         logger.info(f"Starting to run a task as worker {self._worker_idx}")
+
+#         logger.info(f"GPU Walker Task ----> {self.mapper_attributes}")
+#         # get the platform
+#         platform = self.mapper_attributes["platform"]
+
+#         # get the device index from the attributes
+#         device_id = self.mapper_attributes["device_ids"][self._worker_idx]
+
+#         # make the platform kwargs dictionary
+#         platform_options = {"DeviceIndex": str(device_id)}
+
+#         logger.info(f"platform={platform}, platform_options={platform_options}")
+
+#         return task(
+#             platform=platform,
+#             platform_kwargs=platform_options,
+#         )
