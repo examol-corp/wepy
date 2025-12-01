@@ -17,14 +17,15 @@ AnyWalkerState = TypeVar("AnyWalkerState", bound=WalkerState)
 class WorkMapper(Protocol[AnyWalkerState]):
 
     def init(
-            self,
-            segment_func: Callable[
-                tuple[
-                    AnyWalkerState,
-                    ...,
-                ],
+        self,
+        segment_func: Callable[
+            tuple[
                 AnyWalkerState,
-            ]
+                ...,
+            ],
+            AnyWalkerState,
+        ],
+        num_workers: int | None = None,
     ) -> None:
         ...
 

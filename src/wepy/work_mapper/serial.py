@@ -45,6 +45,9 @@ class SerialMapper(WorkMapper[AnyWalkerState]):
                 ],
                 AnyWalkerState,
             ],
+            # UGLY: these are here for compatibility with the
+            # interface but not used
+            num_workers: int | None = None,
     ) -> None:
 
         self._func = segment_func
