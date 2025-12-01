@@ -81,6 +81,11 @@ dev = [
   "pytest",
   "coverage",
   "pytest-cov",
+  # for documentation testing
+  "pytest-shutil",
+  "pytest-check",
+  "pytest-datadir @ git+https://github.com/salotz/pytest-datadir-extras.git@41e9a1e94ba27efe28ce9d0019b1e0a73be34400",
+  "pytest-print",
   # qa
   "black",
   "isort",
@@ -106,5 +111,6 @@ dev = [
 fail-under = 100
 verbose = 2
 
-[tool.hatch.version]
-path = "src/wepy/__about__.py"
+# [tool.uv.sources]
+
+# pytest-datadir = { git = "https://github.com/salotz/pytest-datadir-e"}

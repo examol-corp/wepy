@@ -567,6 +567,15 @@ wheels = [
 ]
 
 [[package]]
+name = "execnet"
+version = "2.1.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/bf/89/780e11f9588d9e7128a3f87788354c7946a9cbb1401ad38a48c4db9a4f07/execnet-2.1.2.tar.gz", hash = "sha256:63d83bfdd9a23e35b9c6a3261412324f964c2ec8dcd8d3c6916ee9373e0befcd", size = 166622, upload-time = "2025-11-12T09:56:37.75Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ab/84/02fc1827e8cdded4aa65baef11296a9bbe595c474f0d6d758af082d849fd/execnet-2.1.2-py3-none-any.whl", hash = "sha256:67fba928dd5a544b783f6056f449e5e3931a5c378b128bc18501f7ea79e296ec", size = 40708, upload-time = "2025-11-12T09:56:36.333Z" },
+]
+
+[[package]]
 name = "executing"
 version = "2.2.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2069,6 +2078,18 @@ wheels = [
 ]
 
 [[package]]
+name = "pytest-check"
+version = "2.6.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0b/b9/9b1636f27a75fbc613037020a148f6410c6f973170fa2189ee0059ae6e5b/pytest_check-2.6.2.tar.gz", hash = "sha256:5e2128405b14978ad74f21f3225fcc52bbb1cc7c41a55d5eaad9f1e3cd27e42e", size = 27988, upload-time = "2025-11-29T02:51:15.908Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ad/e2/26113dc55d59b2364e01afa25270eec29470dd52bf117ad857a3e64e688b/pytest_check-2.6.2-py3-none-any.whl", hash = "sha256:71762eb58f6b8a2d75afb9e6c8b800af7f634f67359d899a65ee48aaee087215", size = 16060, upload-time = "2025-11-29T02:51:14.521Z" },
+]
+
+[[package]]
 name = "pytest-cov"
 version = "7.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2080,6 +2101,41 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5e/f7/c933acc76f5208b3b00089573cf6a2bc26dc80a8aece8f52bb7d6b1855ca/pytest_cov-7.0.0.tar.gz", hash = "sha256:33c97eda2e049a0c5298e91f519302a1334c26ac65c1a483d6206fd458361af1", size = 54328, upload-time = "2025-09-09T10:57:02.113Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ee/49/1377b49de7d0c1ce41292161ea0f721913fa8722c19fb9c1e3aa0367eecb/pytest_cov-7.0.0-py3-none-any.whl", hash = "sha256:3b8e9558b16cc1479da72058bdecf8073661c7f57f7d3c5f22a1c23507f2d861", size = 22424, upload-time = "2025-09-09T10:57:00.695Z" },
+]
+
+[[package]]
+name = "pytest-datadir"
+version = "1.3.1.dev9+g41e9a1e94"
+source = { git = "https://github.com/salotz/pytest-datadir-extras.git?rev=41e9a1e94ba27efe28ce9d0019b1e0a73be34400#41e9a1e94ba27efe28ce9d0019b1e0a73be34400" }
+dependencies = [
+    { name = "pytest" },
+]
+
+[[package]]
+name = "pytest-print"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/0c/0d/7167bc3a83d6862241b367bce92119c338929a46408b4ca9555c15cb5b40/pytest_print-1.2.0.tar.gz", hash = "sha256:62514752d788206789d04dde2e69218d04138068377e5355d389fcc186a8e51e", size = 11898, upload-time = "2025-10-09T19:19:55.919Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4c/80/02c87f95140e3621dde9a599c0b5684464f16acc0786ab8c8c5e929330c2/pytest_print-1.2.0-py3-none-any.whl", hash = "sha256:12969d579e72d549b71a68cef8a2d10ec47afdbaf92e32c8777d5d93d5a1cd42", size = 7151, upload-time = "2025-10-09T19:19:54.924Z" },
+]
+
+[[package]]
+name = "pytest-shutil"
+version = "1.8.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "execnet" },
+    { name = "pytest" },
+    { name = "six" },
+    { name = "termcolor" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a0/8d/5a60eeced74608fd2304dafc9e26815988714f8a2cfa72da99c8c3c85515/pytest-shutil-1.8.1.tar.gz", hash = "sha256:7dcc02e8a372098d51a98737e7f662e6edfd75cec7070a11e904141de49d866b", size = 37554, upload-time = "2024-11-29T19:34:17.066Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b2/17/1b161657385982134b723dcd463483d498e54e286c5632d42602407e606f/pytest_shutil-1.8.1-py3-none-any.whl", hash = "sha256:0793e347e07b9296d814ce33377ed348ce376ffac76c0e57b28bf84235499f51", size = 15948, upload-time = "2024-11-29T19:33:26.349Z" },
 ]
 
 [[package]]
@@ -2665,6 +2721,15 @@ wheels = [
 ]
 
 [[package]]
+name = "termcolor"
+version = "3.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/56/ab275c2b56a5e2342568838f0d5e3e66a32354adcc159b495e374cda43f5/termcolor-3.2.0.tar.gz", hash = "sha256:610e6456feec42c4bcd28934a8c87a06c3fa28b01561d46aa09a9881b8622c58", size = 14423, upload-time = "2025-10-25T19:11:42.586Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f9/d5/141f53d7c1eb2a80e6d3e9a390228c3222c27705cbe7f048d3623053f3ca/termcolor-3.2.0-py3-none-any.whl", hash = "sha256:a10343879eba4da819353c55cb8049b0933890c2ebf9ad5d3ecd2bb32ea96ea6", size = 7698, upload-time = "2025-10-25T19:11:41.536Z" },
+]
+
+[[package]]
 name = "terminado"
 version = "0.18.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2849,7 +2914,11 @@ dev = [
     { name = "notebook" },
     { name = "pdbpp" },
     { name = "pytest" },
+    { name = "pytest-check" },
     { name = "pytest-cov" },
+    { name = "pytest-datadir" },
+    { name = "pytest-print" },
+    { name = "pytest-shutil" },
     { name = "ruff" },
     { name = "sphinx" },
     { name = "sphinxcontrib-bibtex" },
@@ -2895,7 +2964,11 @@ dev = [
     { name = "notebook" },
     { name = "pdbpp" },
     { name = "pytest" },
+    { name = "pytest-check" },
     { name = "pytest-cov" },
+    { name = "pytest-datadir", git = "https://github.com/salotz/pytest-datadir-extras.git?rev=41e9a1e94ba27efe28ce9d0019b1e0a73be34400" },
+    { name = "pytest-print" },
+    { name = "pytest-shutil" },
     { name = "ruff" },
     { name = "sphinx" },
     { name = "sphinxcontrib-bibtex" },
