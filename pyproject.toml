@@ -28,7 +28,6 @@ dependencies = [
   "h5py>=3",
   "networkx",
   "pandas",
-  "dill",
   "click",
   "scipy",
   "geomm",
@@ -70,10 +69,6 @@ graphics = [
 Documentation = "https://adicksonlab.github.io/wepy/index.html"
 Source = "https://github.com/ADicksonLab/wepy"
 Issues = "https://github.com/ADicksonLab/wepy/issues"
-
-[project.scripts]
-
-wepy = "wepy.__main__:cli"
 
 [build-system]
 requires = ["uv_build>=0.9.11,<0.10.0"]
