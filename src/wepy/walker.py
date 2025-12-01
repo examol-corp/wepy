@@ -28,7 +28,7 @@ magic method for the accessor syntax, i.e. walker.state['positions'].
 
 # Standard Library
 import logging
-from typing import Protocol, Hashable, Any, Self
+from typing import Protocol, Hashable, Any, Self, TypeVar, Generic
 from abc import ABC
 import math
 
@@ -40,6 +40,7 @@ import attrs
 
 logger = logging.getLogger(__name__)
 
+T = TypeVar("T")
 
 class WalkerStateProtocol(Protocol):
 
@@ -84,6 +85,8 @@ class WalkerState:
         """Return all key-value pairs as a dictionary."""
         return deepcopy(self._data)
 
+# TODO: move all cloning and merging methods and functions to a
+# standalone module or in the clone_merge decision module
 
 class WalkerABC(ABC):
 
@@ -150,7 +153,7 @@ class WalkerABC(ABC):
 
 
 @attrs.define
-class Walker(WalkerABC):
+class Walker(WalkerABC, Generic[T]):
     """Reference implementation of the Walker interface.
 
     A container for:
@@ -160,7 +163,7 @@ class Walker(WalkerABC):
 
     """
 
-    state: WalkerState
+    state: T
     weight: float = attrs.field(eq=attrs.cmp_using(eq=math.isclose))
 
 
