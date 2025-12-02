@@ -20,3 +20,6 @@ check:
 
 test:
     uv run pytest --import-mode=importlib tests/unit
+
+clean:
+    find . -type d -name "__pycache__" -prune -exec rm -rf {} +
