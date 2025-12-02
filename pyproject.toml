@@ -110,6 +110,19 @@ dev = [
 fail-under = 100
 verbose = 2
 
-# [tool.uv.sources]
+[tool.pytest]
 
-# pytest-datadir = { git = "https://github.com/salotz/pytest-datadir-e"}
+minversion = "9.0"
+strict = true
+
+addopts = ["--import-mode=importlib"]
+
+python_classes = ["Test*", "Test_*"]
+python_functions = ["test_*"]
+python_files = ["test_*.py"]
+
+markers = [
+   "ray", # mark a test as running ray
+]
+
+log_level = "INFO"
