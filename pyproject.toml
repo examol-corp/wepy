@@ -23,6 +23,7 @@ classifiers = [
 
 dependencies = [
   "attrs",
+  "immutables",
   "numpy>=2",
   "nptyping",
   "h5py>=3",
@@ -44,6 +45,8 @@ md = [
   # NOTE: you should just install this yourself to get it the compute
   # runtime you need.
   "openmm",
+  # for dealing with openmm serialized objects
+  "lxml",
 ]
 
 distributed = [
@@ -85,6 +88,8 @@ dev = [
   "pytest-check",
   "pytest-datadir @ git+https://github.com/salotz/pytest-datadir-extras.git@41e9a1e94ba27efe28ce9d0019b1e0a73be34400",
   "pytest-print",
+  # for testing openmm wrappers
+  "lxml",
   # qa
   "black",
   "isort",
@@ -126,3 +131,16 @@ markers = [
 ]
 
 log_level = "INFO"
+
+[tool.mypy]
+
+pretty = true
+color_output= true
+
+[[tool.mypy.overrides]]
+module = "mdtraj.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "openmm.*"
+ignore_missing_imports = true

@@ -1,14 +1,15 @@
-from wepy.runners.openmm import (
+from wepy_tools.systems.lennard_jones import LennardJonesPair
+from wepy.runners.openmm.state import (
+    dummy_context,
     resolve_state_data_type_enum_values,
     GET_STATE_KWARG_DEFAULTS,
     get_state_fields_present,
-    OpenMMRunner,
     OpenMMState,
     gen_sim_state,
-    # OpenMMCPUWorker,
-    # OpenMMGPUWorker,
-    # OpenMMCPUWalkerTaskProcess,
-    # OpenMMGPUWalkerTaskProcess,
+)
+
+from wepy.runner.openmm.runner import (
+    OpenMMRunner,
 )
 
 import pytest
@@ -18,137 +19,65 @@ import openmm
 import openmm.app
 import openmm.unit
 
-
-def dummy_context(
-    system: openmm.System,
-    positions: openmm.unit.Quantity,
-    unitcell: openmm.unit.Quantity | None = None,
-) -> openmm.Context:
-    """Create a throwaway OpenMM context.
-
-    This uses some hardcoded integrators, etc. to be able to get a
-    context which is useful for generating OpenMM objects without
-    running any calculations. You can also use it for a simulation but
-    it won't do anything meaningful.
-    """
-
-    platform = openmm.Platform.getPlatformByName("Reference")
-    integrator = openmm.VerletIntegrator(1.0 * openmm.unit.femtoseconds)
-    context = openmm.Context(system, integrator, platform)
-    context.setPositions(positions)
-
-    if unitcell is not None:
-        bvs = unitcell.to_vec3()
-        context.setPeriodicBoxVectors(*bvs)
-
-    return context
-
-
-def n_lj_system(
-    num_particles: int,
-    mass: openmm.unit.Quantity = (39.9481 * openmm.unit.dalton),
-    sigma: openmm.unit.Quantity = (0.3350 * openmm.unit.nanometer),
-    epsilon: openmm.unit.Quantity = (0.996 * openmm.unit.kilojoules_per_mole),
-) -> openmm.System:
-
-    system = openmm.System()
-
-    # single nonbonded force
-    nb_force = openmm.NonbondedForce()
-    nb_force.setNonbondedMethod(openmm.NonbondedForce.NoCutoff)
-
-    # TODO: add support for cutoffs
-
-    for idx in range(num_particles):
-        system.addParticle(mass)
-        nb_force.addParticle(
-            0.0 * openmm.unit.elementary_charge,
-            sigma,
-            epsilon,
+UNIT_CUBE = np.array(
+            [
+                [1.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+                [0.0, 0.0, 1.0],
+            ]
         )
 
-    system.addForce(nb_force)
+def test_dummy_context():
+    lj_sys = LennardJonesPair()
 
-    return system
-
-
-def particle_line(num_particles: int) -> openmm.unit.Quantity:
-    """Initialize a 3D coordinate array."""
-
-    return (
-        np.array([[float(idx), 0.0, 0.0] for idx in range(num_particles)])
-        * openmm.unit.angstrom
+    dummy_context(
+        lj_sys.system,
+        np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+            ]
+        )
+        * openmm.unit.nanometer
     )
 
-
-ARGON = openmm.app.Element.getBySymbol("Ar")
-
-
-def n_particle_topology(
-    num_particles: int,
-    element: openmm.app.Element = ARGON,
-) -> openmm.app.Topology:
-    """Create a single particle topology from scratch.
-
-    There will only be one chain, and each particle is it's own
-    residue.
-
-    Box vectors are never set.
-    """
-
-    top = openmm.app.Topology()
-
-    chain = top.addChain()
-    for idx in range(num_particles):
-
-        residue = top.addResidue(element.symbol, chain)
-        top.addAtom(
-            element.symbol,
-            element,
-            residue,
+    dummy_context(
+        lj_sys.system,
+        np.array(
+            [
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+            ]
         )
+        * openmm.unit.angstrom,
+        unitcell=UNIT_CUBE * openmm.unit.nanometer,
+    )
 
-    return top
+def test_resolve_state_data_type_enum_values():
+
+    assert resolve_state_data_type_enum_values() == frozenmap(
+        {
+            "positions": 1,
+            "velocities": 2,
+            "forces": 4,
+            "energy": 8,
+            "parameters": 16,
+            "parameter_derivatives": 32,
+            "integrator_parameters": 64,
+        }
+    )
 
 
 @pytest.fixture
 def omm_context() -> openmm.Context:
 
-    system = n_lj_system(2)
+    lj_sys = LennardJonesPair()
 
-    coords = particle_line(2)
 
-    ctx = dummy_context(system, coords)
+    ctx = dummy_context(lj_sys.system, lj_sys.positions)
 
     return ctx
 
-
-def test_resolve_state_data_type_enum_values():
-
-    assert resolve_state_data_type_enum_values() == {
-        "positions": 1,
-        "velocities": 2,
-        "energy": 8,
-        "forces": 4,
-        "integrator_parameters": 64,
-        "parameter_derivatives": 32,
-        "parameters": 16,
-    }
-
-
-def test_get_state_fields_present(omm_context):
-
-    state = omm_context.getState(positions=True)
-    assert get_state_fields_present(state) == ["positions"]
-
-
-def test_gen_sim_state():
-
-    state = gen_sim_state(
-        positions=particle_line(2),
-        system=n_lj_system(2),
-        integrator=openmm.VerletIntegrator(0.002),
-    )
 
 
 class TestOpenMMState:
@@ -422,3 +351,4 @@ class TestOpenMMRunner:
 
 # class TestOpenMMGPUWalkerTaskProcess:
 #     pass
+
