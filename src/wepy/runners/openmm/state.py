@@ -1,4 +1,5 @@
 import copy
+import logging
 from typing import Literal, get_args, TypeAlias, Union, Any, Self, TypedDict, NotRequired, ClassVar
 from collections.abc import Mapping, Collection
 import openmm
@@ -10,9 +11,12 @@ import attrs
 from lxml import etree
 from immutables import Map as frozenmap
 
+from wepy.missing import MISSING
 from wepy.walker import WalkerState
 from wepy.core import BugError
 from wepy.util.openmm import array3d_to_vec3
+
+logger = logging.getLogger(__name__)
 
 class OpenMMStateValidationError(Exception):
     pass
@@ -716,6 +720,7 @@ class OpenMMState(WalkerState):
     # way to do something
     DWIM_DEFAULT_TIME: ClassVar[openmm.unit.Quantity] = 0 * openmm.unit.picosecond
     DWIM_DEFAULT_UNITCELL: ClassVar[openmm.unit.Quantity] = _gen_unit_cube() * openmm.unit.nanometer
+    DWIM_DEFAULT_BOX_VOLUME: ClassVar[openmm.unit.Quantity] = 0. * (openmm.unit.nanometer ** 3)
 
     @staticmethod
     def _validate_array3ds(
@@ -776,25 +781,81 @@ class OpenMMState(WalkerState):
         #
         # validate that the parameters and derivatives have the same keys
 
-    # Methods for the protocol
-    def get_positions(self) -> openmm.unit.Quantity | None:
-        return self.positions
+    def __len__(self) -> int:
 
-    def get_unitcell(self) -> openmm.unit.Quantity:
-        return self.unitcell
+        count = 0
+        for key in STATE_FIELD_NAMES:
+            if getattr(self, key, MISSING) is not None:
+                count += 1
 
-    def to_dict(self) -> StateFieldData:
-        return StateFieldData(
-            {
-                k: v
-                for k, v in attrs.asdict(self, recurse=False).items()
-                if v is not None
-            }
-        )
+        return count
+
+    def __contains__(self, key: str) -> bool:
+
+        if key not in STATE_FIELD_NAMES:
+            return False
+
+        elif getattr(self, key, MISSING) is None:
+            return False
+
+        else:
+            return True
+        
+    def __getitem__(self, key: str) -> openmm.unit.Quantity:
+
+        if key not in STATE_FIELD_NAMES:
+            raise KeyError(f"Field {key} is not a valid OpenMMState key")
+
+        elif getattr(self, key, MISSING) is None:
+            raise ValueError(f"Field {key} has no value.")
+
+        else:
+            return getattr(self, key, None)
 
     @classmethod
     def from_dict(cls, data_dict: StateFieldData) -> Self:
         return cls(**data_dict)
+
+        
+    @classmethod
+    def from_dwim(
+            cls,
+            positions: openmm.unit.Quantity,
+            time: openmm.unit.Quantity | None = None,
+            box_volume: openmm.unit.Quantity | None = None,
+            box_vectors: openmm.unit.Quantity | None = None, 
+            velocities: openmm.unit.Quantity | None = None,
+            forces: openmm.unit.Quantity | None = None,
+            kinetic_energy: openmm.unit.Quantity | None = None,
+            potential_energy: openmm.unit.Quantity | None = None,
+            parameters: frozenmap[str, Any] | None = None,
+            parameter_derivatives: frozenmap[str, Any] | None = None,
+    ):
+
+        return cls(
+            time=(
+                cls.DWIM_DEFAULT_TIME
+                if time is None
+                else time
+            ),
+            box_volume=(
+                cls.DWIM_DEFAULT_BOX_VOLUME
+                if box_volume is None
+                else box_volume
+            ),
+            positions=positions,
+            box_vectors=(
+                cls.DWIM_DEFAULT_UNITCELL
+                if box_vectors is None
+                else box_vectors
+            ),
+            velocities=velocities,
+            forces=forces,
+            kinetic_energy=kinetic_energy,
+            potential_energy=potential_energy,
+            parameters=parameters,
+            parameter_derivatives=parameter_derivatives,
+        )
 
     @classmethod
     def from_state_wrapper(cls, state_wrapper: OpenMMStateWrapper) -> Self:
@@ -804,6 +865,16 @@ class OpenMMState(WalkerState):
     def from_state(cls, state: openmm.State) -> Self:
         return cls.from_state_wrapper(OpenMMStateWrapper(state))
 
+
+    def to_dict(self) -> StateFieldData:
+        return StateFieldData(
+            {
+                k: v
+                for k, v in attrs.asdict(self, recurse=False).items()
+                if v is not None
+            }
+        )
+    
     def to_state_wrapper(
         self,
         system: openmm.System | None = None,
@@ -963,7 +1034,7 @@ def state_to_xml(
     # example on how to do this so I am eliding them.
     if state.parameters is not None or state.parameter_derivatives is not None:
 
-        warnings.warn(
+        logger.warning(
             "A state was provided to the XML serializer with parameters or parameter_derivatives, but these are currently not serialized."
         )
 

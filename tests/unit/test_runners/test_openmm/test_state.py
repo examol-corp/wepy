@@ -381,6 +381,51 @@ class Test_OpenMMStateWrapper:
 
         assert openmm.XmlSerializer.serialize(state) == state_wrapper.serialize_xml()
 
+    def test_from_dict(self):
+
+        time = 0.0 * openmm.unit.picosecond
+        bvs = UNIT_CUBE * openmm.unit.nanometer
+
+        positions = (
+            np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer
+        )
+        velocities = (
+            np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer
+            / openmm.unit.picosecond
+        )
+        forces = (
+            np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.kilojoule
+            / (openmm.unit.nanometer * openmm.unit.mole)
+        )
+
+        d = dict(
+            time=time,
+            box_vectors=bvs,
+            positions=positions,
+            velocities=velocities,
+            forces=forces,
+        )
+        assert OpenMMState.from_dict(d) == OpenMMState(**d)
+        
+
     def test_from_xml(self, omm_context):
 
         state = omm_context.getState()
@@ -570,6 +615,148 @@ class Test_OpenMMState:
             / (openmm.unit.nanometer * openmm.unit.mole),
         )
 
+    def test___len__(self):
+        assert len(OpenMMState(
+            time=0.0 * openmm.unit.picosecond,
+            box_vectors=UNIT_CUBE * openmm.unit.nanometer,
+        )) == 2
+
+        assert len(OpenMMState(
+            time=0.0 * openmm.unit.picosecond,
+            box_vectors=UNIT_CUBE * openmm.unit.nanometer,
+            positions=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer,
+            velocities=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer
+            / openmm.unit.picosecond,
+            forces=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.kilojoule
+            / (openmm.unit.nanometer * openmm.unit.mole),
+        )) == 5
+
+    def test___contains__(self):
+        small_state = OpenMMState(
+            time=0.0 * openmm.unit.picosecond,
+            box_vectors=UNIT_CUBE * openmm.unit.nanometer,
+        )
+
+        assert "time" in small_state
+        assert "box_vectors" in small_state
+        assert "box_volume" not in small_state
+        assert "positions" not in small_state
+        assert "velocities" not in small_state
+        assert "forces" not in small_state
+        assert "kinetic_energy" not in small_state
+        assert "potential_energy" not in small_state
+        assert "parameters" not in small_state
+        assert "parameter_derivatives" not in small_state
+
+        large_state = OpenMMState(
+            time=0.0 * openmm.unit.picosecond,
+            box_vectors=UNIT_CUBE * openmm.unit.nanometer,
+            positions=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer,
+            velocities=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer
+            / openmm.unit.picosecond,
+            forces=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.kilojoule
+            / (openmm.unit.nanometer * openmm.unit.mole),
+        )
+
+        assert "time" in large_state
+        assert "box_vectors" in large_state
+        assert "box_volume" not in large_state
+        assert "positions" in large_state
+        assert "velocities" in large_state
+        assert "forces" in large_state
+        assert "kinetic_energy" not in large_state
+        assert "potential_energy" not in large_state
+        assert "parameters" not in large_state
+        assert "parameter_derivatives" not in large_state
+        
+        
+    def test___getitem__(self):
+
+        bvs = UNIT_CUBE * openmm.unit.nanometer
+
+        state = OpenMMState(
+            time=0.0 * openmm.unit.picosecond,
+            box_vectors=bvs,
+        )
+
+        assert state["time"] == 0.0 * openmm.unit.picosecond
+        assert state["box_vectors"] is not None
+
+        with pytest.raises(KeyError):
+            state["invalid"]
+
+        with pytest.raises(ValueError):
+            state["positions"]
+        
+        state = OpenMMState(
+            time=0.0 * openmm.unit.picosecond,
+            box_vectors=bvs,
+            positions=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer,
+            velocities=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer
+            / openmm.unit.picosecond,
+            forces=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.kilojoule
+            / (openmm.unit.nanometer * openmm.unit.mole),
+        )
+
+        assert state["positions"] is not None
+        assert state["velocities"] is not None
+        assert state["forces"] is not None
+        
+
     def test_from_state(self, omm_context):
         s = OpenMMState.from_state(omm_context.getState())
 
@@ -633,6 +820,70 @@ class Test_OpenMMState:
         )
         OpenMMState.from_state_wrapper(sw)
 
+
+    def test_from_dwim(self):
+        positions = (
+            np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer
+        )
+        velocities = (
+            np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.nanometer
+            / openmm.unit.picosecond
+        )
+        forces = (
+            np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                ]
+            )
+            * openmm.unit.kilojoule
+            / (openmm.unit.nanometer * openmm.unit.mole)
+        )
+
+        assert OpenMMState.from_dwim(
+            box_vectors=None,
+            positions=positions,
+            velocities=velocities,
+            forces=forces,
+        ) == OpenMMState(
+            time=OpenMMState.DWIM_DEFAULT_TIME,
+            box_volume=OpenMMState.DWIM_DEFAULT_BOX_VOLUME,
+            box_vectors=OpenMMState.DWIM_DEFAULT_UNITCELL,
+            positions=positions,
+            velocities=velocities,
+            forces=forces,
+        )
+
+        bv = np.array(
+            [
+                [2.0, 0.0, 0.0],
+                [0., 2.0, 0.0],
+                [0., 0.0, 2.0],
+            ]
+        )
+
+        assert OpenMMState.from_dwim(
+            box_vectors=bv,
+            positions=positions,
+        ) == OpenMMState(
+            time=OpenMMState.DWIM_DEFAULT_TIME,
+            box_volume=OpenMMState.DWIM_DEFAULT_BOX_VOLUME,
+            box_vectors=bv,
+            positions=positions,
+        )
+
     def test_to_dict(self):
 
         time = 0.0 * openmm.unit.picosecond
@@ -684,51 +935,7 @@ class Test_OpenMMState:
             "velocities",
             "forces",
         }
-
-    def test_from_dict(self):
-
-        time = 0.0 * openmm.unit.picosecond
-        bvs = UNIT_CUBE * openmm.unit.nanometer
-
-        positions = (
-            np.array(
-                [
-                    [1.0, 0.0, 0.0],
-                    [1.0, 0.0, 0.0],
-                ]
-            )
-            * openmm.unit.nanometer
-        )
-        velocities = (
-            np.array(
-                [
-                    [1.0, 0.0, 0.0],
-                    [1.0, 0.0, 0.0],
-                ]
-            )
-            * openmm.unit.nanometer
-            / openmm.unit.picosecond
-        )
-        forces = (
-            np.array(
-                [
-                    [1.0, 0.0, 0.0],
-                    [1.0, 0.0, 0.0],
-                ]
-            )
-            * openmm.unit.kilojoule
-            / (openmm.unit.nanometer * openmm.unit.mole)
-        )
-
-        d = dict(
-            time=time,
-            box_vectors=bvs,
-            positions=positions,
-            velocities=velocities,
-            forces=forces,
-        )
-        assert OpenMMState.from_dict(d) == OpenMMState(**d)
-
+        
     def test_to_state_wrapper(self):
 
         time = 0.0 * openmm.unit.picosecond
