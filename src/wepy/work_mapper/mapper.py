@@ -17,14 +17,6 @@ from wepy.work_mapper.base import WorkMapper, AnyWalker
 
 logger = logging.getLogger(__name__)
 
-
-
-
-
-
-
-
-
 class ABCWorkerMapper(ABCMapper):
     def __init__(
         self,

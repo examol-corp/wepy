@@ -1,3 +1,4 @@
+import functools
 import attrs
 from wepy.walker import Walker, WalkerState
 from wepy.work_mapper.serial import SerialMapper
@@ -8,12 +9,23 @@ from wepy.work_mapper.serial import SerialMapper
 class RizzWalkerState:
     rizz: int
 
+
 def rizz_run(walker_state: RizzWalkerState, delta: int, multiple: int) -> RizzWalkerState:
 
     return attrs.evolve(
         walker_state,
         rizz=(walker_state.rizz + delta) * multiple
     )
+
+@attrs.define
+class RizzTask:
+
+    delta: int
+    multiple: int
+
+    def __call__(self, state: RizzWalkerState) -> RizzWalkerState:
+
+        return rizz_run(state, delta=self.delta, multiple=self.multiple)
 
 def test_rizz_walker():
     assert rizz_run(
@@ -29,16 +41,24 @@ class TestMapper:
 
         mapper = SerialMapper()
 
-        mapper.init(segment_func=rizz_run)
+        mapper.init()
 
         assert mapper.map(
+            [
+                RizzTask(
+                    *args,
+                )
+                for args
+                in zip(
+                [1, 2, 2],
+                [2, 2, 2],
+                )
+            ],
             [
                 RizzWalkerState(1),
                 RizzWalkerState(1),
                 RizzWalkerState(2),
             ],
-            [1, 2, 2],
-            [2, 2, 2],
         ) == [
             RizzWalkerState(4),
             RizzWalkerState(6),
@@ -46,18 +66,3 @@ class TestMapper:
         ]
 
         assert len(mapper.get_worker_segment_times()[0]) == 3
-
-        assert mapper.map(
-            [
-                RizzWalkerState(1),
-                RizzWalkerState(1),
-                RizzWalkerState(2),
-            ],
-            [1, 2, 2],
-            multiple=[2, 2, 2],
-        ) == [
-            RizzWalkerState(4),
-            RizzWalkerState(6),
-            RizzWalkerState(8),
-        ]
-        
