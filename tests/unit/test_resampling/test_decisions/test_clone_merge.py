@@ -1,7 +1,8 @@
 import pytest
 import attrs
 
-from wepy.walker import Walker, WalkerState
+from wepy.walker import Walker
+from wepy.runners.mock import MockState
 from wepy.resampling.decisions.clone_merge import (
     MultiCloneMergeDecision,
     CloneMergeDecisionEnum,
@@ -12,16 +13,16 @@ class TestMultiCloneMergeDecision:
 
     def test_action(self):
         walker_1 = Walker(
-            state=WalkerState(a=1),
+            state=MockState(a=1),
             weight=1.0,
         )
 
         walker_2 = Walker(
-            state=WalkerState(a=2),
+            state=MockState(a=2),
             weight=1.0,
         )
         walker_3 = Walker(
-            state=WalkerState(a=3),
+            state=MockState(a=3),
             weight=1.0,
         )
 
