@@ -1,5 +1,21 @@
-from wepy.runners.mock import MockRunner, MockState
+import pytest
+from wepy.runners.mock import MockRunner, MockState, MockTask, MockError
 
+def test_MockTask():
+
+    assert MockTask(
+        MockRunner(),
+        10,
+        fail=False,
+    )(MockState(10)) == MockState(20)
+
+    with pytest.raises(MockError):
+        MockTask(
+            MockRunner(),
+            10,
+            fail=True,
+        )(MockState(10))
+    
 class TestMockRunner:
 
     def test_pre_cycle(self):

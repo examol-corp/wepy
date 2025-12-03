@@ -1,20 +1,23 @@
 """Realistic mock runners useful mostly for testing."""
+import logging
 
 import attrs
-from wepy.walker import Walker
+from wepy.walker import Walker, WalkerState
 from wepy.runners.runner import Runner
+from wepy.work_mapper.base import Task
+
+logger = logging.getLogger(__name__)
 
 @attrs.define
-class MockState:
-    a: 1
+class MockState(WalkerState):
+    a: int
 
 class MockError(Exception):
     pass
 
-@attrs.define
-class MockRunner(Runner[MockState]):
 
-    fail: bool = False
+@attrs.define
+class MockRunner(Runner):
 
     def pre_cycle(self) -> None:
         pass
@@ -26,15 +29,14 @@ class MockRunner(Runner[MockState]):
         self,
         state: MockState,
         segment_length: int,
-        worker_id: int = 0,
-        # UGLY: here to satisfy the interface
-        cycle_idx: int = 0,
-        walker_idx: int = 0
+        fail: bool,
     ) -> MockState:
 
-        if self.fail:
+        if fail:
+            logger.critical("Error requested in MockRuner.run_segment, raising.")
             raise MockError("Error requested")
 
+        logger.info("Evolving the MockState in MockRunner.run_segment")
         return attrs.evolve(
             state,
             a=(state.a + segment_length),
@@ -42,3 +44,14 @@ class MockRunner(Runner[MockState]):
 
     def get_last_cycle_segments_split_times(self) -> None:
         return None
+
+@attrs.define
+class MockTask(Task):
+
+    runner: MockRunner
+    segment_length: int
+    fail: bool
+
+    def __call__(self, state: MockState) -> MockState:
+        logger.info("Running MockTask segment")
+        return self.runner.run_segment(state, self.segment_length, self.fail)

@@ -18,15 +18,16 @@ See the openmm.py module for an example.
 """
 
 # Standard Library
-from typing import Protocol, Any, TypedDict, TypeVar
+from typing import Protocol, Any, TypedDict, TypeVar, ParamSpec
 import attrs
-from wepy.walker import Walker
+from wepy.walker import Walker, WalkerState
 
-State_ = TypeVar("State_")
-class Runner(Protocol[State_]):
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+SegmentParams_ = ParamSpec("SegmentParams_")
+class Runner(Protocol[WalkerState_, SegmentParams_]):
     """Abstract base class for the Runner interface."""
 
-    def pre_cycle(self, **kwargs: dict[str, Any]) -> None:
+    def pre_cycle(self) -> None:
         """Perform pre-cycle behavior. run_segment will be called for each
         walker so this allows you to perform changes of state on a
         per-cycle basis.
@@ -56,12 +57,11 @@ class Runner(Protocol[State_]):
 
     def run_segment(
         self,
-        walker: Walker,
+        walker: WalkerState_,
         segment_length: int,
-        # UGLY: here to satisfy the interface
-        cycle_idx: int = 0,
-        walker_idx: int = 0
-    ) -> Walker:
+        *args: SegmentParams_.args,
+        **kwargs: SegmentParams_.kwargs,
+    ) -> WalkerState_:
         """Run dynamics for the walker.
 
         Parameters
@@ -82,7 +82,7 @@ class Runner(Protocol[State_]):
 
 
 @attrs.define
-class NoRunner[State_]:
+class NoRunner(Runner):
     """Stub Runner that just returns the walkers back with the same state.
 
     May be useful for testing.
@@ -96,10 +96,7 @@ class NoRunner[State_]:
         return None
     def run_segment(
         self,
-        state: State_,
+        state: WalkerState_,
         segment_length: int | float,
-        # UGLY: here to satisfy the interface
-        cycle_idx: int = 0,
-        walker_idx: int = 0
-    ) -> State_:
+    ) -> WalkerState_:
         return state
