@@ -5,6 +5,9 @@ import logging
 
 import attrs
 
+from wepy.interface import (
+    WorkMapperFactoryArgs,
+)
 from wepy.work_mapper.base import Task, WalkerState, WorkMapper
 
 # log_safe.initialize_safe_logging()
@@ -39,9 +42,9 @@ class ProcPoolMapper(
 
     def __init__(
         self,
-        num_workers: int,
+        wm_args: WorkMapperFactoryArgs,
     ) -> None:
-        self._num_workers = num_workers
+        self._num_workers = wm_args.num_workers
 
     def init(
             self,

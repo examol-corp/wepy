@@ -21,10 +21,13 @@ See the openmm.py module for an example.
 from typing import Protocol, Any, TypedDict, TypeVar, ParamSpec
 import attrs
 from wepy.walker import Walker, WalkerState
+from wepy.interface import Task, RunnerGenTaskArgs
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
-SegmentParams_ = ParamSpec("SegmentParams_")
-class Runner(Protocol[WalkerState_, SegmentParams_]):
+
+Task_ = TypeVar("Task_", bound=Task)
+
+class Runner(Protocol[WalkerState_, Task_]):
     """Abstract base class for the Runner interface."""
 
     def pre_cycle(self) -> None:
@@ -52,15 +55,15 @@ class Runner(Protocol[WalkerState_, SegmentParams_]):
 
         """
 
-        # by default just pass since subclasses need not implement this
-        pass
+        ...
+
+    def gen_tasks(self, segment_spec: RunnerGenTaskArgs[WalkerState_]) -> list[Task_]:
+        ...
 
     def run_segment(
         self,
         walker: WalkerState_,
         segment_length: int,
-        *args: SegmentParams_.args,
-        **kwargs: SegmentParams_.kwargs,
     ) -> WalkerState_:
         """Run dynamics for the walker.
 
@@ -80,6 +83,13 @@ class Runner(Protocol[WalkerState_, SegmentParams_]):
 
     def get_last_cycle_segments_split_times(self) -> list[dict[str, float]] | None: ...
 
+@attrs.define
+class IdentityTask(Task[WalkerState_]):
+
+    runner: "NoRunner"
+
+    def __call__(self, walker_state: WalkerState_) -> WalkerState_:
+        return self.runner.run_segment(walker_state)
 
 @attrs.define
 class NoRunner(Runner):
@@ -94,6 +104,15 @@ class NoRunner(Runner):
         pass
     def get_last_cycle_segments_split_times(self) -> None:
         return None
+
+    def gen_tasks(self, segment_spec: RunnerGenTaskArgs[WalkerState_]) -> list[IdentityTask[WalkerState_]]:
+
+        return [
+            IdentityTask(self)
+            for state
+            in segment_spec.states
+        ]
+        
     def run_segment(
         self,
         state: WalkerState_,

@@ -6,6 +6,9 @@ import traceback
 from typing import Callable, Literal, Generic, TypeVar, Protocol, Any, ParamSpec, Concatenate, Sequence
 import logging
 
+from wepy.interface import (
+    WorkMapperFactoryArgs,
+)
 from wepy.walker import Walker, WalkerState
 from wepy.work_mapper.base import WorkMapper, TaskException, Task
 
@@ -25,6 +28,7 @@ class SerialMapper(
 
     def __init__(
         self,
+        wm_args: WorkMapperFactoryArgs,
     ) -> None:
         self._worker_segment_times: dict[int, list[float]] = {0: []}
 
@@ -46,13 +50,6 @@ class SerialMapper(
     def cleanup(self) -> None:
         pass
 
-    def gen_task(
-            self,
-            outer_task: Task_,
-            task_idx: int,
-    ) -> Task_:
-        return outer_task
-
     def map(
             self,
             tasks: list[Task_],
@@ -62,10 +59,8 @@ class SerialMapper(
         results: list[WalkerState_] = []
         for task_idx, (task, walker_state) in enumerate(zip(tasks, walker_states, strict=True)):
 
-            _task = self.gen_task(task, task_idx=task_idx)
-
             tic = time.time()
-            result = _task(walker_state)
+            result = task(walker_state)
             toc = time.time()
 
             segment_times.append(toc - tic)

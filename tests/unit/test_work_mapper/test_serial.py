@@ -1,6 +1,9 @@
 import functools
 import attrs
 from wepy.walker import Walker, WalkerState
+from wepy.interface import (
+    WorkMapperFactoryArgs,
+)
 from wepy.work_mapper.serial import SerialMapper
 
 # some minimal definitions for testing a concrete work mapper
@@ -39,7 +42,7 @@ class TestMapper:
 
     def test_map(self):
 
-        mapper = SerialMapper()
+        mapper = SerialMapper(WorkMapperFactoryArgs(num_workers=0))
 
         mapper.init()
 

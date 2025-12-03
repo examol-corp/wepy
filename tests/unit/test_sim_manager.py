@@ -13,7 +13,6 @@ def sim_components() -> tuple[
         list[Walker],
         NoRunner,
         MockRunner,
-        SerialMapper,
 ]:
 
     num_walkers = 4
@@ -28,7 +27,7 @@ def sim_components() -> tuple[
         in range(num_walkers)
     ]
 
-    return init_walkers, MockRunner(), NoResampler(), SerialMapper()
+    return init_walkers, MockRunner(), NoResampler()
 
 class TestManager:
 
@@ -37,23 +36,26 @@ class TestManager:
         manager = Manager(*sim_components)
 
         assert len(manager.reporters) == 0
-        assert manager.work_mapper == sim_components[3]
+        assert manager.work_mapper_class == SerialMapper
+        assert not hasattr(manager, "work_mapper")
 
     def test_init(self, sim_components):
 
         manager = Manager(*sim_components)
 
         manager.init()
+        assert hasattr(manager, "work_mapper")
 
     def test_cleanup(self, sim_components):
 
         manager = Manager(*sim_components)
 
+        manager.init()
         manager.cleanup()
         
     def test_run_segment(self, sim_components):
 
-        init_walkers, runner, resampler, mapper = sim_components
+        init_walkers, runner, resampler = sim_components
 
         manager = Manager(*sim_components)
         manager.init()
@@ -67,9 +69,8 @@ class TestManager:
         # test if something fails
         manager = Manager(
             init_walkers,
-            MockRunner(fail=True),
+            MockRunner(fail_walker_idxs={0,}),
             resampler,
-            mapper,
         )
         manager.init()
 
@@ -82,7 +83,7 @@ class TestManager:
 
     def test_run_cycle(self, sim_components):
 
-        init_walkers, runner, resampler, mapper = sim_components
+        init_walkers, runner, resampler = sim_components
 
         manager = Manager(*sim_components)
         manager.init()
@@ -96,9 +97,8 @@ class TestManager:
         # test if something fails
         manager = Manager(
             init_walkers,
-            MockRunner(fail=True),
+            MockRunner(fail_walker_idxs={0,}),
             resampler,
-            mapper,
         )
         manager.init()
 
@@ -130,13 +130,21 @@ class TestManager:
         manager.init()
 
         new_walkers, _ = manager.run_simulation_by_time(
-            1,
+            0.001,
             2,
             num_workers=None,
         )
 
         new_walkers, _ = manager.run_simulation_by_time(
-            1,
+            0.001,
+            2,
+            num_workers=None,
+            continue_run_idx=0,
+        )
+
+        # make sure it runs at least one cycle
+        new_walkers, _ = manager.run_simulation_by_time(
+            0.0000001,
             2,
             num_workers=None,
             continue_run_idx=0,

@@ -52,6 +52,10 @@ import time
 from copy import deepcopy
 
 # First Party Library
+from wepy.interface import (
+    WorkMapperFactoryArgs,
+    RunnerGenTaskArgs,
+)
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.reporter.reporter import Reporter
 from wepy.resampling.resamplers.resampler import Resampler
@@ -120,6 +124,7 @@ class Manager(Generic[State_]):
     runner: Runner
     resampler: Resampler
     boundary_conditions: BoundaryConditions | None
+    work_mapper_class: type[WorkMapper]
     work_mapper: WorkMapper
     reporters: list[Reporter]
     monitor: Monitor | None
@@ -150,7 +155,7 @@ class Manager(Generic[State_]):
         init_walkers: list[Walker[State_]],
         runner: Runner,
         resampler: Resampler,
-        work_mapper: WorkMapper | None = None,
+        work_mapper_class: type[WorkMapper] | None = None,
         boundary_conditions: BoundaryConditions | None = None,
         reporters: list[Reporter] | None = None,
         sim_monitor: Monitor | None = None,
@@ -165,9 +170,9 @@ class Manager(Generic[State_]):
         runner : object implementing the Runner interface
             The runner to be used for propagating sampling segments of walkers.
 
-        work_mapper : object implementing the WorkMapper interface
-            The object that will be used to perform a set of runner
-            segments in a cycle.
+        work_mapper_class : Class for a work mapper, will be
+            instantiated by simulation manager. If None will default
+            to a serial mapper.
 
         resampler : object implementing the Resampler interface
             The resampler to be used in the simulation
@@ -210,10 +215,10 @@ class Manager(Generic[State_]):
         else:
             self.reporters = reporters
 
-        if work_mapper is None:
-            self.work_mapper = SerialMapper()
+        if work_mapper_class is None:
+            self.work_mapper_class = SerialMapper
         else:
-            self.work_mapper = work_mapper
+            self.work_mapper_class = work_mapper_class
 
         ## Monitor
         self.monitor = sim_monitor
@@ -282,11 +287,15 @@ class Manager(Generic[State_]):
         # initialize the work_mapper with the function it will be
         # mapping and the number of workers, this may include things like starting processes
         # etc.
-        logger.info("Initializing work_mapper")
-        self.work_mapper.init(
-            segment_func=self.runner.run_segment,
-            num_workers=num_workers,
+        logger.info("Instantiating work mapper")
+        self.work_mapper = self.work_mapper_class(
+            WorkMapperFactoryArgs(
+                num_workers=num_workers,
+            )
         )
+        logger.info("Running WorkMapper.init hook")
+        self.work_mapper.init()
+        logger.info("Finished WorkMapper.init hook")
 
         # init the reporter
         for reporter in self.reporters:
@@ -364,9 +373,7 @@ class Manager(Generic[State_]):
 
         Parameters
         ----------
-        walkers : list[Walker]
-            List of walkers
-
+        states
         segment_length : int
             Number of steps to run in each segment.
 
@@ -379,22 +386,21 @@ class Manager(Generic[State_]):
            The walkers after the segment of sampling simulation.
         """
 
-        num_walkers = len(states)
+        logger.info("Generating tasks for walker states")
+        tasks = self.runner.gen_tasks(
+            RunnerGenTaskArgs(
+                segment_length=segment_length,
+                cycle_idx=cycle_idx,
+                states=states,
+            )
+        )
 
-        logger.info("Starting segment")
-
-        segment_lengths = [segment_length for i in range(num_walkers)]
-        cycle_idxs = [cycle_idx for i in range(num_walkers)]
-        walker_idxs = [walker_idx for walker_idx in range(num_walkers)]
+        logger.info("Starting segment runs")
         try:
             new_states = list(
                 self.work_mapper.map(
-                    # args, which must be supported by the map function
+                    tasks,
                     states,
-                    segment_lengths,
-                    # kwargs which are optionally recognized by the map function
-                    cycle_idx=cycle_idxs,
-                    walker_idx=walker_idxs,
                 )
             )
 
@@ -650,74 +656,6 @@ class Manager(Generic[State_]):
         logger.info("Done: returning walkers")
         return resampled_walkers, (self.runner, self.boundary_conditions, self.resampler)
 
-    def run_simulation_by_time(
-            self,
-            run_time: float,
-            segments_length: int,
-            num_workers: int | None = None,
-    ) -> tuple[
-        list[Walker[State_]],
-        tuple[Runner, BoundaryConditions | None, Resampler],
-    ]:
-        """Run a simulation for a certain amount of time.
-
-        This starts timing as soon as this is called. If the time
-        before running a new cycle is greater than the runtime the run
-        will exit after cleaning up. Once a cycle is started it may
-        also run over the wall time.
-
-        All this does is provide a run idx to the reporters, which is
-        the run that is intended to be continued. This simulation
-        manager knows no details and is left up to the reporters to
-        handle this appropriately.
-
-        Parameters
-        ----------
-        run_time : float
-            The time to run in seconds.
-
-        segments_length : int
-            The number of steps for each runner segment.
-
-        num_workers : int
-            The number of workers to use for the work mapper.
-             (Default value = None)
-
-        Returns
-        -------
-        new_walkers : list of walkers
-            The resulting walkers of the cycle
-
-        sim_components : list
-            Deep copies of the runner, resampler, and boundary
-            conditions objects at the end of the cycle.
-
-
-        """
-        start_time = time.time()
-        self.init(num_workers=num_workers)
-        cycle_idx = 0
-        walkers = self.init_walkers
-        while time.time() - start_time < run_time:
-            logger.info(
-                "starting cycle {} at time {}".format(
-                    cycle_idx, time.time() - start_time
-                )
-            )
-
-            walkers, filters = self.run_cycle(walkers, segments_length, cycle_idx)
-
-            logger.info(
-                "ending cycle {} at time {}".format(cycle_idx, time.time() - start_time)
-            )
-
-            cycle_idx += 1
-
-        logger.info("Cleaning up simulation")
-        self.cleanup()
-
-        return walkers, deepcopy(filters)
-
     def run_simulation(
         self,
         n_cycles: int,
@@ -817,7 +755,8 @@ class Manager(Generic[State_]):
 
         cycle_idx = 0
         walkers = self.init_walkers
-        while time.time() - start_time < run_time:
+        # run until time is elapsed, but guarantee to run at least one cycle
+        while time.time() - start_time < run_time or cycle_idx < 1:
             logger.info(
                 "starting cycle {} at time {}".format(
                     cycle_idx, time.time() - start_time

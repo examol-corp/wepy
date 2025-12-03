@@ -7,25 +7,20 @@ import logging
 
 # Standard Library
 
+from wepy.interface import (
+    WorkMapperFactoryArgs,
+    Task,
+)
 from wepy.walker import WalkerState
 
 logger = logging.getLogger(__name__)
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
-Task_ = TypeVar("Task_")
-WorkMapperParams_ = ParamSpec("WorkMapperParams_")
-InnerTask_ = TypeVar("InnerTask_")
+Task_ = TypeVar("Task_", bound=Task)
 
-class Task(Protocol[WalkerState_]):
-
-    def __call__(
-            self,
-            walker_state: WalkerState_,
-    ) -> WalkerState_:
-        ...
 
     
-class WorkMapper(Protocol[WalkerState_, WorkMapperParams_, Task_, InnerTask_]):
+class WorkMapper(Protocol[WalkerState_, Task_]):
 
     def __init__(
         self,
@@ -36,15 +31,12 @@ class WorkMapper(Protocol[WalkerState_, WorkMapperParams_, Task_, InnerTask_]):
             ],
             WalkerState_,
         ],
-        *args: WorkMapperParams_.args,
-        **kwargs: WorkMapperParams_.kwargs,
+        wm_args: WorkMapperFactoryArgs | None,
     ) -> None:
         ...
 
     def init(self) -> None:
         ...
-
-    def gen_task(self, outer_task: Task_) -> Task_ | InnerTask_: ...
 
     def map(
         self,
