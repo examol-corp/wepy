@@ -47,7 +47,7 @@ md = [
 ]
 
 distributed = [
-  "dask[bag]",
+  "ray",
 ]
 
 prometheus = [
