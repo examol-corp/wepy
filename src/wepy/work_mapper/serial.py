@@ -6,29 +6,21 @@ import traceback
 from typing import Callable, Literal, Generic, TypeVar, Protocol, Any, ParamSpec, Concatenate, Sequence
 import logging
 
-from wepy.interface import (
-    WorkMapperFactoryArgs,
-)
 from wepy.walker import Walker, WalkerState
-from wepy.work_mapper.base import WorkMapper, TaskException, Task
 
 logger = logging.getLogger(__name__)
 
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
-Task_ = TypeVar("Task_", bound=Task)
 
 class SerialMapper(
-        WorkMapper,
         Generic[
             WalkerState_,
-            Task_,
         ]):
     """Basic non-parallel reference implementation of a mapper."""
 
     def __init__(
         self,
-        wm_args: WorkMapperFactoryArgs,
     ) -> None:
         self._worker_segment_times: dict[int, list[float]] = {0: []}
 
@@ -52,15 +44,28 @@ class SerialMapper(
 
     def map(
             self,
-            tasks: list[Task_],
+            task: Callable[
+                [
+                    WalkerState_,
+                    int,
+                ],
+                WalkerState_
+            ],
             walker_states: list[WalkerState_],
+            segment_lengths: list[int],
     ) -> list[WalkerState_]:
         segment_times: list[float] = []
         results: list[WalkerState_] = []
-        for task_idx, (task, walker_state) in enumerate(zip(tasks, walker_states, strict=True)):
+        for task_idx, task_args in enumerate(
+                zip(
+                    walker_states,
+                    segment_lengths,
+                    strict=True,
+                )
+        ):
 
             tic = time.time()
-            result = task(walker_state)
+            result = task(*task_args)
             toc = time.time()
 
             segment_times.append(toc - tic)

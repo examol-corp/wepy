@@ -90,6 +90,7 @@ dev = [
   "pytest-print",
   # for testing openmm wrappers
   "lxml",
+  "psutil",
   # qa
   "black",
   "isort",

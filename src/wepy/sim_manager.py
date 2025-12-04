@@ -44,7 +44,7 @@ to be determined adaptively (e.g. according to some time limit).
 
 # Standard Library
 import logging
-from typing import Final, Any, TypedDict, Generic, TypeVar
+from typing import Final, Any, TypedDict, Generic, TypeVar, Callable
 
 logger = logging.getLogger(__name__)
 # Standard Library
@@ -52,10 +52,6 @@ import time
 from copy import deepcopy
 
 # First Party Library
-from wepy.interface import (
-    WorkMapperFactoryArgs,
-    RunnerGenTaskArgs,
-)
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.reporter.reporter import Reporter
 from wepy.resampling.resamplers.resampler import Resampler
@@ -124,7 +120,7 @@ class Manager(Generic[State_]):
     runner: Runner
     resampler: Resampler
     boundary_conditions: BoundaryConditions | None
-    work_mapper_class: type[WorkMapper]
+    work_mapper_factory: type[WorkMapper]
     work_mapper: WorkMapper
     reporters: list[Reporter]
     monitor: Monitor | None
@@ -155,7 +151,7 @@ class Manager(Generic[State_]):
         init_walkers: list[Walker[State_]],
         runner: Runner,
         resampler: Resampler,
-        work_mapper_class: type[WorkMapper] | None = None,
+        work_mapper_factory: Callable[[], WorkMapper] | None = None,
         boundary_conditions: BoundaryConditions | None = None,
         reporters: list[Reporter] | None = None,
         sim_monitor: Monitor | None = None,
@@ -170,7 +166,7 @@ class Manager(Generic[State_]):
         runner : object implementing the Runner interface
             The runner to be used for propagating sampling segments of walkers.
 
-        work_mapper_class : Class for a work mapper, will be
+        work_mapper_factory : Class for a work mapper, will be
             instantiated by simulation manager. If None will default
             to a serial mapper.
 
@@ -215,10 +211,10 @@ class Manager(Generic[State_]):
         else:
             self.reporters = reporters
 
-        if work_mapper_class is None:
-            self.work_mapper_class = SerialMapper
+        if work_mapper_factory is None:
+            self.work_mapper_factory = SerialMapper
         else:
-            self.work_mapper_class = work_mapper_class
+            self.work_mapper_factory = work_mapper_factory
 
         ## Monitor
         self.monitor = sim_monitor
@@ -231,7 +227,6 @@ class Manager(Generic[State_]):
 
     def init(
         self,
-        num_workers: int | None = None,
         continue_run: int | None = None,
     ) -> None:
         """Initialize wepy configuration components for use at runtime.
@@ -265,9 +260,6 @@ class Manager(Generic[State_]):
 
         Parameters
         ----------
-        num_workers : int
-            The number of workers to use in the work mapper.
-             (Default value = None)
         continue_run : int
             Index of a run this one is continuing.
              (Default value = None)
@@ -288,11 +280,7 @@ class Manager(Generic[State_]):
         # mapping and the number of workers, this may include things like starting processes
         # etc.
         logger.info("Instantiating work mapper")
-        self.work_mapper = self.work_mapper_class(
-            WorkMapperFactoryArgs(
-                num_workers=num_workers,
-            )
-        )
+        self.work_mapper = self.work_mapper_factory()
         logger.info("Running WorkMapper.init hook")
         self.work_mapper.init()
         logger.info("Finished WorkMapper.init hook")
@@ -386,21 +374,14 @@ class Manager(Generic[State_]):
            The walkers after the segment of sampling simulation.
         """
 
-        logger.info("Generating tasks for walker states")
-        tasks = self.runner.gen_tasks(
-            RunnerGenTaskArgs(
-                segment_length=segment_length,
-                cycle_idx=cycle_idx,
-                states=states,
-            )
-        )
-
+        segment_lengths = [segment_length for i in range(len(states))]
         logger.info("Starting segment runs")
         try:
             new_states = list(
                 self.work_mapper.map(
-                    tasks,
+                    self.runner.run_segment,
                     states,
+                    segment_lengths,
                 )
             )
 
@@ -660,7 +641,6 @@ class Manager(Generic[State_]):
         self,
         n_cycles: int,
         segment_lengths: int,
-        num_workers: int | None = None,
         continue_run_idx: int | None = None,
     ) -> tuple[
         list[Walker[State_]],
@@ -675,10 +655,6 @@ class Manager(Generic[State_]):
 
         segment_lengths : int
             The number of steps for each runner segment.
-
-        num_workers : int
-            The number of workers to use for the work mapper.
-             (Default value = None)
 
         continue_run_idx: Index of the run you are continuing, optional.
 
@@ -695,7 +671,7 @@ class Manager(Generic[State_]):
         """
 
         logger.info("Running simulation init hook")
-        self.init(num_workers=num_workers, continue_run=continue_run_idx)
+        self.init(continue_run=continue_run_idx)
 
         if type(segment_lengths) == int:
             logger.info("Single number of steps provided for simulation, using this for all cycles.")
@@ -727,7 +703,6 @@ class Manager(Generic[State_]):
         self,
         run_time: int,
         segments_length: int,
-        num_workers: int | None = None,
         continue_run_idx: int | None = None,
     ) -> tuple[
         list[Walker[State_]],
@@ -751,7 +726,7 @@ class Manager(Generic[State_]):
         logger.info(f"Simulation start time: {start_time}")
 
         logger.info("Running simulation init hook")
-        self.init(num_workers=num_workers, continue_run=continue_run_idx)
+        self.init(continue_run=continue_run_idx)
 
         cycle_idx = 0
         walkers = self.init_walkers

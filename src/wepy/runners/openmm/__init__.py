@@ -7,9 +7,10 @@ from .state import (
     get_context_state,
     state_to_xml,
 )
-from .runner import OpenMMRunner
+from .runner import OpenMMRunner, PlatformKwargs, OpenMMPlatformName
 
 __all__ = [
+    "OpenMMPlatformName",
     "OpenMMRunner",
     "OpenMMState",
     "OpenMMStateWrapper",
@@ -17,4 +18,5 @@ __all__ = [
     "dummy_context",
     "get_context_state",
     "state_to_xml",
+    "PlatformKwargs",
 ]

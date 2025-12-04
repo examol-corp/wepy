@@ -33,12 +33,11 @@ except ModuleNotFoundError:
 from wepy.runners.runner import Runner
 from wepy.util.util import box_vectors_to_lengths_angles
 from wepy.walker import WalkerState
-from wepy.interface import Task, RunnerGenTaskArgs
 from .state import OpenMMState, OpenMMStateWrapper, get_context_state
 
 PlatformKwargs = dict[str, str]
-GPU_PLATFORMS = {"CUDA", "OpenCL", "HIP"}
 
+OpenMMPlatformName = Literal["Reference", "CPU", "CUDA", "OpenCL", "HIP"]
 
 class OpenMMRunnerSegmentSplitTimes(TypedDict):
     gen_sim_time: float
@@ -58,23 +57,6 @@ GET_STATE_DEFAULT_KEYS = frozenset({
             "box_vectors",
             "box_volume",
 })
-
-@attrs.define
-class OpenMMTask(Task):
-
-    runner: "OpenMMRunner"
-    segment_length: int
-    platform_kwargs: PlatformKwargs | None = None
-
-    def __call___(self, state: OpenMMState) -> OpenMMState:
-
-        logger.info("Running OpenMMTask")
-
-        return self.runner.run_segment(
-            state,
-            segment_length=self.segment_length,
-            platform_kwargs=self.platform_kwargs,
-        )
 
 # the runner for the simulation which runs the actual dynamics
 @attrs.define
@@ -106,6 +88,7 @@ class OpenMMRunner(Runner):
         self,
         walker_state: OpenMMState,
         segment_length: int,
+        platform_name: OpenMMPlatformName | None = None,
         platform_kwargs: PlatformKwargs | None = None,
     ) -> OpenMMState:
         """Run dynamics for the walker.
@@ -126,6 +109,8 @@ class OpenMMRunner(Runner):
 
         """
 
+        logger.info("Running OpenMM MD segment")
+
         run_segment_start = time.time()
 
         # set the kwargs that will be passed to getState
@@ -142,36 +127,22 @@ class OpenMMRunner(Runner):
 
         ## Platform
 
-        logger.info(f"'global_platform_kwargs' in runner: {self.global_platform_kwargs}")
-
         logger.info(f"'platform_kwargs' passed to 'run_segment' : {platform_kwargs}")
-
-        match (self.global_platform_kwargs, platform_kwargs):
-            case (None, None):
-                _platform_kwargs = {}
-            case (global_kwargs, None):
-                _platform_kwargs = global_kwargs
-            case (None, local_kwargs):
-                _platform_kwargs = local_kwargs
-            case (global_kwargs, local_kwargs):
-                _platform_kwargs = self.global_platform_kwargs | platform_kwargs
-
-        logger.info(f"Resolved 'platform_kwargs' : {_platform_kwargs}")
 
         # create simulation object
 
         ## create the platform and customize
 
         # if a platform was given we use it to make a Simulation object
-        if self.platform_name is not None:
+        if platform_name is not None:
             logger.info("Using platform configured in code.")
 
             # get the platform by its name to use
-            platform = openmm.Platform.getPlatformByName(self.platform_name)
+            platform = openmm.Platform.getPlatformByName(platform_name)
             logger.info(f"Platform object created: {platform}")
 
             # set properties from the kwargs if they apply to the platform
-            for key, value in _platform_kwargs.items():
+            for key, value in platform_kwargs.items():
                 if key in platform.getPropertyNames():
                     logger.info(f"Setting platform property: {key} : {value}")
                     platform.setPropertyDefaultValue(key, value)
@@ -179,7 +150,7 @@ class OpenMMRunner(Runner):
                 else:
                     logger.warning(
                         f"Platform kwargs given ({key} : {value}) "
-                        f"but is not valid for this platform ({self.platform_name})"
+                        f"but is not valid for this platform ({platform_name})"
                     )
 
             # make a new simulation object

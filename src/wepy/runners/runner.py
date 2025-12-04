@@ -21,13 +21,10 @@ See the openmm.py module for an example.
 from typing import Protocol, Any, TypedDict, TypeVar, ParamSpec
 import attrs
 from wepy.walker import Walker, WalkerState
-from wepy.interface import Task, RunnerGenTaskArgs
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 
-Task_ = TypeVar("Task_", bound=Task)
-
-class Runner(Protocol[WalkerState_, Task_]):
+class Runner(Protocol[WalkerState_]):
     """Abstract base class for the Runner interface."""
 
     def pre_cycle(self) -> None:
@@ -57,9 +54,6 @@ class Runner(Protocol[WalkerState_, Task_]):
 
         ...
 
-    def gen_tasks(self, segment_spec: RunnerGenTaskArgs[WalkerState_]) -> list[Task_]:
-        ...
-
     def run_segment(
         self,
         walker: WalkerState_,
@@ -84,14 +78,6 @@ class Runner(Protocol[WalkerState_, Task_]):
     def get_last_cycle_segments_split_times(self) -> list[dict[str, float]] | None: ...
 
 @attrs.define
-class IdentityTask(Task[WalkerState_]):
-
-    runner: "NoRunner"
-
-    def __call__(self, walker_state: WalkerState_) -> WalkerState_:
-        return self.runner.run_segment(walker_state)
-
-@attrs.define
 class NoRunner(Runner):
     """Stub Runner that just returns the walkers back with the same state.
 
@@ -105,14 +91,6 @@ class NoRunner(Runner):
     def get_last_cycle_segments_split_times(self) -> None:
         return None
 
-    def gen_tasks(self, segment_spec: RunnerGenTaskArgs[WalkerState_]) -> list[IdentityTask[WalkerState_]]:
-
-        return [
-            IdentityTask(self)
-            for state
-            in segment_spec.states
-        ]
-        
     def run_segment(
         self,
         state: WalkerState_,
