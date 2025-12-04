@@ -33,9 +33,12 @@ except ModuleNotFoundError:
 from wepy.runners.runner import Runner
 from wepy.util.util import box_vectors_to_lengths_angles
 from wepy.walker import WalkerState
+from wepy.interface import Task, RunnerGenTaskArgs
 from .state import OpenMMState, OpenMMStateWrapper, get_context_state
 
 PlatformKwargs = dict[str, str]
+GPU_PLATFORMS = {"CUDA", "OpenCL", "HIP"}
+
 
 class OpenMMRunnerSegmentSplitTimes(TypedDict):
     gen_sim_time: float
@@ -55,6 +58,23 @@ GET_STATE_DEFAULT_KEYS = frozenset({
             "box_vectors",
             "box_volume",
 })
+
+@attrs.define
+class OpenMMTask(Task):
+
+    runner: "OpenMMRunner"
+    segment_length: int
+    platform_kwargs: PlatformKwargs | None = None
+
+    def __call___(self, state: OpenMMState) -> OpenMMState:
+
+        logger.info("Running OpenMMTask")
+
+        return self.runner.run_segment(
+            state,
+            segment_length=self.segment_length,
+            platform_kwargs=self.platform_kwargs,
+        )
 
 # the runner for the simulation which runs the actual dynamics
 @attrs.define
@@ -81,6 +101,7 @@ class OpenMMRunner(Runner):
     def post_cycle(self) -> None:
         pass
 
+    
     def run_segment(
         self,
         walker_state: OpenMMState,

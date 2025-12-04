@@ -21,11 +21,6 @@ def test_serial_mapper():
         integrator=integrator,
     )
 
-    run_func = functools.partial(
-        runner.run_segment,
-        platform="Reference",
-    )
-
     num_walkers = 4
 
     walker_states = [
