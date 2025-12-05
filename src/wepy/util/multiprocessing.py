@@ -1,8 +1,11 @@
+import os
+import contextlib
 import copy
 import logging
 import logging.handlers
 import logging.config
 import multiprocessing as mp
+from typing import Generator
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +56,7 @@ def proc_pool_worker_setup(log_queue: mp.Queue) -> None:
 
     logging.config.dictConfig(config)
 
+    logger = logging.getLogger(__name__)
     logger.info("Configured logging in worker process")
 
 
@@ -68,3 +72,70 @@ def _dummy_task(foo: int) -> int:
     logger.info("Executing dummy task")
 
     return foo + 1
+
+class WorkerFormatter(logging.Formatter):
+    def __init__(self, base_formatter: logging.Formatter):
+        self.base_formatter = base_formatter
+
+    def format(self, record):
+        # Ensure process info exists
+        if not hasattr(record, "processName"):
+            record.processName = mp.current_process().name
+        if not hasattr(record, "process"):
+            record.process = mp.current_process().pid
+
+        # Prepend process info to the actual message
+
+        # the formatted msg string
+        original_msg = record.getMessage()
+        record.msg = f"[{record.processName} | PID {record.process}] {original_msg}"
+        # ensure no old args are re-applied
+        record.args = ()
+
+        # Use the base formatter for the rest
+        formatted = self.base_formatter.format(record)
+
+        # Restore original message so we don't mutate it permanently
+        record.msg = original_msg
+        return formatted
+
+@contextlib.contextmanager
+def queue_listener_context(log_queue: mp.Queue) -> Generator[None, None, None]:
+
+    root_logger = logging.getLogger()
+
+    old_factory = logging.getLogRecordFactory()
+
+    def record_factory(*args, **kwargs):
+
+        record = old_factory(*args, **kwargs)
+        if not hasattr(record, "processName"):
+            record.processName = mp.current_process().name
+
+        if not hasattr(record, "process"):
+            record.process = os.getpid()
+
+    old_formatters = [
+        handler.formatter
+        for handler
+        in root_logger.handlers
+    ]
+
+    listener_handlers = []
+    for handler in root_logger.handlers:
+        new_handler = copy.copy(handler)
+        new_handler.setFormatter(WorkerFormatter(handler.formatter))
+        listener_handlers.append(new_handler)
+
+    listener = logging.handlers.QueueListener(log_queue, *listener_handlers)
+    listener.start()
+
+    try:
+        yield
+    finally:
+        listener.stop()
+
+        for handler, formatter in zip(root_logger.handlers, old_formatters, strict=True):
+            handler.setFormatter(formatter)
+
+        logging.setLogRecordFactory(old_factory)

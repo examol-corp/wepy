@@ -1,8 +1,10 @@
 """Special OpenMM mappers."""
+import os
 import logging
 import logging.handlers
 import logging.config
-from typing import Literal, Any, Callable
+from typing import Literal, Any, Callable, Generator
+import contextlib
 import time
 import copy
 import multiprocessing as mp
@@ -10,11 +12,12 @@ import itertools
 
 import attrs
 
-from wepy.util.multiprocessing import proc_pool_worker_setup
+from wepy.util.multiprocessing import proc_pool_worker_setup, queue_listener_context
 from wepy.work_mapper.base import WorkMapper
 from wepy.runners.openmm import OpenMMState, OpenMMRunner, PlatformKwargs, OpenMMPlatformName, GPU_PLATFORMS
 
 logger = logging.getLogger(__name__)
+
 
 class OpenMMProcPoolWorkMapper(WorkMapper):
 
@@ -97,18 +100,18 @@ class OpenMMProcPoolWorkMapper(WorkMapper):
         log_queue = self._mp_ctx.Queue()
         # handler = logging.StreamHandler()
 
-        handlers = list(logging.getLogger().handlers)
-        listener = logging.handlers.QueueListener(log_queue, *handlers)
-        listener.start()
 
-        with self._mp_ctx.Pool(
-                processes=self._num_procs,
-                # only run one thing per task, just to make sure
-                # everything is cleaned up
-                maxtasksperchild=1,
-                initializer=proc_pool_worker_setup,
-                initargs=(log_queue,),
-        ) as pool:
+        with (
+                queue_listener_context(log_queue),
+                self._mp_ctx.Pool(
+                    processes=self._num_procs,
+                    # only run one thing per task, just to make sure
+                    # everything is cleaned up
+                    maxtasksperchild=1,
+                    initializer=proc_pool_worker_setup,
+                    initargs=(log_queue,),
+                ) as pool,
+        ):
 
             results = []
             for batch_idx, batch in enumerate(itertools.batched(
@@ -202,8 +205,6 @@ class OpenMMProcPoolWorkMapper(WorkMapper):
                 logger.info(f"Batch {batch_idx} completed")
 
             logger.info(f"Completed all batches, terminating Pool")
-
-        listener.stop()
 
         return results
 
