@@ -10,46 +10,11 @@ import itertools
 
 import attrs
 
+from wepy.util.multiprocessing import proc_pool_worker_setup
 from wepy.work_mapper.base import WorkMapper
 from wepy.runners.openmm import OpenMMState, OpenMMRunner, PlatformKwargs, OpenMMPlatformName, GPU_PLATFORMS
 
 logger = logging.getLogger(__name__)
-
-BASE_WORKER_LOGGING_CONFIG = {
-    "version": 1,
-    "disable_existing_loggers": False,
-    "handlers": {
-        "queue": {
-            "class": "logging.handlers.QueueHandler",
-            "queue": None,  # injected at runtime
-        }
-    },
-    "root": {
-        "handlers": ["queue"],
-        "level": "NOTSET",  # defer filtering to parent
-    },
-}
-
-def _worker_setup(log_queue: mp.Queue) -> None:
-
-    config = copy.deepcopy(BASE_WORKER_LOGGING_CONFIG)
-
-    config["handlers"]["queue"]["queue"] = log_queue
-    parent_loggers = logging.root.manager.loggerDict
-    for name, logger in parent_loggers.items():
-        if isinstance(logger, logging.Logger):
-            config.setdefault("loggers", {})[name] = {
-                "level" : logging.getLevelName(logger.level),
-                "propagate" : logger.propagate,
-                "handlers" : [],
-                "filters" : [
-                    f.__class__.__name__
-                    for f
-                    in logger.filters
-                ],
-            }
-
-    logging.config.dictConfig(config)
 
 class OpenMMProcPoolWorkMapper(WorkMapper):
 
@@ -135,13 +100,13 @@ class OpenMMProcPoolWorkMapper(WorkMapper):
         handlers = list(logging.getLogger().handlers)
         listener = logging.handlers.QueueListener(log_queue, *handlers)
         listener.start()
-        
+
         with self._mp_ctx.Pool(
                 processes=self._num_procs,
                 # only run one thing per task, just to make sure
                 # everything is cleaned up
                 maxtasksperchild=1,
-                initializer=_worker_setup,
+                initializer=proc_pool_worker_setup,
                 initargs=(log_queue,),
         ) as pool:
 
