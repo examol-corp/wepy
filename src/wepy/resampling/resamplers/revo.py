@@ -4,13 +4,14 @@ import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-import multiprocessing as mulproc
+import multiprocessing as mp
 import random as rand
 
 # Third Party Library
 import numpy as np
 
 # First Party Library
+from wepy.util.multiprocessing import proc_pool_worker_setup
 from wepy.resampling.resamplers.clone_merge import CloneMergeResampler
 
 
@@ -655,7 +656,16 @@ class REVOResampler(CloneMergeResampler):
 
         # make images for all the walker states for us to compute distances on
         if self.num_proc > 1:
-            with mulproc.Pool(self.num_proc) as pool:
+            log_queue = mp.Queue()
+            handlers = list(logging.getLogger().handlers)
+            listener = logging.handlers.QueueListener(log_queue, *handlers)
+            listener.start()
+            
+            with mp.Pool(
+                    self.num_proc,
+                    initializer=proc_pool_worker_setup,
+                    initargs=(log_queue,),
+            ) as pool:
                 images = pool.map(self.distance.image, [walker.state for walker in walkers])
         else:
             images = []
