@@ -7,9 +7,10 @@ from .state import (
     get_context_state,
     state_to_xml,
 )
-from .runner import OpenMMRunner, PlatformKwargs, OpenMMPlatformName
+from .runner import OpenMMRunner, PlatformKwargs, OpenMMPlatformName, GPU_PLATFORMS
 
 __all__ = [
+    "GPU_PLATFORMS",
     "OpenMMPlatformName",
     "OpenMMRunner",
     "OpenMMState",

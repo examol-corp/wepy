@@ -38,6 +38,7 @@ from .state import OpenMMState, OpenMMStateWrapper, get_context_state
 PlatformKwargs = dict[str, str]
 
 OpenMMPlatformName = Literal["Reference", "CPU", "CUDA", "OpenCL", "HIP"]
+GPU_PLATFORMS = frozenset({"CUDA", "OpenCL", "HIP"})
 
 class OpenMMRunnerSegmentSplitTimes(TypedDict):
     gen_sim_time: float
