@@ -1,4 +1,5 @@
-import functools
+import logging
+import pytest
 import psutil
 import openmm
 from wepy.walker import Walker
@@ -18,7 +19,6 @@ def test_serial_mapper():
 
     lj_sys = LennardJonesPair()
     integrator = openmm.LangevinIntegrator(300.0, 0.002, 0.1)
-
 
     runner = OpenMMRunner(
         system=lj_sys.system,
@@ -89,7 +89,7 @@ def test_serial_mapper():
         n_cycles=1,
         segment_lengths=10000000000,
     )
-    
+
 def test_proc_pool_mapper():
 
     lj_sys = LennardJonesPair()

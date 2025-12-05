@@ -185,6 +185,7 @@ class OpenMMRunner(Runner):
         steps_start = time.time()
 
         # Run the simulation segment for the number of time steps
+        logger.info("Running MD steps")
         simulation.step(segment_length)
 
         steps_end = time.time()
