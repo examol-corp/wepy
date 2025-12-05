@@ -1,0 +1,5 @@
+outs:
+- md5: 567e2fd21891f7a3b6d62aab422a3538
+  size: 82903
+  hash: md5
+  path: alanine-dipeptide.crd

@@ -1,0 +1,5 @@
+outs:
+- md5: 099b49adfcc8da32792ea5efdffe9f5b
+  size: 357642
+  hash: md5
+  path: alanine-dipeptide.prmtop

@@ -47,7 +47,7 @@ class LennardJonesPair:
 
     """
 
-    def __init__(self, mass=39.9 * openmm.unit.amu, sigma=3.350 * openmm.unit.angstrom, epsilon=10.0 * openmm.unit.kilocalories_per_mole, **kwargs):
+    def __init__(self, mass=39.9 * openmm.unit.amu, sigma=3.350 * openmm.unit.angstrom, epsilon=10.0 * openmm.unit.kilocalories_per_mole):
 
         # Store parameters
         self.mass = mass
