@@ -125,7 +125,6 @@ class Manager(Generic[State_]):
     reporters: list[Reporter]
     monitor: Monitor | None
 
-
     REPORT_ITEM_KEYS: Final[tuple[str, ...]] = (
         "cycle_idx",
         "n_segment_steps",
@@ -266,7 +265,10 @@ class Manager(Generic[State_]):
 
         """
 
-        logger.info("Starting simulation")
+        logger.info("Running sim_manager.init hooks")
+
+        logger.info("Running runner.init hook")
+        self.runner.init()
 
         # initialize the monitoring object
 

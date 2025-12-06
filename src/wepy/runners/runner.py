@@ -27,6 +27,8 @@ WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 class Runner(Protocol[WalkerState_]):
     """Abstract base class for the Runner interface."""
 
+    def init(self) -> None: ...
+
     def pre_cycle(self) -> None:
         """Perform pre-cycle behavior. run_segment will be called for each
         walker so this allows you to perform changes of state on a
@@ -83,6 +85,9 @@ class NoRunner(Runner):
 
     May be useful for testing.
     """
+
+    def init(self) -> None:
+        pass
 
     def pre_cycle(self) -> None:
         pass

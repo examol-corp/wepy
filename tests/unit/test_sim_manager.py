@@ -36,15 +36,17 @@ class TestManager:
         manager = Manager(*sim_components)
 
         assert len(manager.reporters) == 0
-        assert manager.work_mapper_class == SerialMapper
+        assert manager.work_mapper_factory == SerialMapper
         assert not hasattr(manager, "work_mapper")
 
     def test_init(self, sim_components):
 
         manager = Manager(*sim_components)
+        assert not manager.runner._initialized
 
         manager.init()
         assert hasattr(manager, "work_mapper")
+        assert manager.runner._initialized
 
     def test_cleanup(self, sim_components):
 
@@ -69,7 +71,7 @@ class TestManager:
         # test if something fails
         manager = Manager(
             init_walkers,
-            MockRunner(fail_walker_idxs={0,}),
+            MockRunner(fail=True),
             resampler,
         )
         manager.init()
@@ -97,7 +99,7 @@ class TestManager:
         # test if something fails
         manager = Manager(
             init_walkers,
-            MockRunner(fail_walker_idxs={0,}),
+            MockRunner(fail=True),
             resampler,
         )
         manager.init()
@@ -114,13 +116,12 @@ class TestManager:
         manager = Manager(*sim_components)
         manager.init()
 
-        new_walkers, _ = manager.run_simulation(2, 2, num_workers=None)
+        new_walkers, _ = manager.run_simulation(2, 2)
 
 
         new_walkers, _ = manager.run_simulation(
             2,
             2,
-            num_workers=None,
             continue_run_idx=0,
         )
 
@@ -132,13 +133,11 @@ class TestManager:
         new_walkers, _ = manager.run_simulation_by_time(
             0.001,
             2,
-            num_workers=None,
         )
 
         new_walkers, _ = manager.run_simulation_by_time(
             0.001,
             2,
-            num_workers=None,
             continue_run_idx=0,
         )
 
@@ -146,6 +145,5 @@ class TestManager:
         new_walkers, _ = manager.run_simulation_by_time(
             0.0000001,
             2,
-            num_workers=None,
             continue_run_idx=0,
         )
