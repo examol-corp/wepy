@@ -1,3 +1,4 @@
+import logging
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 from wepy.runners.openmm.state import (
     dummy_context,
@@ -8,6 +9,7 @@ from wepy.runners.openmm.runner import (
     OpenMMRunner,
 )
 
+from wepy.runners.openmm.logger import StepIntervalLoggingReporter
 import pytest
 
 import numpy as np
@@ -50,6 +52,20 @@ class TestOpenMMRunner:
         runner = OpenMMRunner(
             *runner_components
         )
+
+    def test_init(self, runner_components):
+
+        runner = OpenMMRunner(
+            *runner_components
+        )
+
+        assert runner._openmm_reporters == []
+
+        runner.init()
+
+        # check the default openmm reporters were constructed
+        assert len(runner._openmm_reporters) > 0
+
 
     def test_pre_cycle(self, runner_components):
 
@@ -101,3 +117,54 @@ class TestOpenMMRunner:
         )
         assert new_state["positions"] is not None
         assert "velocities" not in new_state
+
+        # test that openmm reporters are being called
+        class Spy:
+            def __init__(self) -> None:
+                self.touched = False
+
+            def touch(self) -> None:
+                self.touched = True
+
+        SPY = Spy()
+
+        class TouchGlobalStepIntervalLoggingReporter(StepIntervalLoggingReporter):
+
+            def __init__(
+                self,
+                logger: logging.Logger,
+            ) -> None:
+
+                self.spy = SPY
+
+                super().__init__(
+                    logger=logger,
+                    callback=self.touch,
+                    state_includes=[],
+                    # NOTE: hardcoded
+                    step_interval=1,
+                )
+
+            def touch(self, *args) -> None:
+                self.spy.touch()
+
+
+        def _mock_factory(logger: logging.Logger) -> TouchGlobalStepIntervalLoggingReporter:
+            return TouchGlobalStepIntervalLoggingReporter(logger=logger)
+
+        runner = OpenMMRunner(
+            system=system,
+            topology=topology,
+            integrator=integrator,
+            get_state_keys={},
+            openmm_reporter_factories=[_mock_factory],
+        )
+        runner.init()
+
+        assert not SPY.touched
+        new_state = runner.run_segment(
+            state,
+            2,
+        )
+
+        assert SPY.touched

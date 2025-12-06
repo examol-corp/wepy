@@ -1,5 +1,5 @@
 # Standard Library
-from typing import Any, Annotated, TypedDict, NotRequired, Literal, Final, Self, get_args, TypeAlias
+from typing import Any, Annotated, TypedDict, NotRequired, Literal, Final, Self, get_args, TypeAlias, Callable
 import logging
 import multiprocessing as mp
 import itertools
@@ -11,6 +11,8 @@ import copy
 from immutables import Map as frozenmap
 import attrs
 import numpy as np
+
+from .reporter import OpenMMReporter
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ from wepy.runners.runner import Runner
 from wepy.util.util import box_vectors_to_lengths_angles
 from wepy.walker import WalkerState
 from .state import OpenMMState, OpenMMStateWrapper, get_context_state
+from .logger import HeartBeatLoggingReporterFactory, LoggingReporterFactory
 
 PlatformKwargs = dict[str, str]
 
@@ -59,6 +62,11 @@ GET_STATE_DEFAULT_KEYS = frozenset({
             "box_volume",
 })
 
+DEFAULT_OPENMM_REPORTER_FACTORIES = [
+    # default heart beat every 500 steps
+    HeartBeatLoggingReporterFactory(step_interval=500),
+]
+
 # the runner for the simulation which runs the actual dynamics
 @attrs.define
 class OpenMMRunner(Runner):
@@ -73,8 +81,15 @@ class OpenMMRunner(Runner):
     global_platform_kwargs: PlatformKwargs | None = None
     enforce_box: bool = False
     get_state_keys: frozenset[str] = attrs.field(default=GET_STATE_DEFAULT_KEYS)
+    openmm_reporter_factories: list[LoggingReporterFactory] = attrs.field(default=DEFAULT_OPENMM_REPORTER_FACTORIES)
 
+    _openmm_reporters: list[OpenMMReporter] = attrs.field(default=[])
     _last_cycle_segments_split_times: list[OpenMMRunnerSegmentSplitTimes] = attrs.field(default=[])
+
+    def init(self) -> None:
+
+        for omm_reporter_factory in self.openmm_reporter_factories:
+            self._openmm_reporters.append(omm_reporter_factory(logger))
 
     def pre_cycle(
         self,
@@ -155,6 +170,7 @@ class OpenMMRunner(Runner):
                     )
 
             # make a new simulation object
+            logger.info("Construction Simulation and context")
             simulation = openmm.app.Simulation(
                 self.topology, self.system, new_integrator, platform
             )
@@ -165,6 +181,9 @@ class OpenMMRunner(Runner):
             simulation = openmm.app.Simulation(
                 self.topology, self.system, new_integrator
             )
+
+        logger.info("Registering OpenMM Simulation reporters")
+        simulation.reporters.extend(self._openmm_reporters)
 
         # generate a sim state
         logger.info("Generating openmm.State from input OpenMMState")
