@@ -4,6 +4,7 @@ from collections.abc import Collection
 import openmm.app
 import openmm
 import openmm.unit
+import attrs
 
 from .reporter import (
     OpenMMReporter,
@@ -19,6 +20,7 @@ LoggingReporterCallback = Callable[
     ],
     None,
 ]
+
 
 class LoggingReporter(OpenMMReporter):
     logger: logging.Logger
@@ -48,6 +50,7 @@ class LoggingReporter(OpenMMReporter):
             state,
         )
 
+LoggingReporterFactory = Callable[[logging.Logger], LoggingReporter]
 
 class StepIntervalLoggingReporter(LoggingReporter):
     """Reporter that reports at intervals in steps."""
@@ -141,3 +144,50 @@ class SamplingTimeIntervalLoggingReporter(LoggingReporter):
             include=list(self.state_includes),
             periodic=False,
         )
+
+
+class HeartBeatLoggingReporter(StepIntervalLoggingReporter):
+
+    def __init__(
+        self,
+        logger: logging.Logger,
+        step_interval: int
+    ) -> None:
+
+        super().__init__(
+            logger=logger,
+            callback=self.logging_callback,
+            state_includes=[],
+            step_interval=step_interval,
+        )
+    
+    @staticmethod
+    def logging_callback(
+            logger: logging.Logger,
+            simulation: openmm.app.Simulation,
+            state: openmm.State,
+    ) -> None:
+
+        # TODO: make this adaptive to reduce zeros etc.
+        sim_time = simulation.context.getTime()
+        sim_time_mag = sim_time.value_in_unit(openmm.unit.picosecond)
+        sim_steps = simulation.context.getStepCount()
+
+        logger.info(f"OpenMM simulation progress: sim_time={sim_time_mag:.4f} ps, sim_steps={sim_steps}")
+
+
+
+
+@attrs.define
+class HeartBeatLoggingReporterFactory:
+
+    step_interval: int
+
+    def __call__(self, logger: logging.Logger) -> HeartBeatLoggingReporter:
+
+        return HeartBeatLoggingReporter(
+            logger=logger,
+            step_interval=self.step_interval,
+        )
+# TODO:
+# class EnergyLoggingReporter()

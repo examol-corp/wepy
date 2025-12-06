@@ -6,7 +6,12 @@ import openmm.app
 import openmm.unit
 from wepy.runners.openmm.state import OpenMMState
 from wepy.runners.openmm.reporter import OpenMMReporterNextReport
-from wepy.runners.openmm.logger import LoggingReporter, StepIntervalLoggingReporter, SamplingTimeIntervalLoggingReporter
+from wepy.runners.openmm.logger import (
+    LoggingReporter,
+    StepIntervalLoggingReporter,
+    SamplingTimeIntervalLoggingReporter,
+    HeartBeatLoggingReporter,
+)
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 
 STEP_TIME = 1 * openmm.unit.femtosecond
@@ -357,6 +362,81 @@ class Test_SamplingTimeIntervalLoggingReporter:
         )
         simulation.context.setState(omm_state)
         simulation.reporters.append(time_logger)
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(10)
+
+        assert len(caplog.records) == 5
+        caplog.clear()
+
+class Test_HeartBeatLoggingReporter:
+
+    def test_logging_callback(self, sim_components, caplog):
+
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+
+        topology, system, integrator, platform = sim_args
+
+        logger_name = "test-HeartBeatLoggingReporter"
+        logger = logging.getLogger(logger_name)
+
+        time_logger = HeartBeatLoggingReporter(
+            logger,
+            step_interval=2,
+        )
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+
+        with caplog.at_level(logging.INFO, logger_name):
+            HeartBeatLoggingReporter.logging_callback(
+                logger,
+                simulation,
+                omm_state,
+            )
+
+        assert len(caplog.records) == 1
+        
+
+    def test_simulation(self, sim_components, caplog):
+
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+
+        topology, system, integrator, platform = sim_args
+
+        logger_name = "test-HeartBeatLoggingReporter"
+        logger = logging.getLogger(logger_name)
+
+        time_logger = HeartBeatLoggingReporter(
+            logger,
+            step_interval=2,
+        )
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+        simulation.reporters.append(time_logger)
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(1)
+
+        assert len(caplog.records) == 0
+        caplog.clear()
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(1)
+
+        assert len(caplog.records) == 1
+        caplog.clear()
 
         with caplog.at_level(logging.INFO, logger_name):
             simulation.step(10)
