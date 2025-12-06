@@ -1,0 +1,365 @@
+import logging
+import copy
+import pytest
+import openmm
+import openmm.app
+import openmm.unit
+from wepy.runners.openmm.state import OpenMMState
+from wepy.runners.openmm.reporter import OpenMMReporterNextReport
+from wepy.runners.openmm.logger import LoggingReporter, StepIntervalLoggingReporter, SamplingTimeIntervalLoggingReporter
+from wepy_tools.systems.lennard_jones import LennardJonesPair
+
+STEP_TIME = 1 * openmm.unit.femtosecond
+
+@pytest.fixture(scope="function")
+def sim_components() -> tuple[
+        openmm.State,
+        openmm.app.Topology,
+        openmm.System,
+        openmm.LangevinIntegrator,
+        openmm.Platform,
+]:
+
+    lj_sys = LennardJonesPair()
+    integrator  = openmm.VerletIntegrator(STEP_TIME)
+    omm_state = OpenMMState.from_dwim(positions=lj_sys.positions).to_state_wrapper().state
+
+
+    platform = openmm.Platform.getPlatformByName("Reference")
+
+    return omm_state, lj_sys.topology, lj_sys.system, integrator, platform
+    
+    
+
+class Test_LoggingReporter:
+
+    def test_report(self, caplog):
+
+        logger = logging.getLogger("test-LoggingReporter")
+
+        def hello_log(
+                logger: logging.Logger,
+                simulation: openmm.app.Simulation,
+                state: openmm.State,
+        ) -> None:
+
+            logger.info("Hello")
+
+        hello_log_reporter = LoggingReporter(
+            logger,
+            callback=hello_log,
+            state_includes=["energy"],
+        )
+
+        # NOTE: dummy inputs since they aren't used in the hello_log callback
+        with caplog.at_level(logging.INFO, logger="test-LoggingReporter"):
+            hello_log_reporter.report(None, None)
+
+        assert len(caplog.records) == 1
+        assert caplog.records[0].levelname == "INFO"
+        assert caplog.records[0].msg == "Hello"
+
+        caplog.clear()
+
+class Test_StepIntervalLoggingReporter:
+
+    def test_describeNextReport(self, sim_components):
+
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+
+        logger = logging.getLogger("test-StepIntervalLoggingReporter")
+
+        def hello_log(
+                logger: logging.Logger,
+                simulation: openmm.app.Simulation,
+                state: openmm.State,
+        ) -> None:
+
+            logger.info("Hello")
+
+        state_includes = ["energy"]
+
+        step_logger = StepIntervalLoggingReporter(
+            logger,
+            callback=hello_log,
+            state_includes=state_includes,
+            step_interval=10,
+        )
+
+
+        simulation = openmm.app.Simulation(
+            *sim_args
+        )
+        simulation.context.setState(omm_state)
+
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=10,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+        simulation.step(1)
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=9,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+        simulation.step(2)
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=7,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+        # wraps back around at 0
+        simulation.step(7)
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=10,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+
+    def test_simulation(self, sim_components, caplog):
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+
+        simulation = openmm.app.Simulation(
+            *sim_args
+        )
+        simulation.context.setState(omm_state)
+
+        logger_name = "test-StepIntervalLoggingReporter"
+        logger = logging.getLogger(logger_name)
+
+        def hello_log(
+                logger: logging.Logger,
+                simulation: openmm.app.Simulation,
+                state: openmm.State,
+        ) -> None:
+
+            logger.info("Hello")
+
+        state_includes = ["energy"]
+
+        step_logger = StepIntervalLoggingReporter(
+            logger,
+            callback=hello_log,
+            state_includes=state_includes,
+            step_interval=10,
+        )
+
+        simulation.reporters.append(step_logger)
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(1)
+
+        assert len(caplog.records) == 0
+        caplog.clear()
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(9)
+
+        assert len(caplog.records) == 1
+        assert caplog.records[0].msg == "Hello"
+
+        caplog.clear()
+
+
+class Test_SamplingTimeIntervalLoggingReporter:
+
+    def test_describeNextReport(self, sim_components):
+
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+        topology, system, integrator, platform = sim_args
+
+
+        logger = logging.getLogger("test-SamplingTimeIntervalLoggingReporter")
+
+        def hello_log(
+                logger: logging.Logger,
+                simulation: openmm.app.Simulation,
+                state: openmm.State,
+        ) -> None:
+
+            logger.info("Hello")
+
+        state_includes = ["energy"]
+
+        step_logger = SamplingTimeIntervalLoggingReporter(
+            logger,
+            callback=hello_log,
+            state_includes=state_includes,
+            step_size=STEP_TIME,
+            sampling_time_interval=(10 * openmm.unit.femtosecond),
+        )
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+
+        # at step 0 returns the interval
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=10,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+        simulation.step(1)
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=9,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+        simulation.step(2)
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=7,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+        simulation.step(7)
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=10,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+        simulation.step(3)
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=7,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+
+        simulation.step(10)
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=10,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+        # test wrapping around behavior
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+
+        simulation.step(11)
+        assert step_logger.describeNextReport(
+            simulation
+        ) == OpenMMReporterNextReport(
+            steps=9,
+            include=list(state_includes),
+            periodic=False,
+        )
+
+
+    def test_simulation(self, sim_components, caplog):
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+
+        topology, system, integrator, platform = sim_args
+
+        logger_name = "test-SamplingTimeIntevalLoggingReporter"
+        logger = logging.getLogger(logger_name)
+
+        def hello_log(
+                logger: logging.Logger,
+                simulation: openmm.app.Simulation,
+                state: openmm.State,
+        ) -> None:
+
+            logger.info("Hello")
+
+        state_includes = ["energy"]
+
+        time_logger = SamplingTimeIntervalLoggingReporter(
+            logger,
+            callback=hello_log,
+            state_includes=state_includes,
+            step_size=STEP_TIME,
+            sampling_time_interval=(10 * openmm.unit.femtosecond),
+        )
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+        simulation.reporters.append(time_logger)
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(1)
+
+        assert len(caplog.records) == 0
+        caplog.clear()
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(9)
+
+        assert len(caplog.records) == 1
+        assert caplog.records[0].msg == "Hello"
+
+        caplog.clear()
+
+        # test something longer
+        time_logger = SamplingTimeIntervalLoggingReporter(
+            logger,
+            callback=hello_log,
+            state_includes=state_includes,
+            step_size=STEP_TIME,
+            sampling_time_interval=(2 * openmm.unit.femtosecond),
+        )
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+        simulation.reporters.append(time_logger)
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(10)
+
+        assert len(caplog.records) == 5
+        caplog.clear()
