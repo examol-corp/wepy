@@ -1,10 +1,11 @@
 """Realistic mock runners useful mostly for testing."""
+import time
 import logging
 from typing import Literal
 
 import attrs
 from wepy.walker import Walker, WalkerState
-from wepy.runners.runner import Runner
+from wepy.runners.runner import Runner, RunnerStatus, RunSegmentData, RunnerStateMachine, RunnerEvent, RunnerStateError
 
 logger = logging.getLogger(__name__)
 
@@ -17,34 +18,65 @@ class MockError(Exception):
 
 @attrs.define
 class MockRunner(Runner):
-
     fail: bool = False
 
-    _initialized: bool = False
+    state_machine: RunnerStateMachine = attrs.field(
+        default=attrs.Factory(
+            RunnerStateMachine,
+        )
+    )
+
+    @property
+    def status(self) -> RunnerStatus:
+        return self.state_machine.state
 
     def init(self) -> None:
-        self._initialized = True
+
+        # NOTE: showing example of validating the event before doing
+        # potentially expensive calculations and then transitioning
+        # the actual state when it is done
+        self.state_machine.validate_event(RunnerEvent.INIT)
+        # do something...
+        logger.info("INIT stuff")
+        self.state_machine.send(RunnerEvent.INIT)
 
     def pre_cycle(self) -> None:
-        pass
-    def post_cycle(self) -> None:
-        pass
+        self.state_machine.send(RunnerEvent.PRE_CYCLE)
+
+    def post_cycle(self, segments_data: list[RunSegmentData]) -> None:
+        self.state_machine.send(RunnerEvent.POST_SEGMENT)
+        self.state_machine.send(RunnerEvent.POST_CYCLE)
 
     def run_segment(
         self,
         state: MockState,
         segment_length: int,
-    ) -> MockState:
+    ) -> tuple[MockState, RunSegmentData]:
+
+        if self.status != RunnerStatus.PRE_CYCLE:
+            raise RunnerStateError(
+                f"Cannot run a segment in state ({self.status.name}:{self.status.value})"
+            )
+
+        seg_start_time = time.time()
 
         if self.fail:
-            logger.critical("Error requested in MockRuner.run_segment, raising.")
+            logger.critical("Error requested in MockRunner.run_segment, raising.")
             raise MockError("Error requested")
 
         logger.info("Evolving the MockState in MockRunner.run_segment")
-        return attrs.evolve(
+        new_state = attrs.evolve(
             state,
             a=(state.a + segment_length),
         )
 
-    def get_last_cycle_segments_split_times(self) -> None:
-        return None
+        seg_end_time = time.time()
+
+        split_time = seg_end_time - seg_start_time
+        
+        segment_data = RunSegmentData(segment_split_time=split_time)
+
+        return new_state, segment_data
+
+# @attrs.define
+# class MockRunnerFactory:

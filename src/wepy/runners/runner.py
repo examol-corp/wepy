@@ -18,49 +18,121 @@ See the openmm.py module for an example.
 """
 
 # Standard Library
-from typing import Protocol, Any, TypedDict, TypeVar, ParamSpec
+import logging
+from typing import Protocol, Any, TypedDict, TypeVar, ParamSpec, Callable, Literal
+from enum import IntEnum
 import attrs
+from immutables import Map as frozenmap
 from wepy.walker import Walker, WalkerState
 
-WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+logger = logging.getLogger(__name__)
 
-class Runner(Protocol[WalkerState_]):
+@attrs.define
+class RunSegmentData:
+    segment_split_time: float
+
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+RunSegmentData_ = TypeVar("RunSegmentData_", bound=RunSegmentData)
+
+class RunnerStatus(IntEnum):
+    PRE_INITIALIZATION = 0
+    INITIALIZED = 1
+    PRE_CYCLE = 2
+    POST_SEGMENT = 3
+    POST_CYCLE = 4
+
+class RunnerEvent(IntEnum):
+    INIT = 0
+    PRE_CYCLE = 1
+    POST_SEGMENT = 2
+    POST_CYCLE = 3
+
+class RunnerStateMachineError(Exception):
+    pass
+
+class RunnerStateTransitionError(RunnerStateMachineError):
+    """Indicates an error with the runner state machine transition."""
+    pass
+
+class RunnerStateError(RunnerStateMachineError):
+    """Indicates an error relating to the current state of the runner."""
+    pass
+
+# State machine table that defines what are the valid states to
+# transition to another state. None for the initial states
+RUNNER_STATE_TRANSITION_TABLE: frozenmap[
+    RunnerStatus,
+    frozenmap[RunnerEvent, RunnerStatus],
+] = frozenmap({
+    RunnerStatus.PRE_INITIALIZATION: frozenmap({
+        RunnerEvent.INIT : RunnerStatus.INITIALIZED,
+    }),
+    RunnerStatus.INITIALIZED: frozenmap({
+        RunnerEvent.PRE_CYCLE : RunnerStatus.PRE_CYCLE,
+    }),
+    RunnerStatus.PRE_CYCLE: frozenmap({
+        RunnerEvent.POST_SEGMENT : RunnerStatus.POST_SEGMENT,
+    }),
+    RunnerStatus.POST_SEGMENT: frozenmap({
+        RunnerEvent.POST_CYCLE : RunnerStatus.POST_CYCLE,
+    }),
+    RunnerStatus.POST_CYCLE: frozenmap({
+        RunnerEvent.PRE_CYCLE : RunnerStatus.PRE_CYCLE,
+    }),
+})
+
+@attrs.define
+class RunnerStateMachine:
+    state: RunnerStatus = attrs.field(
+        default=RunnerStatus.PRE_INITIALIZATION,
+    )
+
+    def validate_event(self, event: RunnerEvent) -> Literal[True]:
+        state_transitions = RUNNER_STATE_TRANSITION_TABLE[self.state]
+        if event not in state_transitions:
+            raise RunnerStateTransitionError(
+                f"Runner is in state {self.state.name}:{self.state.value},"
+                f"event {event.name}:{event.value} is not a valid."
+                f" Choose from: {set(state_transitions.keys())}"
+            )
+        else:
+            return True
+
+    def send(self, event: RunnerEvent) -> RunnerStatus:
+
+        logger.info(f"Received event: {event.name}:{event.value}")
+        self.validate_event(event)
+        
+        state_transitions = RUNNER_STATE_TRANSITION_TABLE[self.state]
+        new_state = state_transitions[event]
+
+        logger.info(
+            "Transitioning runner state:"
+            f" {self.state.name}:{self.state.value} -> {new_state.name}:{new_state.value}"
+        )
+        self.state = new_state
+
+        return self.state
+    
+class Runner(Protocol[WalkerState_, RunSegmentData_]):
     """Abstract base class for the Runner interface."""
+
+    @property
+    def status(self) -> RunnerStatus:
+        ...
+
 
     def init(self) -> None: ...
 
     def pre_cycle(self) -> None:
-        """Perform pre-cycle behavior. run_segment will be called for each
-        walker so this allows you to perform changes of state on a
-        per-cycle basis.
-
-        Parameters
-        ----------
-        kwargs : key-word arguments
-            Key-value pairs to be interpreted by each runner implementation.
-
-        """
-        ...
-
-    def post_cycle(self) -> None:
-        """Perform post-cycle behavior. run_segment will be called for each
-        walker so this allows you to perform changes of state on a
-        per-cycle basis.
-
-        Parameters
-        ----------
-        kwargs : key-word arguments
-            Key-value pairs to be interpreted by each runner implementation.
-
-        """
-
+        """Perform pre-cycle behavior."""
         ...
 
     def run_segment(
         self,
         walker: WalkerState_,
         segment_length: int,
-    ) -> WalkerState_:
+    ) -> tuple[WalkerState_, RunSegmentData_ | None]:
         """Run dynamics for the walker.
 
         Parameters
@@ -71,13 +143,26 @@ class Runner(Protocol[WalkerState_]):
 
         Returns
         -------
-        new_walker : object implementing the Walker interface
-            Walker after dynamics was run, only the state should be modified.
+        new_walker : Walker after dynamics was run, only the state should be modified.
+        run_segment_data: Arbitrary data type that is used internally
+            in the runner and managers for runner specific data,
+            e.g. segment performance metrics.
 
         """
         ...
 
-    def get_last_cycle_segments_split_times(self) -> list[dict[str, float]] | None: ...
+    def post_cycle(
+            self,
+            segments_data: list[RunSegmentData_] | None,
+    ) -> None:
+        """Perform post-cycle behavior."""
+        ...
+
+        
+
+RunnerFactory = Callable[
+    [], Runner,
+]
 
 @attrs.define
 class NoRunner(Runner):
@@ -86,19 +171,38 @@ class NoRunner(Runner):
     May be useful for testing.
     """
 
+    state_machine: RunnerStateMachine = attrs.field(
+        default=attrs.Factory(
+            RunnerStateMachine,
+        )
+    )
+
+    @property
+    def status(self) -> RunnerStatus:
+        return self.state_machine.state
+
     def init(self) -> None:
-        pass
+        self.state_machine.send(RunnerEvent.INIT)
 
     def pre_cycle(self) -> None:
-        pass
-    def post_cycle(self) -> None:
-        pass
-    def get_last_cycle_segments_split_times(self) -> None:
-        return None
+        self.state_machine.send(RunnerEvent.PRE_CYCLE)
 
+        
     def run_segment(
         self,
         state: WalkerState_,
         segment_length: int | float,
-    ) -> WalkerState_:
-        return state
+    ) -> tuple[WalkerState_, None]:
+
+        if self.status != RunnerStatus.PRE_CYCLE:
+            raise RunnerStateError(
+                f"Cannot run a segment in state ({self.status.name}:{self.status.value})"
+            )
+        
+        return state, None
+
+    def post_cycle(self, segments_data: None) -> None:
+
+        self.state_machine.send(RunnerEvent.POST_SEGMENT)
+        self.state_machine.send(RunnerEvent.POST_CYCLE)
+    
