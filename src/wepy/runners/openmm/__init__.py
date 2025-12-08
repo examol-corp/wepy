@@ -8,8 +8,10 @@ from .state import (
     state_to_xml,
 )
 from .runner import OpenMMRunner, PlatformKwargs, OpenMMPlatformName, GPU_PLATFORMS
+from .logger import HeartBeatLoggingReporterFactory
 
 __all__ = [
+    "HeartBeatLoggingReporterFactory",
     "GPU_PLATFORMS",
     "OpenMMPlatformName",
     "OpenMMRunner",
