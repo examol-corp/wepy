@@ -2,8 +2,9 @@ import logging
 import pytest
 import psutil
 import openmm
+import openmm.unit
 from wepy.walker import Walker
-from wepy.runners.openmm import OpenMMRunner, OpenMMState
+from wepy.runners.openmm import OpenMMRunner, OpenMMState, HeartBeatLoggingReporterFactory
 from wepy.work_mapper.serial import SerialMapper
 from wepy.work_mapper.openmm import (
     OpenMMSerialWorkMapperFactory,
@@ -14,16 +15,27 @@ from wepy.resampling.resamplers.noresampler import NoResampler
 
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 
+STEP_SIZE = 2 * openmm.unit.femtosecond
+
 
 def test_serial_mapper():
 
     lj_sys = LennardJonesPair()
-    integrator = openmm.LangevinIntegrator(300.0, 0.002, 0.1)
+    integrator = openmm.LangevinIntegrator(
+        300.0,
+        0.1,
+        STEP_SIZE,
+    )
 
     runner = OpenMMRunner(
         system=lj_sys.system,
         topology=lj_sys.topology,
         integrator=integrator,
+        # specialized reporters for testing
+        openmm_reporter_factories=[
+            # heart beat every step
+            HeartBeatLoggingReporterFactory(step_interval=1)
+        ]
     )
 
     num_walkers = 4
@@ -93,13 +105,20 @@ def test_serial_mapper():
 def test_proc_pool_mapper():
 
     lj_sys = LennardJonesPair()
-    integrator = openmm.LangevinIntegrator(300.0, 0.002, 0.1)
-
+    integrator = openmm.LangevinIntegrator(
+        300.0,
+        0.1,
+        STEP_SIZE,
+    )
 
     runner = OpenMMRunner(
         system=lj_sys.system,
         topology=lj_sys.topology,
         integrator=integrator,
+        openmm_reporter_factories=[
+            # heart beat every step
+            HeartBeatLoggingReporterFactory(step_interval=10)
+        ]
     )
 
     num_walkers = 4
@@ -122,9 +141,9 @@ def test_proc_pool_mapper():
         in walker_states
     ]
 
-    # As an example of a useful configuration. There are 4 walkers in
-    # each cycle so that is the max number of processes that should be
-    # used.
+    # As an example of a useful configuration for Reference
+    # platform. There are 4 walkers in each cycle so that is the max
+    # number of processes that should be used.
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner=runner,
