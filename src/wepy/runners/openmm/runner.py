@@ -32,7 +32,7 @@ except ModuleNotFoundError:
     )
 
 # First Party Library
-from wepy.runners.runner import Runner
+from wepy.runners.runner import Runner, RunnerStatus, RunSegmentData, RunnerStateMachine, RunnerEvent, RunnerStateError
 from wepy.util.util import box_vectors_to_lengths_angles
 from wepy.walker import WalkerState
 from .state import OpenMMState, OpenMMStateWrapper, get_context_state
@@ -43,11 +43,7 @@ PlatformKwargs = dict[str, str]
 OpenMMPlatformName = Literal["Reference", "CPU", "CUDA", "OpenCL", "HIP"]
 GPU_PLATFORMS = frozenset({"CUDA", "OpenCL", "HIP"})
 
-class OpenMMRunnerSegmentSplitTimes(TypedDict):
-    gen_sim_time: float
-    steps_time: float
-    get_state_time: float
-    run_segment_time: float
+
 
 GET_STATE_DEFAULT_KEYS = frozenset({
             "positions",
@@ -67,47 +63,88 @@ DEFAULT_OPENMM_REPORTER_FACTORIES = [
     HeartBeatLoggingReporterFactory(step_interval=500),
 ]
 
-# the runner for the simulation which runs the actual dynamics
 @attrs.define
+class OpenMMRunnerSegmentSplitTime:
+    gen_sim_time: float
+    steps_time: float
+    get_state_time: float
+
+@attrs.define
+class OpenMMRunnerSegmentData(RunSegmentData):
+    segment_split_time: float
+    openmm_segment_split_time: OpenMMRunnerSegmentSplitTime
+
+# the runner for the simulation which runs the actual dynamics
 class OpenMMRunner(Runner):
     """Runner for OpenMM simulations."""
 
-    # TODO: should probably have these as the serialized versions for
-    # going across process boundaries
     system: openmm.System
     topology: openmm.app.Topology
     integrator: openmm.Integrator
-    platform_name: str | None = None
-    global_platform_kwargs: PlatformKwargs | None = None
-    enforce_box: bool = False
-    get_state_keys: frozenset[str] = attrs.field(default=GET_STATE_DEFAULT_KEYS)
-    openmm_reporter_factories: list[LoggingReporterFactory] = attrs.field(default=DEFAULT_OPENMM_REPORTER_FACTORIES)
+    platform_name: str | None
+    global_platform_kwargs: PlatformKwargs | None
+    enforce_box: bool
+    get_state_keys: frozenset[str]
+    openmm_reporter_factories: list[LoggingReporterFactory] | None
 
-    # TODO: figure out a better way to do this, probably by separating
-    # runner into a factory and concrete, stateful, implementation
-    _openmm_reporters: list[OpenMMReporter] = attrs.field(default=[])
-    _last_cycle_segments_split_times: list[OpenMMRunnerSegmentSplitTimes] = attrs.field(default=[])
-    _init_time: int = attrs.field(init=False)
+    state_machine: RunnerStateMachine
+
+    _openmm_reporters: list[OpenMMReporter] | None
+    _init_time: int | None
+    _pre_cycle_time: int | None
+
+    def __init__(
+        self,
+        system: openmm.System,
+        topology: openmm.app.Topology,
+        integrator: openmm.Integrator,
+        platform_name: str | None = None,
+        global_platform_kwargs: PlatformKwargs | None = None,
+        enforce_box: bool = False,
+        get_state_keys: frozenset[str] = GET_STATE_DEFAULT_KEYS,
+        openmm_reporter_factories: list[LoggingReporterFactory] | None = None,
+    ) -> None:
+
+        self.system = system
+        self.topology = topology
+        self.integrator = integrator
+        self.platform_name = platform_name
+        self.global_platform_args = global_platform_kwargs
+        self.enforce_box = enforce_box
+        self.get_state_keys = get_state_keys
+
+        logger.warning("No OpenMM reporter factories configured.")
+        self.openmm_reporter_factories = openmm_reporter_factories if openmm_reporter_factories is not None else []
+
+        self._openmm_reporters = None
+        self._init_time = None
+        self._pre_cycle_time = None
+
+        self.state_machine = RunnerStateMachine()
+
+    @property
+    def status(self) -> RunnerStatus:
+        return self.state_machine.state
 
     def init(self) -> None:
 
-        self._init_time = time.time()
+        self.state_machine.validate_event(RunnerEvent.INIT)
 
-        for omm_reporter_factory in self.openmm_reporter_factories:
-            self._openmm_reporters.append(
-                omm_reporter_factory(
-                    logger,
-                    start_time=self._init_time,
-                )
-            )
+        self._init_time = time.time()
+        logger.info(f"Initialized runner at time: {self._init_time} s")
+
+        self.state_machine.send(RunnerEvent.INIT)
 
     def pre_cycle(
         self,
     ) -> None:
-        self._last_cycle_segments_split_times = []
 
-    def post_cycle(self) -> None:
-        pass
+        self.state_machine.validate_event(RunnerEvent.PRE_CYCLE)
+
+        self._pre_cycle_time = time.time()
+        logger.info(f"Runner pre_cycle time: {self._pre_cycle_time} s")
+
+        self.state_machine.send(RunnerEvent.PRE_CYCLE)
 
     
     def run_segment(
@@ -116,7 +153,10 @@ class OpenMMRunner(Runner):
         segment_length: int,
         platform_name: OpenMMPlatformName | None = None,
         platform_kwargs: PlatformKwargs | None = None,
-    ) -> OpenMMState:
+    ) -> tuple[
+        OpenMMState,
+        OpenMMRunnerSegmentData,
+    ]:
         """Run dynamics for the walker.
 
         Parameters
@@ -135,15 +175,24 @@ class OpenMMRunner(Runner):
 
         """
 
+        if self.status != RunnerStatus.PRE_CYCLE:
+            raise RunnerStateError(
+                f"Cannot run a segment in state ({self.status.name}:{self.status.value})"
+            )
+
         logger.info("Running OpenMM MD segment")
 
         run_segment_start = time.time()
 
         # set the kwargs that will be passed to getState
-        
         gen_sim_start = time.time()
 
-        # make a copy of the integrator for this particular segment
+        # TODO: refactor this as an integrator spec as the object
+        # attribute to avoid needing to do this and make this
+        # interface explicit
+
+        # make a copy of the integrator for this particular segment,
+        # otherwise the object attribute will get bound to the context
         new_integrator = copy.copy(self.integrator)
         # force setting of random seed to 0, which is a special
         # value that forces the integrator to choose another
@@ -192,8 +241,21 @@ class OpenMMRunner(Runner):
                 self.topology, self.system, new_integrator
             )
 
+        # Generate new reporters for each segment so they don't step
+        # on each other's state
+        logger.info("Generating OpenMM reporters for this segment.")
+        openmm_reporters = []
+        for omm_reporter_factory in self.openmm_reporter_factories:
+            logger.info(f"Generating and configuring reporter for factory: {omm_reporter_factory}")
+            openmm_reporters.append(
+                omm_reporter_factory(
+                    logger,
+                    start_time=run_segment_start,
+                )
+            )
+
         logger.info("Registering OpenMM Simulation reporters")
-        simulation.reporters.extend(self._openmm_reporters)
+        simulation.reporters = openmm_reporters
 
         # generate a sim state
         logger.info("Generating openmm.State from input OpenMMState")
@@ -220,7 +282,7 @@ class OpenMMRunner(Runner):
         steps_end = time.time()
         steps_time = steps_end - steps_start
 
-        logger.info("Time to run {} sim steps: {}".format(segment_length, steps_time))
+        logger.info(f"Time to run {segment_length} sim steps: {steps_time} s")
 
         get_state_start = time.time()
 
@@ -244,20 +306,47 @@ class OpenMMRunner(Runner):
         run_segment_time = run_segment_end - run_segment_start
         logger.info("Total internal run_segment time: {}".format(run_segment_time))
 
-        segment_split_times = OpenMMRunnerSegmentSplitTimes({
-            "gen_sim_time": gen_sim_time,
-            "steps_time": steps_time,
-            "get_state_time": get_state_time,
-            "run_segment_time": run_segment_time,
-        })
+        segment_data = OpenMMRunnerSegmentData(
+            segment_split_time=run_segment_time,
+            openmm_segment_split_time=OpenMMRunnerSegmentSplitTime(
+                gen_sim_time=gen_sim_time,
+                steps_time=steps_time,
+                get_state_time=get_state_time,
+            ),
+        )
 
-        self._last_cycle_segments_split_times.append(segment_split_times)
+        return new_state, segment_data
 
-        return new_state
+    def post_cycle(self, segments_data: list[OpenMMRunnerSegmentData]) -> None:
 
-    def last_cycle_segments_split_times(self) -> list[OpenMMRunnerSegmentSplitTimes]:
+        self.state_machine.send(RunnerEvent.POST_SEGMENT)
+        logger.info("Nothing to do")
+        self.state_machine.send(RunnerEvent.POST_CYCLE)
 
-        return copy.deepcopy(self._last_cycle_segments_split_times)
+@attrs.define
+class OpenMMRunnerFactory:
+
+    system: openmm.System
+    topology: openmm.app.Topology
+    integrator: openmm.Integrator
+    platform_name: str | None = None
+    global_platform_kwargs: PlatformKwargs | None = None
+    enforce_box: bool = False
+    get_state_keys: frozenset[str] = attrs.field(default=GET_STATE_DEFAULT_KEYS)
+    openmm_reporter_factories: list[LoggingReporterFactory] | None = attrs.field(default=DEFAULT_OPENMM_REPORTER_FACTORIES)
+
+    def __call__(self) -> OpenMMRunner:
+
+        return OpenMMRunner(
+            system=copy.deepcopy(self.system),
+            topology=copy.deepcopy(self.topology),
+            integrator=copy.deepcopy(self.integrator),
+            platform_name=self.platform_name,
+            global_platform_kwargs=self.global_platform_kwargs,
+            enforce_box=self.enforce_box,
+            get_state_keys=self.get_state_keys,
+            openmm_reporter_factories=self.openmm_reporter_factories,
+        )
 
 
 # class OpenMMCPUWorker(Worker):

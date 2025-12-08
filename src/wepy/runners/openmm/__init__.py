@@ -7,12 +7,14 @@ from .state import (
     get_context_state,
     state_to_xml,
 )
-from .runner import OpenMMRunner, PlatformKwargs, OpenMMPlatformName, GPU_PLATFORMS
+from .runner import (
+    OpenMMRunner, PlatformKwargs, OpenMMPlatformName, GPU_PLATFORMS, OpenMMRunnerFactory)
 from .logger import HeartBeatLoggingReporterFactory
 
 __all__ = [
     "HeartBeatLoggingReporterFactory",
     "GPU_PLATFORMS",
+    "OpenMMRunnerFactory",
     "OpenMMPlatformName",
     "OpenMMRunner",
     "OpenMMState",

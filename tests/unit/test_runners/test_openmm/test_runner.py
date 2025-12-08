@@ -1,12 +1,20 @@
 import logging
+import copy
+import attrs
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 from wepy.runners.openmm.state import (
     dummy_context,
     OpenMMState,
 )
 
+from wepy.runners.runner import (
+    RunnerStatus,
+    RunnerStateTransitionError,
+    RunnerStateError,
+)
 from wepy.runners.openmm.runner import (
     OpenMMRunner,
+    OpenMMRunnerSegmentData,
 )
 
 from wepy.runners.openmm.logger import StepIntervalLoggingReporter
@@ -30,7 +38,7 @@ def runner_components() -> tuple[openmm.System, openmm.app.Topology, openmm.Lang
 
     lj_sys = LennardJonesPair()
 
-    integrator  = openmm.LangevinIntegrator(300.0, 0.002, 0.1)
+    integrator  = openmm.LangevinIntegrator(300.0, 0.1, 0.002)
 
     return lj_sys.system, lj_sys.topology, integrator
 
@@ -43,47 +51,112 @@ def omm_context() -> openmm.Context:
 
     return ctx
 
+@attrs.define
+class Spy:
+    touched: bool = False
 
+    def touch(self) -> None:
+        self.touched = True
 
-class TestOpenMMRunner:
+class TouchGlobalStepIntervalLoggingReporter(StepIntervalLoggingReporter):
+
+    def __init__(
+        self,
+        logger: logging.Logger,
+        start_time: int,
+        spy: Spy,
+    ) -> None:
+
+        self.spy = spy
+
+        super().__init__(
+            logger=logger,
+            callback=self.touch,
+            state_includes=[],
+            # NOTE: hardcoded
+            step_interval=1,
+            start_time=start_time,
+        )
+
+    def touch(self, *args) -> None:
+        self.spy.touch()
+
+class Test_OpenMMRunner:
 
     def test___init__(self, runner_components):
 
+        system, topology, integrator = runner_components
+
         runner = OpenMMRunner(
-            *runner_components
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
+            openmm_reporter_factories=None,
         )
+        assert runner.openmm_reporter_factories == []
+        assert runner._openmm_reporters is None
+        assert runner._init_time is None
+
+        runner = OpenMMRunner(
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
+        )
+        assert runner.openmm_reporter_factories == []
+
+        assert runner.status == RunnerStatus.PRE_INITIALIZATION
+
+        SPY = Spy()
+        def _mock_factory(logger: logging.Logger, start_time: int) -> TouchGlobalStepIntervalLoggingReporter:
+            return TouchGlobalStepIntervalLoggingReporter(logger=logger, start_time=start_time, spy=SPY)
+
+        runner = OpenMMRunner(
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
+            openmm_reporter_factories=[_mock_factory],
+        )
+        assert len(runner.openmm_reporter_factories) == 1
 
     def test_init(self, runner_components):
 
+        system, topology, integrator = runner_components
         runner = OpenMMRunner(
-            *runner_components
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
         )
 
-        assert runner._openmm_reporters == []
+        assert runner._openmm_reporters is None
 
         runner.init()
+        assert runner.status == RunnerStatus.INITIALIZED
 
         # check the default openmm reporters were constructed
-        assert len(runner._openmm_reporters) > 0
+        assert runner._init_time is not None
 
+        # test status, can't init twice
+        with pytest.raises(RunnerStateTransitionError):
+            runner.init()
 
     def test_pre_cycle(self, runner_components):
+        system, topology, integrator = runner_components
 
         runner = OpenMMRunner(
-            *runner_components,
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
         )
 
-        assert runner._last_cycle_segments_split_times == []
-        runner.pre_cycle()
-        assert runner._last_cycle_segments_split_times == []
+        with pytest.raises(RunnerStateTransitionError):
+            runner.pre_cycle()
 
-        runner = OpenMMRunner(
-            *runner_components,
-            last_cycle_segments_split_times=[{"something" : 1}]
-        )
+        runner.init()
+        assert runner.status == RunnerStatus.INITIALIZED
 
         runner.pre_cycle()
-        assert runner._last_cycle_segments_split_times == []
+        assert runner.status == RunnerStatus.PRE_CYCLE
+        assert runner._pre_cycle_time is not None
 
     def test_run_segment(self, runner_components):
 
@@ -94,77 +167,119 @@ class TestOpenMMRunner:
         state = OpenMMState.from_dwim(positions=lj_sys.positions)
 
         runner = OpenMMRunner(
-            system=system,
-            topology=topology,
-            integrator=integrator,
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
             platform_name="Reference",
         )
 
-        new_state = runner.run_segment(state, 2)
+        with pytest.raises(RunnerStateError):
+            runner.run_segment(state, 2)
+
+        runner.init()
+        with pytest.raises(RunnerStateError):
+            runner.run_segment(state, 2)
+
+        runner.pre_cycle()
+
+        new_state, segment_data = runner.run_segment(state, 2)
+
         assert "positions" in new_state
         assert "velocities" in new_state
 
         runner = OpenMMRunner(
-            system=system,
-            topology=topology,
-            integrator=integrator,
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
             get_state_keys={"positions",}
         )
+        runner.init()
+        runner.pre_cycle()
 
-        new_state = runner.run_segment(
+        new_state, segment_data = runner.run_segment(
             new_state,
             2,
         )
         assert new_state["positions"] is not None
         assert "velocities" not in new_state
 
+        assert isinstance(segment_data, OpenMMRunnerSegmentData)
+
         # test that openmm reporters are being called
-        class Spy:
-            def __init__(self) -> None:
-                self.touched = False
-
-            def touch(self) -> None:
-                self.touched = True
-
         SPY = Spy()
-
-        class TouchGlobalStepIntervalLoggingReporter(StepIntervalLoggingReporter):
-
-            def __init__(
-                self,
-                logger: logging.Logger,
-            ) -> None:
-
-                self.spy = SPY
-
-                super().__init__(
-                    logger=logger,
-                    callback=self.touch,
-                    state_includes=[],
-                    # NOTE: hardcoded
-                    step_interval=1,
-                )
-
-            def touch(self, *args) -> None:
-                self.spy.touch()
-
-
-        def _mock_factory(logger: logging.Logger) -> TouchGlobalStepIntervalLoggingReporter:
-            return TouchGlobalStepIntervalLoggingReporter(logger=logger)
+        def _mock_factory(logger: logging.Logger, start_time: int) -> TouchGlobalStepIntervalLoggingReporter:
+            return TouchGlobalStepIntervalLoggingReporter(logger=logger, start_time=start_time, spy=SPY)
 
         runner = OpenMMRunner(
-            system=system,
-            topology=topology,
-            integrator=integrator,
-            get_state_keys={},
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
             openmm_reporter_factories=[_mock_factory],
         )
         runner.init()
+        runner.pre_cycle()
 
         assert not SPY.touched
-        new_state = runner.run_segment(
+        new_state, segment_data = runner.run_segment(
             state,
-            2,
+            10,
         )
 
         assert SPY.touched
+
+    def test_post_cycle(self, runner_components):
+
+        system, topology, integrator = runner_components
+
+        lj_sys = LennardJonesPair()
+
+        state = OpenMMState.from_dwim(positions=lj_sys.positions)
+
+        runner = OpenMMRunner(
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
+            platform_name="Reference",
+        )
+
+        with pytest.raises(RunnerStateTransitionError):
+            runner.post_cycle(None)
+
+        runner.init()
+        with pytest.raises(RunnerStateTransitionError):
+            runner.post_cycle(None)
+
+        runner.pre_cycle()
+
+        # NOTE: that you don't need to call run_segment, because in a
+        # standard use case this would be done in a subprocess. Any
+        # state changes must be reified in the RunSegmentData
+
+        runner.post_cycle(None)
+
+        assert runner.status == RunnerStatus.POST_CYCLE
+
+        # with a run_segment
+        runner = OpenMMRunner(
+            system=copy.deepcopy(system),
+            topology=copy.deepcopy(topology),
+            integrator=copy.deepcopy(integrator),
+            platform_name="Reference",
+        )
+
+        with pytest.raises(RunnerStateTransitionError):
+            runner.post_cycle(None)
+
+        runner.init()
+        with pytest.raises(RunnerStateTransitionError):
+            runner.post_cycle(None)
+
+        runner.pre_cycle()
+        new_state, segment_data = runner.run_segment(
+            state,
+            10,
+        )
+
+        runner.post_cycle([segment_data])
+
+        assert runner.status == RunnerStatus.POST_CYCLE
