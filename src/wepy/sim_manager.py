@@ -45,11 +45,8 @@ to be determined adaptively (e.g. according to some time limit).
 # Standard Library
 import logging
 from typing import Final, Any, TypedDict, Generic, TypeVar, Callable
-
-logger = logging.getLogger(__name__)
-# Standard Library
+import copy
 import time
-from copy import deepcopy
 
 # First Party Library
 from wepy.boundary_conditions.boundary import BoundaryConditions
@@ -60,6 +57,8 @@ from wepy.walker import Walker
 from wepy.work_mapper.base import WorkMapper
 from wepy.work_mapper.serial import SerialMapper
 from wepy.monitor import Monitor
+
+logger = logging.getLogger(__name__)
 
 class CycleReportDict(TypedDict):
     cycle_idx: int
@@ -194,21 +193,21 @@ class Manager(Generic[State_]):
 
         """
 
-        self.init_walkers = init_walkers
+        self.init_walkers = copy.deepcopy(init_walkers)
         self.n_init_walkers = len(init_walkers)
 
         # the runner is the object that runs dynamics
-        self.runner = runner
+        self.runner = copy.deepcopy(runner)
         # the resampler
-        self.resampler = resampler
+        self.resampler = copy.deepcopy(resampler)
         # object for boundary conditions
-        self.boundary_conditions = boundary_conditions
+        self.boundary_conditions = copy.deepcopy(boundary_conditions)
 
         # the method for writing output
         if reporters is None:
             self.reporters = []
         else:
-            self.reporters = reporters
+            self.reporters = copy.deepcopy(reporters)
 
         if work_mapper_factory is None:
             self.work_mapper_factory = SerialMapper
@@ -699,7 +698,7 @@ class Manager(Generic[State_]):
         self.cleanup()
         logger.info("Simulation cleanup complete")
 
-        return walkers, deepcopy(tuple(filters))
+        return walkers, copy.deepcopy(tuple(filters))
 
     def run_simulation_by_time(
         self,
