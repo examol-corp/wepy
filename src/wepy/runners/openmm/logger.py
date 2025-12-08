@@ -1,3 +1,4 @@
+import time
 import logging
 from typing import Callable
 from collections.abc import Collection
@@ -50,7 +51,14 @@ class LoggingReporter(OpenMMReporter):
             state,
         )
 
-LoggingReporterFactory = Callable[[logging.Logger], LoggingReporter]
+LoggingReporterFactory = Callable[
+    [
+        logging.Logger,
+        # start_time
+        int,
+    ],
+    LoggingReporter,
+]
 
 class StepIntervalLoggingReporter(LoggingReporter):
     """Reporter that reports at intervals in steps."""
@@ -66,6 +74,7 @@ class StepIntervalLoggingReporter(LoggingReporter):
         callback: LoggingReporterCallback,
         state_includes: Collection[OpenMMGetStateKeys],
         step_interval: int,
+        start_time: int,
     ) -> None:
 
         super().__init__(
@@ -74,6 +83,7 @@ class StepIntervalLoggingReporter(LoggingReporter):
             state_includes=state_includes,
         )
         self.step_interval = step_interval
+        self.start_time = start_time
 
     def describeNextReport(
         self, simulation: openmm.app.Simulation
@@ -108,21 +118,30 @@ class SamplingTimeIntervalLoggingReporter(LoggingReporter):
         state_includes: Collection[OpenMMGetStateKeys],
         step_size: openmm.unit.Quantity,
         sampling_time_interval: openmm.unit.Quantity,
+        start_time: int,
     ) -> None:
 
         super().__init__(logger, callback, state_includes)
         self.sampling_time_interval = sampling_time_interval
         self.step_size = step_size
+        self.start_time = start_time
 
     def describeNextReport(
-        self, simulation: openmm.app.Simulation
+            self,
+            simulation: openmm.app.Simulation,
     ) -> OpenMMReporterNextReport:
+
+        # Special case for first step
+        if simulation.context.getStepCount() == 0:
+            return OpenMMReporterNextReport(
+                steps=0,
+                include=list(self.state_includes),
+                periodic=False,
+            )
 
         _unit = openmm.unit.attosecond
 
         curr_sampling_time: openmm.unit.Quantity = simulation.context.getTime()
-
-        # avg_step_time: openmm.unit.Quantity = curr_sampling_time / simulation.currentStep
 
         sampling_time_left = (
             self.sampling_time_interval.value_in_unit(_unit) - (
@@ -151,7 +170,8 @@ class HeartBeatLoggingReporter(StepIntervalLoggingReporter):
     def __init__(
         self,
         logger: logging.Logger,
-        step_interval: int
+        step_interval: int,
+        start_time: int,
     ) -> None:
 
         super().__init__(
@@ -159,21 +179,28 @@ class HeartBeatLoggingReporter(StepIntervalLoggingReporter):
             callback=self.logging_callback,
             state_includes=[],
             step_interval=step_interval,
+            start_time=start_time,
         )
     
-    @staticmethod
     def logging_callback(
+            self,
             logger: logging.Logger,
             simulation: openmm.app.Simulation,
             state: openmm.State,
     ) -> None:
 
-        # TODO: make this adaptive to reduce zeros etc.
+        current_time = time.time()
+        elapsed_time = current_time - self.start_time
+
+        # TODO: make this adaptive to reduce zeros etc. Currently just
+        # padded to the standard 1-2 fs step time shown in picoseconds
         sim_time = simulation.context.getTime()
         sim_time_mag = sim_time.value_in_unit(openmm.unit.picosecond)
         sim_steps = simulation.context.getStepCount()
 
-        logger.info(f"OpenMM simulation progress: sim_time={sim_time_mag:.4f} ps, sim_steps={sim_steps}")
+        logger.info(
+            f"OpenMM simulation progress: clock_time={current_time:.4f} s, elapsed_time={elapsed_time:.4f} s, sim_time={sim_time_mag:.4f} ps, sim_steps={sim_steps}",
+        )
 
 
 
@@ -183,11 +210,16 @@ class HeartBeatLoggingReporterFactory:
 
     step_interval: int
 
-    def __call__(self, logger: logging.Logger) -> HeartBeatLoggingReporter:
+    def __call__(
+            self,
+            logger: logging.Logger,
+            start_time: int,
+    ) -> HeartBeatLoggingReporter:
 
         return HeartBeatLoggingReporter(
             logger=logger,
             step_interval=self.step_interval,
+            start_time=start_time,
         )
 # TODO:
 # class EnergyLoggingReporter()

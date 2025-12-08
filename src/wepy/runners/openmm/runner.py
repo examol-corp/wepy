@@ -83,13 +83,23 @@ class OpenMMRunner(Runner):
     get_state_keys: frozenset[str] = attrs.field(default=GET_STATE_DEFAULT_KEYS)
     openmm_reporter_factories: list[LoggingReporterFactory] = attrs.field(default=DEFAULT_OPENMM_REPORTER_FACTORIES)
 
+    # TODO: figure out a better way to do this, probably by separating
+    # runner into a factory and concrete, stateful, implementation
     _openmm_reporters: list[OpenMMReporter] = attrs.field(default=[])
     _last_cycle_segments_split_times: list[OpenMMRunnerSegmentSplitTimes] = attrs.field(default=[])
+    _init_time: int = attrs.field(init=False)
 
     def init(self) -> None:
 
+        self._init_time = time.time()
+
         for omm_reporter_factory in self.openmm_reporter_factories:
-            self._openmm_reporters.append(omm_reporter_factory(logger))
+            self._openmm_reporters.append(
+                omm_reporter_factory(
+                    logger,
+                    start_time=self._init_time,
+                )
+            )
 
     def pre_cycle(
         self,
