@@ -37,7 +37,7 @@ from wepy.util.util import box_vectors_to_lengths_angles
 from wepy.util.openmm import triclinic_volume_vec3_quantity, format_box_vectors_line
 from wepy.walker import WalkerState
 from .state import OpenMMState, OpenMMStateWrapper, get_context_state
-from .logger import HeartBeatLoggingReporterFactory, LoggingReporterFactory
+from .logger import HeartBeatLoggingReporterFactory, LoggingReporterFactory, EnergyLoggingReporterFactory, UnitCellLoggingReporterFactory
 
 PlatformKwargs = dict[str, str]
 
@@ -59,9 +59,14 @@ GET_STATE_DEFAULT_KEYS = frozenset({
             "box_volume",
 })
 
+# default heart beat every 500 steps, should be around 0.5 - 1 picoseconds
+_DEFAULT_HEARTBEAT_INTERVAL = 500
+_DEFAULT_STATE_TIME_INTERVAL = (10 * openmm.unit.picosecond)
+
 DEFAULT_OPENMM_REPORTER_FACTORIES = [
-    # default heart beat every 500 steps
-    HeartBeatLoggingReporterFactory(step_interval=500),
+    HeartBeatLoggingReporterFactory(step_interval=_DEFAULT_HEARTBEAT_INTERVAL),
+    UnitCellLoggingReporterFactory(sampling_time_interval=_DEFAULT_STATE_TIME_INTERVAL),
+    EnergyLoggingReporterFactory(sampling_time_interval=_DEFAULT_STATE_TIME_INTERVAL),
 ]
 
 @attrs.define
@@ -167,7 +172,8 @@ class OpenMMRunner(Runner):
         self.enforce_box = enforce_box
         self.get_state_keys = get_state_keys
 
-        logger.warning("No OpenMM reporter factories configured.")
+        if openmm_reporter_factories is None or len(openmm_reporter_factories) == 0:
+            logger.warning("No OpenMM reporter factories configured.")
         self.openmm_reporter_factories = openmm_reporter_factories if openmm_reporter_factories is not None else []
 
         self._openmm_reporters = None
@@ -182,7 +188,7 @@ class OpenMMRunner(Runner):
         logger.info("Details of OpenMMRunner initial configuration")
 
         logger.info(
-            f"OpenMM logger reporters: {','.join(str(v) for v in self.openmm_reporter_factories)}"
+            f"OpenMM logging reporters: {', '.join(str(v) for v in self.openmm_reporter_factories)}"
         )
 
         logger.info(f"Enforce PBCs in getState: {self.enforce_box}")

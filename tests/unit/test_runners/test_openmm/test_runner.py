@@ -17,6 +17,8 @@ from wepy.runners.openmm.runner import (
     OpenMMRunner,
     OpenMMRunnerSegmentData,
     OpenMMRunnerFactory,
+    _DEFAULT_HEARTBEAT_INTERVAL,
+    _DEFAULT_STATE_TIME_INTERVAL,
 )
 
 from wepy.runners.openmm.logger import StepIntervalLoggingReporter
@@ -35,12 +37,14 @@ UNIT_CUBE = np.array(
             ]
         )
 
+STEP_SIZE = 2 * openmm.unit.femtoseconds
+
 @pytest.fixture
 def runner_components() -> tuple[openmm.System, openmm.app.Topology, openmm.LangevinIntegrator]:
 
     lj_sys = LennardJonesPair()
 
-    integrator  = openmm.LangevinIntegrator(300.0, 0.1, 0.002)
+    integrator  = openmm.LangevinIntegrator(300.0, 0.1, STEP_SIZE)
 
     return lj_sys.system, lj_sys.topology, integrator
 
@@ -296,3 +300,31 @@ def test_OpenMMRunnerFactory(runner_components):
     )
 
     assert isinstance(omm_factory(), OpenMMRunner)
+
+
+def test_defaults(runner_components):
+    """A test that exercises the default settings of the logging reporters."""
+
+    system, topology, integrator = runner_components
+
+    lj_sys = LennardJonesPair()
+
+    state = OpenMMState.from_dwim(positions=lj_sys.positions)
+
+    runner = OpenMMRunnerFactory(
+        system=system,
+        topology=topology,
+        integrator=integrator,
+    )()
+
+    time_interval_steps = _DEFAULT_STATE_TIME_INTERVAL / STEP_SIZE
+
+    _steps = (
+        time_interval_steps
+        if time_interval_steps > _DEFAULT_HEARTBEAT_INTERVAL
+        else _DEFAULT_HEARTBEAT_INTERVAL
+    )
+
+    runner.init()
+    runner.pre_cycle()
+    new_state, segment_data = runner.run_segment(state, 2 * _steps)
