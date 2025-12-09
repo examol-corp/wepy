@@ -5,8 +5,11 @@ import openmm.app
 import openmm.unit
 from scipy.spatial.distance import euclidean
 
+import attrs
+
 # First Party Library
 from wepy.resampling.distances.distance import Distance
+from wepy.runners.openmm import OpenMMState
 
 class LennardJonesPair:
 
@@ -97,15 +100,18 @@ class LennardJonesPair:
         topology.addAtom('Ar', element, residue)
         self.topology = topology
 
+@attrs.define
+class PairDistanceImage:
+    positions: np.typing.ArrayLike
 
 class PairDistance(Distance):
     def __init__(self, metric=euclidean):
         self.metric = metric
 
-    def image(self, state):
-        return state["positions"]
+    def image(self, state: OpenMMState) -> PairDistanceImage:
+        return state.positions
 
-    def image_distance(self, image_a, image_b):
+    def image_distance(self, image_a: PairDistanceImage, image_b: PairDistanceImage) -> float:
         dist_a = self.metric(image_a[0], image_a[1])
         dist_b = self.metric(image_b[0], image_b[1])
 
