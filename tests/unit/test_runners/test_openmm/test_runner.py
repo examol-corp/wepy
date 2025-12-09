@@ -11,10 +11,12 @@ from wepy.runners.runner import (
     RunnerStatus,
     RunnerStateTransitionError,
     RunnerStateError,
+    
 )
 from wepy.runners.openmm.runner import (
     OpenMMRunner,
     OpenMMRunnerSegmentData,
+    OpenMMRunnerFactory,
 )
 
 from wepy.runners.openmm.logger import StepIntervalLoggingReporter
@@ -283,3 +285,17 @@ class Test_OpenMMRunner:
         runner.post_cycle([segment_data])
 
         assert runner.status == RunnerStatus.POST_CYCLE
+
+def test_OpenMMRunnerFactory(runner_components):
+
+    system, topology, integrator = runner_components
+
+    # NOTE: no need to copy at this level because the factory handles
+    # that for you
+    omm_factory = OpenMMRunnerFactory(
+        system=system,
+        topology=topology,
+        integrator=integrator,
+    )
+
+    assert isinstance(omm_factory, OpenMMRunner)
