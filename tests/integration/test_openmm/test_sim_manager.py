@@ -4,7 +4,7 @@ import psutil
 import openmm
 import openmm.unit
 from wepy.walker import Walker
-from wepy.runners.openmm import OpenMMRunner, OpenMMState, HeartBeatLoggingReporterFactory
+from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState, HeartBeatLoggingReporterFactory
 from wepy.work_mapper.serial import SerialMapper
 from wepy.work_mapper.openmm import (
     OpenMMSerialWorkMapperFactory,
@@ -27,7 +27,7 @@ def test_serial_mapper():
         STEP_SIZE,
     )
 
-    runner = OpenMMRunner(
+    runner_factory = OpenMMRunnerFactory(
         system=lj_sys.system,
         topology=lj_sys.topology,
         integrator=integrator,
@@ -60,7 +60,7 @@ def test_serial_mapper():
 
     sim_manager = Manager(
         init_walkers=init_walkers,
-        runner=runner,
+        runner_factory=runner_factory,
         resampler=NoResampler(),
         work_mapper_factory=OpenMMSerialWorkMapperFactory(
             platform="Reference",
@@ -74,7 +74,7 @@ def test_serial_mapper():
 
     sim_manager = Manager(
         init_walkers=init_walkers,
-        runner=runner,
+        runner_factory=runner_factory,
         resampler=NoResampler(),
         work_mapper_factory=OpenMMSerialWorkMapperFactory(
             platform="CPU",
@@ -89,7 +89,7 @@ def test_serial_mapper():
 
     sim_manager = Manager(
         init_walkers=init_walkers,
-        runner=runner,
+        runner_factory=runner_factory,
         resampler=NoResampler(),
         work_mapper_factory=OpenMMSerialWorkMapperFactory(
             platform="CPU",
@@ -111,7 +111,7 @@ def test_proc_pool_mapper():
         STEP_SIZE,
     )
 
-    runner = OpenMMRunner(
+    runner_factory = OpenMMRunnerFactory(
         system=lj_sys.system,
         topology=lj_sys.topology,
         integrator=integrator,
@@ -146,7 +146,7 @@ def test_proc_pool_mapper():
     # number of processes that should be used.
     sim_manager = Manager(
         init_walkers=init_walkers,
-        runner=runner,
+        runner_factory=runner_factory,
         resampler=NoResampler(),
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="Reference",
@@ -168,7 +168,7 @@ def test_proc_pool_mapper():
     cores_per_worker = (num_cores // num_walkers)
     sim_manager = Manager(
         init_walkers=init_walkers,
-        runner=runner,
+        runner_factory=runner_factory,
         resampler=NoResampler(),
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
@@ -188,7 +188,7 @@ def test_proc_pool_mapper():
     # enumerate the device IDs then.
     sim_manager = Manager(
         init_walkers=init_walkers,
-        runner=runner,
+        runner_factory=runner_factory,
         resampler=NoResampler(),
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
@@ -212,7 +212,7 @@ def test_proc_pool_mapper():
 #     integrator = openmm.LangevinIntegrator(300.0, 0.002, 0.1)
 
 
-#     runner = OpenMMRunner(
+#     runner_factory = OpenMMRunnerFactory(
 #         system=lj_sys.system,
 #         topology=lj_sys.topology,
 #         integrator=integrator,
@@ -240,7 +240,7 @@ def test_proc_pool_mapper():
 
 #     sim_manager = Manager(
 #         init_walkers=init_walkers,
-#         runner=runner,
+#         runner_factory=runner_factory,
 #         resampler=NoResampler(),
 #         work_mapper_factory=OpenMMRayWorkMapperFactory(
 #             platform="Reference",

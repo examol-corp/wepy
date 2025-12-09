@@ -44,15 +44,19 @@ to be determined adaptively (e.g. according to some time limit).
 
 # Standard Library
 import logging
-from typing import Final, Any, TypedDict, Generic, TypeVar, Callable
+from typing import Final, Any, TypedDict, Generic, TypeVar, Callable, Literal
 import copy
 import time
+import enum
+
+import attrs
+from immutables import Map as frozenmap
 
 # First Party Library
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.reporter.reporter import Reporter
 from wepy.resampling.resamplers.resampler import Resampler
-from wepy.runners.runner import Runner
+from wepy.runners.runner import Runner, RunnerFactory, RunSegmentData
 from wepy.walker import Walker
 from wepy.work_mapper.base import WorkMapper
 from wepy.work_mapper.serial import SerialMapper
@@ -80,8 +84,231 @@ class CycleReportDict(TypedDict):
     cycle_runner_time: float
     cycle_bc_time: float
     cycle_resampling_time: float
+
+class ManagerStatus(enum.IntEnum):
+    CONSTRUCTED = enum.auto()
+    PRE_SIMULATION = enum.auto()
+    INITIALIZING = enum.auto()
+    INITIALIZED = enum.auto()
+    SIM_STARTED = enum.auto()
+    RUNNING_CYCLE = enum.auto()
+    RUNNING_PRE_SEGMENT = enum.auto()
+    PRE_SEGMENT_FINISHED = enum.auto()
+    RUNNING_SEGMENT = enum.auto()
+    SEGMENT_FINISHED = enum.auto()
+    RUNNING_POST_SEGMENT = enum.auto()
+    POST_SEGMENT_FINISHED = enum.auto()
+    BC_WARPING = enum.auto()
+    POST_BC_WARPING = enum.auto()
+    RESAMPLING = enum.auto()
+    POST_RESAMPLING = enum.auto()
+    REPORT_GENERATION = enum.auto()
+    REPORTING = enum.auto()
+    POST_REPORTING = enum.auto()
+    CYCLE_MONITORING = enum.auto()
+    POST_CYCLE_MONITORING = enum.auto()
+    POST_CYCLE = enum.auto()
+    POST_SIMULATION = enum.auto()
+    CLEANING = enum.auto()
+    CLEANUP_FINISHED = enum.auto()
+    FINISHED = enum.auto()
+
+class ManagerEvent(enum.IntEnum):
+    START_PRE_SIM = enum.auto()
+    START_INITIALIZATION = enum.auto()
+    FINISH_INITIALIZATION = enum.auto()
+    START_SIM = enum.auto()
+    START_CYCLE = enum.auto()
+    START_PRE_SEGMENT = enum.auto()
+    FINISH_PRE_SEGMENT = enum.auto()
+    START_SEGMENT = enum.auto()
+    FINISH_SEGMENT = enum.auto()
+    START_POST_SEGMENT = enum.auto()
+    FINISH_POST_SEGMENT = enum.auto()
+    START_BC_WARPING = enum.auto()
+    FINISH_BC_WARPING = enum.auto()
+    START_RESAMPLING = enum.auto()
+    FINISH_RESAMPLING = enum.auto()
+    GENERATE_REPORT = enum.auto()
+    START_REPORTING = enum.auto()
+    FINISH_REPORTING = enum.auto()
+    START_CYCLE_MONITORING = enum.auto()
+    FINISH_CYCLE_MONITORING = enum.auto()
+    FINISH_CYCLE = enum.auto()
+    FINISH_SIMULATION = enum.auto()
+    START_CLEANUP = enum.auto()
+    FINISH_CLEANUP = enum.auto()
+    SHUTDOWN = enum.auto()
+
+
+# State machine table that defines what are the valid states to
+# transition to another state. None for the initial states
+MANAGER_STATE_TRANSITION_TABLE: frozenmap[
+    ManagerStatus,
+    frozenmap[ManagerEvent, ManagerStatus],
+] = frozenmap({
+    ManagerStatus.CONSTRUCTED: frozenmap({
+        ManagerEvent.START_PRE_SIM : ManagerStatus.PRE_SIMULATION,
+    }),
+    ManagerStatus.PRE_SIMULATION: frozenmap({
+        ManagerEvent.START_INITIALIZATION : ManagerStatus.INITIALIZING,
+    }),
+    ManagerStatus.INITIALIZING: frozenmap({
+        ManagerEvent.FINISH_INITIALIZATION : ManagerStatus.INITIALIZED,
+    }),
+    ManagerStatus.INITIALIZED: frozenmap({
+        ManagerEvent.START_SIM : ManagerStatus.SIM_STARTED,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.SIM_STARTED: frozenmap({
+        ManagerEvent.START_CYCLE : ManagerStatus.RUNNING_CYCLE,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.RUNNING_CYCLE: frozenmap({
+        ManagerEvent.START_PRE_SEGMENT : ManagerStatus.RUNNING_PRE_SEGMENT,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.RUNNING_PRE_SEGMENT: frozenmap({
+        ManagerEvent.FINISH_PRE_SEGMENT : ManagerStatus.PRE_SEGMENT_FINISHED,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.PRE_SEGMENT_FINISHED: frozenmap({
+        ManagerEvent.START_SEGMENT : ManagerStatus.RUNNING_SEGMENT,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.RUNNING_SEGMENT: frozenmap({
+        ManagerEvent.FINISH_SEGMENT : ManagerStatus.SEGMENT_FINISHED,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.SEGMENT_FINISHED: frozenmap({
+        ManagerEvent.START_POST_SEGMENT : ManagerStatus.RUNNING_POST_SEGMENT,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+
+    ManagerStatus.RUNNING_POST_SEGMENT: frozenmap({
+        ManagerEvent.FINISH_POST_SEGMENT : ManagerStatus.POST_SEGMENT_FINISHED,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+
+    ManagerStatus.POST_SEGMENT_FINISHED: frozenmap({
+        ManagerEvent.START_BC_WARPING : ManagerStatus.BC_WARPING,
+        ManagerEvent.START_RESAMPLING : ManagerStatus.RESAMPLING,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.BC_WARPING: frozenmap({
+        ManagerEvent.FINISH_BC_WARPING : ManagerStatus.POST_BC_WARPING,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.POST_BC_WARPING: frozenmap({
+        ManagerEvent.START_RESAMPLING : ManagerStatus.RESAMPLING,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+
+    ManagerStatus.RESAMPLING: frozenmap({
+        ManagerEvent.FINISH_RESAMPLING : ManagerStatus.POST_RESAMPLING,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.POST_RESAMPLING: frozenmap({
+        ManagerEvent.GENERATE_REPORT : ManagerStatus.REPORT_GENERATION,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+
+
+    ManagerStatus.REPORT_GENERATION: frozenmap({
+        ManagerEvent.START_REPORTING : ManagerStatus.REPORTING,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    
+    ManagerStatus.REPORTING: frozenmap({
+        ManagerEvent.FINISH_REPORTING : ManagerStatus.POST_REPORTING,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+
+    ManagerStatus.POST_REPORTING: frozenmap({
+        ManagerEvent.START_CYCLE_MONITORING : ManagerStatus.CYCLE_MONITORING,
+        ManagerEvent.FINISH_CYCLE : ManagerStatus.POST_CYCLE,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.CYCLE_MONITORING: frozenmap({
+        ManagerEvent.FINISH_CYCLE_MONITORING : ManagerStatus.POST_CYCLE_MONITORING,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+
+    ManagerStatus.CYCLE_MONITORING: frozenmap({
+        ManagerEvent.FINISH_CYCLE_MONITORING : ManagerStatus.POST_CYCLE_MONITORING,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+
+    ManagerStatus.POST_CYCLE_MONITORING: frozenmap({
+        ManagerEvent.FINISH_CYCLE : ManagerStatus.POST_CYCLE,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+
+    ManagerStatus.POST_CYCLE: frozenmap({
+        ManagerEvent.START_CYCLE : ManagerStatus.RUNNING_CYCLE,
+        ManagerEvent.FINISH_SIMULATION : ManagerStatus.POST_SIMULATION,
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.POST_SIMULATION: frozenmap({
+        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
+    }),
+    ManagerStatus.CLEANING: frozenmap({
+        ManagerEvent.FINISH_CLEANUP : ManagerStatus.CLEANUP_FINISHED,
+    }),
+    ManagerStatus.CLEANUP_FINISHED: frozenmap({
+        ManagerEvent.SHUTDOWN : ManagerStatus.FINISHED,
+    }),
+    ManagerStatus.FINISHED: frozenmap({}),
+})
+
+class ManagerStateMachineError(Exception):
+    pass
+
+class ManagerStateTransitionError(ManagerStateMachineError):
+    """Indicates an error with the runner state machine transition."""
+    pass
+
+class ManagerStateError(ManagerStateMachineError):
+    """Indicates an error relating to the current state of the runner."""
+    pass
+
+
+@attrs.define
+class ManagerStateMachine:
+    state: ManagerStatus = attrs.field(
+        default=ManagerStatus.CONSTRUCTED,
+    )
+
+    def validate_event(self, event: ManagerEvent) -> Literal[True]:
+        state_transitions = MANAGER_STATE_TRANSITION_TABLE[self.state]
+        if event not in state_transitions:
+            raise ManagerStateTransitionError(
+                f"Manager is in state {self.state.name}:{self.state.value},"
+                f" event {event.name}:{event.value} is not a valid."
+                f" Choose from: {set(state_transitions.keys())}"
+            )
+        else:
+            return True
+
+    def send(self, event: ManagerEvent) -> ManagerStatus:
+
+        logger.info(f"Received event: {event.name}:{event.value}")
+        self.validate_event(event)
+        
+        state_transitions = MANAGER_STATE_TRANSITION_TABLE[self.state]
+        new_state = state_transitions[event]
+
+        logger.info(
+            "Transitioning runner state:"
+            f" {self.state.name}:{self.state.value} -> {new_state.name}:{new_state.value}"
+        )
+        self.state = new_state
+
+        return self.state
+    
     
 State_ = TypeVar("State_")
+RunSegmentData_ = TypeVar("RunSegmentData_", bound=RunSegmentData, covariant=True)
 class Manager(Generic[State_]):
     """The class that coordinates wepy simulations.
 
@@ -114,9 +341,10 @@ class Manager(Generic[State_]):
 
     """
 
+    state_machine: ManagerStateMachine
     init_walkers: list[Walker[State_]]
     n_init_walkers: int
-    runner: Runner
+    runner_factory: RunnerFactory
     resampler: Resampler
     boundary_conditions: BoundaryConditions | None
     work_mapper_factory: type[WorkMapper]
@@ -147,7 +375,7 @@ class Manager(Generic[State_]):
     def __init__(
         self,
         init_walkers: list[Walker[State_]],
-        runner: Runner,
+        runner_factory: RunnerFactory,
         resampler: Resampler,
         work_mapper_factory: Callable[[], WorkMapper] | None = None,
         boundary_conditions: BoundaryConditions | None = None,
@@ -193,11 +421,12 @@ class Manager(Generic[State_]):
 
         """
 
+
         self.init_walkers = copy.deepcopy(init_walkers)
         self.n_init_walkers = len(init_walkers)
 
         # the runner is the object that runs dynamics
-        self.runner = copy.deepcopy(runner)
+        self.runner_factory = runner_factory
         # the resampler
         self.resampler = copy.deepcopy(resampler)
         # object for boundary conditions
@@ -222,6 +451,11 @@ class Manager(Generic[State_]):
         # break it and no one cares about this anyhow
         self._last_report: CycleReportDict | None = None
 
+        self.state_machine = ManagerStateMachine()
+
+    @property
+    def status(self) -> ManagerStatus:
+        return self.state_machine.state
 
     def init(
         self,
@@ -263,9 +497,12 @@ class Manager(Generic[State_]):
              (Default value = None)
 
         """
+        self.state_machine.send(ManagerEvent.START_INITIALIZATION)
 
         logger.info("Running sim_manager.init hooks")
 
+        logger.info("Generating runner from factory")
+        self.runner = self.runner_factory()
         logger.info("Running runner.init hook")
         self.runner.init()
 
@@ -300,6 +537,7 @@ class Manager(Generic[State_]):
             )
 
         logger.info("Finished sim_manager initialization")
+        self.state_machine.send(ManagerEvent.FINISH_INITIALIZATION)
 
     def cleanup(self) -> None:
         """Perform cleanup actions for wepy configuration components.
@@ -324,7 +562,7 @@ class Manager(Generic[State_]):
 
         """
 
-        logger.info("Running cleanup")
+        self.state_machine.send(ManagerEvent.START_CLEANUP)
 
         if self.monitor is not None:
             logger.info("Cleaning up monitoring")
@@ -345,14 +583,17 @@ class Manager(Generic[State_]):
                 reporters=self.reporters,
             )
 
-        logger.info("Finished cleanup")
+        self.state_machine.send(ManagerEvent.FINISH_CLEANUP)
 
     def run_segment(
         self,
         states: list[State_],
         segment_length: int,
         cycle_idx: int,
-    ) -> list[State_]:
+    ) -> tuple[
+        list[State_],
+        list[RunSegmentData_],
+    ]:
         """Run a time segment for all walkers using the available workers.
 
         Maps the work for running each segment for each walker using
@@ -375,10 +616,11 @@ class Manager(Generic[State_]):
            The walkers after the segment of sampling simulation.
         """
 
+        self.state_machine.send(ManagerEvent.START_SEGMENT)
+
         segment_lengths = [segment_length for i in range(len(states))]
-        logger.info("Starting segment runs")
         try:
-            new_states = list(
+            map_results = list(
                 self.work_mapper.map(
                     self.runner.run_segment,
                     states,
@@ -396,9 +638,24 @@ class Manager(Generic[State_]):
             # report on all of the errors that occured
             raise exception
 
-        logger.info("Ending segment")
+        self.state_machine.send(ManagerEvent.FINISH_SEGMENT)
 
-        return new_states
+        # transpose
+        new_states, segments_data = zip(*map_results, strict=True)
+
+        return new_states, segments_data
+
+    def pre_segment(self) -> None:
+
+        self.state_machine.send(ManagerEvent.START_PRE_SEGMENT)
+        self.runner.pre_cycle()
+        self.state_machine.send(ManagerEvent.FINISH_PRE_SEGMENT)
+
+    def post_segment(self, segments_data: RunSegmentData_) -> None:
+        self.state_machine.send(ManagerEvent.START_POST_SEGMENT)
+        self.runner.post_cycle(segments_data)
+        self.state_machine.send(ManagerEvent.FINISH_POST_SEGMENT)
+        
 
     def run_cycle(
         self,
@@ -476,33 +733,24 @@ class Manager(Generic[State_]):
 
         """
 
-        logger.info("Running simulation cycle")
+        self.state_machine.send(ManagerEvent.START_CYCLE)
 
-        if runner_opts is None:
-            runner_opts = {}
-
+        
         # run the runner pre-cycle hook
         start = time.time()
-
-        logger.info("Running Runner.pre_cycle hook")
-        self.runner.pre_cycle(
-            **runner_opts,
-        )
-
+        self.pre_segment()
         end = time.time()
-        runner_precycle_time = end - start
-        logger.info(f"Precycle time: {runner_precycle_time}")
+        presegment_time = end - start
+        logger.info(f"Presegment time: {presegment_time}")
 
         # run the segment
         start = time.time()
 
-        logger.info("Running state propagation segment")
-        new_states = self.run_segment(
+        new_states, segments_data = self.run_segment(
             [walker.state for walker in walkers],
             n_segment_steps,
             cycle_idx,
         )
-        logger.info("Finished state propagation segment")
 
         new_walkers = [
             Walker(
@@ -517,18 +765,14 @@ class Manager(Generic[State_]):
         sim_manager_segment_time = end - start
         logger.info(f"Segment duration: {sim_manager_segment_time}")
 
-        runner_splits = self.runner.get_last_cycle_segments_split_times()
-
-        logger.info("Running Runner.post_cycle hook")
         # run post-cycle hook
         start = time.time()
 
-        self.runner.post_cycle()
+        self.post_segment(segments_data)
 
         end = time.time()
-        runner_postcycle_time = end - start
-
-        logger.info(f"Post cycle duration: {runner_postcycle_time}")
+        post_segment_time = end - start
+        logger.info(f"Post segment duration: {post_segment_time}")
 
         # boundary conditions should be optional;
 
@@ -541,12 +785,15 @@ class Manager(Generic[State_]):
         bc_time = 0.0
         if self.boundary_conditions is not None:
             logger.info("Boundary conditions were provided, applying.")
+
+            self.state_machine.send(ManagerEvent.START_BC_WARPING)
+            
             # apply rules of boundary conditions and warp walkers through space
             start = time.time()
-            logger.info("Starting boundary conditions calculations")
             bc_results = self.boundary_conditions.warp_walkers(new_walkers, cycle_idx)
             end = time.time()
             bc_time = end - start
+            self.state_machine.send(ManagerEvent.FINISH_BC_WARPING)
 
             # warping results
             warped_walkers = bc_results[0]
@@ -560,15 +807,19 @@ class Manager(Generic[State_]):
                 logger.info(f"Returned warp record in cycle {cycle_idx}")
 
         # resample walkers
-        logger.info("Starting resampler phase.")
+        self.state_machine.send(ManagerEvent.START_RESAMPLING)
         start = time.time()
 
         resampling_results = self.resampler.resample(warped_walkers)
 
+        self.state_machine.send(ManagerEvent.FINISH_RESAMPLING)
+        
         end = time.time()
         resampling_time = end - start
 
         logger.info(f"Resampling duration: {resampling_time}")
+
+        self.state_machine.send(ManagerEvent.GENERATE_REPORT)
 
         resampled_walkers = resampling_results[0]
         resampling_data = resampling_results[1]
@@ -611,10 +862,11 @@ class Manager(Generic[State_]):
             "n_segment_steps": n_segment_steps,
             "resampled_walkers": resampled_walkers,
             # timings
-            "runner_precycle_time": runner_precycle_time,
-            "runner_postcycle_time": runner_postcycle_time,
+            "runner_precycle_time": presegment_time,
+            "runner_postcycle_time": post_segment_time,
             "sim_manager_segment_overhead_time": sim_manager_segment_overhead_time,
-            "runner_splits_time": runner_splits,
+            # TODO: fix this
+            "runner_splits_time": segments_data,
             "worker_segment_times": seg_times,
             "cycle_sim_manager_segment_time": sim_manager_segment_time,
             "cycle_runner_time": sim_manager_segment_time,
@@ -624,18 +876,23 @@ class Manager(Generic[State_]):
 
         self._last_report = report
 
-        logger.info("Starting reporting")
+        self.state_machine.send(ManagerEvent.START_REPORTING)
+
         # report results to the reporters
         for reporter in self.reporters:
             logger.info(f"Reporting with reporter: {reporter}")
             reporter.report(**report)
 
+        self.state_machine.send(ManagerEvent.FINISH_REPORTING)
+
         # run the simulation monitor to get metrics on everything
         if self.monitor is not None:
-            logger.info("Running cycle monitoring")
+            self.state_machine.send(ManagerEvent.START_CYCLE_MONITORING)
             self.monitor.cycle_monitor(self, resampled_walkers)
+            self.state_machine.send(ManagerEvent.FINISH_CYCLE_MONITORING)
 
-        logger.info("Done: returning walkers")
+        self.state_machine.send(ManagerEvent.FINISH_CYCLE)
+
         return resampled_walkers, (self.runner, self.boundary_conditions, self.resampler)
 
     def run_simulation(
@@ -671,8 +928,8 @@ class Manager(Generic[State_]):
 
         """
 
-        logger.info("Running simulation init hook")
-        self.init(continue_run=continue_run_idx)
+        self.state_machine.send(ManagerEvent.START_PRE_SIM)
+
 
         if type(segment_lengths) == int:
             logger.info("Single number of steps provided for simulation, using this for all cycles.")
@@ -680,23 +937,23 @@ class Manager(Generic[State_]):
 
         walkers = self.init_walkers
 
-        logger.info("Starting main simulation loop over cycles")
+        self.init(continue_run=continue_run_idx)
+
+        self.state_machine.send(ManagerEvent.START_SIM)
         # the main cycle loop
         for cycle_idx in range(n_cycles):
+
             logger.info(f"Running cycle: {cycle_idx}")
             walkers, filters = self.run_cycle(
                 walkers, segment_lengths[cycle_idx], cycle_idx,
             )
             logger.info(f"Finished running cycle: {cycle_idx}")
 
-            # run the simulation monitor to get metrics on everything
-            if self.monitor is not None:
-                logger.info("Running monitoring cycle_monitor hook")
-                self.monitor.cycle_monitor(self, walkers)
+        self.state_machine.send(ManagerEvent.FINISH_SIMULATION)
 
-        logger.info("Running simulation cleanup")
         self.cleanup()
-        logger.info("Simulation cleanup complete")
+
+        self.state_machine.send(ManagerEvent.SHUTDOWN)
 
         return walkers, copy.deepcopy(tuple(filters))
 
@@ -723,11 +980,14 @@ class Manager(Generic[State_]):
 
         """
 
+        self.state_machine.send(ManagerEvent.START_PRE_SIM)
+
         start_time = time.time()
         logger.info(f"Simulation start time: {start_time}")
 
-        logger.info("Running simulation init hook")
         self.init(continue_run=continue_run_idx)
+
+        self.state_machine.send(ManagerEvent.START_SIM)
 
         cycle_idx = 0
         walkers = self.init_walkers
@@ -745,15 +1005,14 @@ class Manager(Generic[State_]):
                 "ending cycle {} at time {}".format(cycle_idx, time.time() - start_time)
             )
 
-            # run the simulation monitor to get metrics on everything
-            if self.monitor is not None:
-                logger.info("Running cycle_monitor hook")
-                self.monitor.cycle_monitor(self, walkers)
-
             cycle_idx += 1
+
+        self.state_machine.send(ManagerEvent.FINISH_SIMULATION)
 
         logger.info("Running simulation cleanup")
         self.cleanup()
         logger.info("Simulation cleanup complete")
+
+        self.state_machine.send(ManagerEvent.SHUTDOWN)
 
         return walkers, filters

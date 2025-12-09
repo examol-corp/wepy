@@ -78,5 +78,9 @@ class MockRunner(Runner):
 
         return new_state, segment_data
 
-# @attrs.define
-# class MockRunnerFactory:
+@attrs.define
+class MockRunnerFactory:
+    fail: bool = False
+
+    def __call__(self) -> MockRunner:
+        return MockRunner(fail=self.fail)

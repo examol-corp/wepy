@@ -1,6 +1,6 @@
 import pytest
 from wepy.runners.mock import MockRunner, MockState, MockError
-from wepy.runners.runner import RunnerStatus, Runner, RunnerStateTransitionError, RunnerStateMachineError
+from wepy.runners.runner import RunnerStatus, Runner, RunnerStateTransitionError, RunnerStateMachineError, RunnerEvent
     
 class TestMockRunner:
 
@@ -22,12 +22,16 @@ class TestMockRunner:
 
         runner.init()
         runner.pre_cycle()
+        assert runner.status == RunnerStatus.PRE_CYCLE
 
         with pytest.raises(RunnerStateTransitionError):
             runner.pre_cycle()
 
         runner.post_cycle(None)
+
+        assert runner.status == RunnerStatus.POST_CYCLE
         runner.pre_cycle()
+        assert runner.status == RunnerStatus.PRE_CYCLE
 
     def test_post_cycle(self):
         runner = MockRunner()
@@ -63,4 +67,3 @@ class TestMockRunner:
             MockState(0),
             10,
         )[0] == MockState(10)
-

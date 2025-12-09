@@ -8,7 +8,6 @@ class Test_RunnerStateMachine:
     def test_validate_event(self):
 
         sm = RunnerStateMachine(state=RunnerStatus.PRE_INITIALIZATION)
-        # make sure the return and state are consistent
         assert sm.validate_event(RunnerEvent.INIT)
 
         sm = RunnerStateMachine(state=RunnerStatus.PRE_INITIALIZATION)
