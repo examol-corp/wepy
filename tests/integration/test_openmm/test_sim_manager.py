@@ -99,7 +99,7 @@ def test_serial_mapper():
 
     new_walkers, sim_components  = sim_manager.run_simulation(
         n_cycles=1,
-        segment_lengths=10000000000,
+        segment_lengths=100,
     )
 
 def test_proc_pool_mapper():

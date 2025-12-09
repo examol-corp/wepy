@@ -7,15 +7,18 @@ from typing import Callable, Literal, Generic, TypeVar, Protocol, Any, ParamSpec
 import logging
 
 from wepy.walker import Walker, WalkerState
+from wepy.runners.runner import RunSegmentData
 
 logger = logging.getLogger(__name__)
 
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+RunSegmentData_ = TypeVar("RunSegmentData_", bound=RunSegmentData)
 
 class SerialMapper(
         Generic[
             WalkerState_,
+            RunSegmentData_,
         ]):
     """Basic non-parallel reference implementation of a mapper."""
 
@@ -53,7 +56,7 @@ class SerialMapper(
             ],
             walker_states: list[WalkerState_],
             segment_lengths: list[int],
-    ) -> list[WalkerState_]:
+    ) -> list[tuple[WalkerState_, RunSegmentData_]]:
         segment_times: list[float] = []
         results: list[WalkerState_] = []
         for task_idx, task_args in enumerate(
