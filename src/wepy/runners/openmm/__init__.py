@@ -9,7 +9,7 @@ from .state import (
 )
 from .runner import (
     OpenMMRunner, PlatformKwargs, OpenMMPlatformName, GPU_PLATFORMS, OpenMMRunnerFactory)
-from .logger import HeartBeatLoggingReporterFactory
+from .logger import HeartBeatLoggingReporterFactory, UnitCellLoggingReporterFactory, EnergyLoggingReporterFactory
 
 __all__ = [
     "HeartBeatLoggingReporterFactory",
@@ -24,4 +24,6 @@ __all__ = [
     "get_context_state",
     "state_to_xml",
     "PlatformKwargs",
+    "UnitCellLoggingReporterFactory",
+    "EnergyLoggingReporterFactory",
 ]

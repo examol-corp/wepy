@@ -208,7 +208,6 @@ class Test_SamplingTimeIntervalLoggingReporter:
             logger,
             callback=hello_log,
             state_includes=state_includes,
-            step_size=STEP_TIME,
             sampling_time_interval=(10 * openmm.unit.femtosecond),
             start_time=time.time(),
         )
@@ -323,7 +322,6 @@ class Test_SamplingTimeIntervalLoggingReporter:
             logger,
             callback=hello_log,
             state_includes=state_includes,
-            step_size=STEP_TIME,
             sampling_time_interval=(10 * openmm.unit.femtosecond),
             start_time=time.time(),
         )
@@ -358,7 +356,6 @@ class Test_SamplingTimeIntervalLoggingReporter:
             logger,
             callback=hello_log,
             state_includes=state_includes,
-            step_size=STEP_TIME,
             sampling_time_interval=(2 * openmm.unit.femtosecond),
             start_time=time.time(),
         )
@@ -483,7 +480,6 @@ class Test_EnergyLoggingReporter:
         reporter = EnergyLoggingReporter(
             logger,
             sampling_time_interval=(1 * openmm.unit.femtosecond),
-            step_size=STEP_TIME,
             start_time=time.time(),
         )
         with caplog.at_level(logging.INFO, logger_name):
@@ -506,7 +502,6 @@ class Test_EnergyLoggingReporter:
         energy_logger = EnergyLoggingReporter(
             logger,
             sampling_time_interval=(STEP_TIME * 2),
-            step_size=STEP_TIME,
             start_time=time.time(),
         )
 
@@ -555,7 +550,6 @@ class Test_UnitCellLoggingReporter:
         reporter = UnitCellLoggingReporter(
             logger,
             sampling_time_interval=(1 * openmm.unit.femtosecond),
-            step_size=STEP_TIME,
             start_time=time.time(),
         )
         with caplog.at_level(logging.INFO, logger_name):
@@ -578,7 +572,6 @@ class Test_UnitCellLoggingReporter:
         energy_logger = UnitCellLoggingReporter(
             logger,
             sampling_time_interval=(STEP_TIME * 2),
-            step_size=STEP_TIME,
             start_time=time.time(),
         )
 

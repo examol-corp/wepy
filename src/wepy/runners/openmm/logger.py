@@ -109,7 +109,6 @@ class SamplingTimeIntervalLoggingReporter(LoggingReporter):
     logger: logging.Logger
     callback: LoggingReporterCallback
     state_includes: list[OpenMMGetStateKeys]
-    step_size: openmm.unit.Quantity
     sampling_time_interval: openmm.unit.Quantity
 
     def __init__(
@@ -117,14 +116,12 @@ class SamplingTimeIntervalLoggingReporter(LoggingReporter):
         logger: logging.Logger,
         callback: LoggingReporterCallback,
         state_includes: Collection[OpenMMGetStateKeys],
-        step_size: openmm.unit.Quantity,
         sampling_time_interval: openmm.unit.Quantity,
         start_time: int,
     ) -> None:
 
         super().__init__(logger, callback, state_includes)
         self.sampling_time_interval = sampling_time_interval
-        self.step_size = step_size
         self.start_time = start_time
 
     def describeNextReport(
@@ -135,6 +132,9 @@ class SamplingTimeIntervalLoggingReporter(LoggingReporter):
         _unit = openmm.unit.attosecond
 
         curr_sampling_time: openmm.unit.Quantity = simulation.context.getTime()
+
+        # get the step size from the integrator
+        step_size = simulation.context.getIntegrator().getStepSize()
 
         sampling_time_left = (
             self.sampling_time_interval.value_in_unit(_unit) - (
@@ -148,7 +148,7 @@ class SamplingTimeIntervalLoggingReporter(LoggingReporter):
 
         else:
             estimated_steps_left = (
-                round(sampling_time_left.value_in_unit(_unit)) // round(self.step_size.value_in_unit(_unit))
+                round(sampling_time_left.value_in_unit(_unit)) // round(step_size.value_in_unit(_unit))
             )
 
         return OpenMMReporterNextReport(
@@ -217,7 +217,6 @@ class EnergyLoggingReporter(SamplingTimeIntervalLoggingReporter):
     def __init__(
         self,
         logger: logging.Logger,
-        step_size: openmm.unit.Quantity,
         sampling_time_interval: openmm.unit.Quantity,
         start_time: int,
     ) -> None:
@@ -227,7 +226,6 @@ class EnergyLoggingReporter(SamplingTimeIntervalLoggingReporter):
             callback=self.logging_callback,
             state_includes=["energy"],
             sampling_time_interval=sampling_time_interval,
-            step_size=step_size,
             start_time=start_time,
         )
 
@@ -251,12 +249,29 @@ class EnergyLoggingReporter(SamplingTimeIntervalLoggingReporter):
             f"kinetic={_kin_e}, potential={_pot_e}, total={_tot_e}"
         )
 
+@attrs.define
+class EnergyLoggingReporterFactory:
+
+    sampling_time_interval: int
+
+    def __call__(
+            self,
+            logger: logging.Logger,
+            start_time: int,
+    ) -> EnergyLoggingReporter:
+
+        return EnergyLoggingReporter(
+            logger=logger,
+            sampling_time_interval=self.sampling_time_interval,
+            start_time=start_time,
+        )
+        
+
 class UnitCellLoggingReporter(SamplingTimeIntervalLoggingReporter):
 
     def __init__(
         self,
         logger: logging.Logger,
-        step_size: openmm.unit.Quantity,
         sampling_time_interval: openmm.unit.Quantity,
         start_time: int,
     ) -> None:
@@ -266,7 +281,6 @@ class UnitCellLoggingReporter(SamplingTimeIntervalLoggingReporter):
             callback=self.logging_callback,
             state_includes=[],
             sampling_time_interval=sampling_time_interval,
-            step_size=step_size,
             start_time=start_time,
         )
 
@@ -288,4 +302,21 @@ class UnitCellLoggingReporter(SamplingTimeIntervalLoggingReporter):
         logger.info(
             f"OpenMM simulation unitcell (steps={sim_steps}, sim_time={sim_time_mag:.4f} ps): "
             f"volume={_box_volume}, vectors={_bvs_line}"
+        )
+
+@attrs.define
+class UnitCellLoggingReporterFactory:
+
+    sampling_time_interval: int
+
+    def __call__(
+            self,
+            logger: logging.Logger,
+            start_time: int,
+    ) -> EnergyLoggingReporter:
+
+        return UnitCellLoggingReporter(
+            logger=logger,
+            sampling_time_interval=self.sampling_time_interval,
+            start_time=start_time,
         )
