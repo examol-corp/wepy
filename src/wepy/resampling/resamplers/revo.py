@@ -654,18 +654,24 @@ class REVOResampler(CloneMergeResampler):
 
         # make images for all the walker states for us to compute distances on
         if self.num_proc > 1:
-            log_queue = mp.Queue()
-            handlers = list(logging.getLogger().handlers)
-            listener = logging.handlers.QueueListener(log_queue, *handlers)
-            listener.start()
 
             # NOTE: Must use spawn here, otherwise there are problems
             # with deadlocking in the sub-processes
             mp_ctx = mp.get_context(method="spawn")
+            log_queue = mp_ctx.Queue()
+            handlers = list(logging.getLogger().handlers)
+            listener = logging.handlers.QueueListener(log_queue, *handlers)
+            listener.start()
+
+            # TODO: This should be part of some setup period
+
             with mp_ctx.Pool(
                     self.num_proc,
                     initializer=proc_pool_worker_setup,
                     initargs=(log_queue,),
+                    # Set some upper bound so that it gets cleaned up
+                    # in case of leaks
+                    maxtasksperchild=4
             ) as pool:
                 images = pool.map(self.distance.image, [walker.state for walker in walkers])
         else:

@@ -28,7 +28,6 @@ class OpenMMProcPoolWorkMapper(WorkMapper):
         device_ids: list[int] | None = None,
         global_platform_properties: dict[str, str] | None = None,
         device_platform_properties: list[dict[str, str]] | None = None,
-        proc_start_method: Literal["fork", "spawn", "forkserver"] = "spawn",
     ):
 
 
@@ -66,7 +65,6 @@ class OpenMMProcPoolWorkMapper(WorkMapper):
         } if device_ids is not None else None
         self._num_procs = num_procs
 
-        self._proc_start_method = proc_start_method
         
     def init(
             self,
@@ -74,8 +72,8 @@ class OpenMMProcPoolWorkMapper(WorkMapper):
 
         logger.info("Initializing ProcPoolMapper")
 
-        logger.info(f"Initializing local multiprocessing context with start method: {self._proc_start_method}")
-        self._mp_ctx = mp.get_context(method=self._proc_start_method)
+        logger.info(f"Initializing local multiprocessing context with start method: spawn")
+        self._mp_ctx = mp.get_context(method="spawn")
 
     def cleanup(self) -> None:
 
@@ -216,7 +214,6 @@ class OpenMMProcPoolWorkMapperFactory:
     device_ids: list[int] | None = None
     global_platform_properties: dict[str, str] | None = None
     device_platform_properties: list[dict[str, str]] | None = None
-    proc_start_method: Literal["fork", "spawn", "forkserver"] = "spawn"
 
     def __attrs_post_init__(self) -> None:
 
@@ -242,6 +239,5 @@ class OpenMMProcPoolWorkMapperFactory:
             device_ids=self.device_ids,
             global_platform_properties=self.global_platform_properties,
             device_platform_properties=self.device_platform_properties,
-            proc_start_method=self.proc_start_method,
         )
 
