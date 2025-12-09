@@ -12,6 +12,8 @@ from wepy.runners.openmm.logger import (
     StepIntervalLoggingReporter,
     SamplingTimeIntervalLoggingReporter,
     HeartBeatLoggingReporter,
+    EnergyLoggingReporter,
+    UnitCellLoggingReporter,
 )
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 
@@ -392,12 +394,6 @@ class Test_HeartBeatLoggingReporter:
         logger_name = "test-HeartBeatLoggingReporter"
         logger = logging.getLogger(logger_name)
 
-        time_logger = HeartBeatLoggingReporter(
-            logger,
-            step_interval=2,
-            start_time=time.time(),
-        )
-
         simulation = openmm.app.Simulation(
             topology,
             system,
@@ -461,3 +457,148 @@ class Test_HeartBeatLoggingReporter:
 
         assert len(caplog.records) == 5
         caplog.clear()
+
+class Test_EnergyLoggingReporter:
+
+    def test_logging_callback(self, sim_components, caplog):
+
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+
+        topology, system, integrator, platform = sim_args
+
+        logger_name = "test-EnergyLoggingReporter"
+        logger = logging.getLogger(logger_name)
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+        # do a step to compute energies
+        simulation.context.getIntegrator().step(1)
+        _omm_state = simulation.context.getState(energy=True)
+
+        reporter = EnergyLoggingReporter(
+            logger,
+            sampling_time_interval=(1 * openmm.unit.femtosecond),
+            step_size=STEP_TIME,
+            start_time=time.time(),
+        )
+        with caplog.at_level(logging.INFO, logger_name):
+            reporter.logging_callback(
+                logger,
+                simulation,
+                _omm_state,
+            )
+
+        assert len(caplog.records) == 1
+
+    def test_simulation(self, sim_components, caplog):
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+
+        topology, system, integrator, platform = sim_args
+
+        logger_name = "test-EnergyLoggingReporter"
+        logger = logging.getLogger(logger_name)
+
+        energy_logger = EnergyLoggingReporter(
+            logger,
+            sampling_time_interval=(STEP_TIME * 2),
+            step_size=STEP_TIME,
+            start_time=time.time(),
+        )
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+        simulation.reporters.append(energy_logger)
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(2)
+            assert len(caplog.records) == 1
+            simulation.step(2)
+            simulation.step(2)
+            simulation.step(2)
+            simulation.step(2)
+
+        assert len(caplog.records) == 5
+        caplog.clear()
+
+class Test_UnitCellLoggingReporter:
+
+    def test_logging_callback(self, sim_components, caplog):
+
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+
+        topology, system, integrator, platform = sim_args
+
+        logger_name = "test-UnitCellLoggingReporter"
+        logger = logging.getLogger(logger_name)
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+        # do a step to compute energies
+        simulation.context.getIntegrator().step(1)
+        _omm_state = simulation.context.getState(energy=True)
+
+        reporter = UnitCellLoggingReporter(
+            logger,
+            sampling_time_interval=(1 * openmm.unit.femtosecond),
+            step_size=STEP_TIME,
+            start_time=time.time(),
+        )
+        with caplog.at_level(logging.INFO, logger_name):
+            reporter.logging_callback(
+                logger,
+                simulation,
+                _omm_state,
+            )
+
+        assert len(caplog.records) == 1
+
+    def test_simulation(self, sim_components, caplog):
+        omm_state, sim_args = sim_components[0], sim_components[1:]
+
+        topology, system, integrator, platform = sim_args
+
+        logger_name = "test-UnitCellLoggingReporter"
+        logger = logging.getLogger(logger_name)
+
+        energy_logger = UnitCellLoggingReporter(
+            logger,
+            sampling_time_interval=(STEP_TIME * 2),
+            step_size=STEP_TIME,
+            start_time=time.time(),
+        )
+
+        simulation = openmm.app.Simulation(
+            topology,
+            system,
+            copy.deepcopy(integrator),
+            platform,
+        )
+        simulation.context.setState(omm_state)
+        simulation.reporters.append(energy_logger)
+
+        with caplog.at_level(logging.INFO, logger_name):
+            simulation.step(2)
+            assert len(caplog.records) == 1
+            simulation.step(2)
+            simulation.step(2)
+            simulation.step(2)
+            simulation.step(2)
+
+        assert len(caplog.records) == 5
+        caplog.clear()
+        

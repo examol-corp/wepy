@@ -6,6 +6,7 @@ import openmm.app
 import openmm
 import openmm.unit
 import attrs
+from wepy.util.openmm import format_box_vectors_line
 
 from .reporter import (
     OpenMMReporter,
@@ -194,9 +195,6 @@ class HeartBeatLoggingReporter(StepIntervalLoggingReporter):
             f"OpenMM simulation progress: clock_time={current_time:.4f} s, elapsed_time={elapsed_time:.4f} s, sim_time={sim_time_mag:.4f} ps, sim_steps={sim_steps}",
         )
 
-
-
-
 @attrs.define
 class HeartBeatLoggingReporterFactory:
 
@@ -213,5 +211,81 @@ class HeartBeatLoggingReporterFactory:
             step_interval=self.step_interval,
             start_time=start_time,
         )
-# TODO:
-# class EnergyLoggingReporter()
+
+class EnergyLoggingReporter(SamplingTimeIntervalLoggingReporter):
+
+    def __init__(
+        self,
+        logger: logging.Logger,
+        step_size: openmm.unit.Quantity,
+        sampling_time_interval: openmm.unit.Quantity,
+        start_time: int,
+    ) -> None:
+
+        super().__init__(
+            logger=logger,
+            callback=self.logging_callback,
+            state_includes=["energy"],
+            sampling_time_interval=sampling_time_interval,
+            step_size=step_size,
+            start_time=start_time,
+        )
+
+    def logging_callback(
+            self,
+            logger: logging.Logger,
+            simulation: openmm.app.Simulation,
+            state: openmm.State
+    ) -> None:
+
+        sim_time = simulation.context.getTime()
+        sim_time_mag = sim_time.value_in_unit(openmm.unit.picosecond)
+        sim_steps = simulation.context.getStepCount()
+
+        _pot_e = state.getPotentialEnergy()
+        _kin_e = state.getKineticEnergy()
+        _tot_e = _pot_e + _kin_e
+
+        logger.info(
+            f"OpenMM simulation energy (steps={sim_steps}, sim_time={sim_time_mag:.4f} ps): "
+            f"kinetic={_kin_e}, potential={_pot_e}, total={_tot_e}"
+        )
+
+class UnitCellLoggingReporter(SamplingTimeIntervalLoggingReporter):
+
+    def __init__(
+        self,
+        logger: logging.Logger,
+        step_size: openmm.unit.Quantity,
+        sampling_time_interval: openmm.unit.Quantity,
+        start_time: int,
+    ) -> None:
+
+        super().__init__(
+            logger=logger,
+            callback=self.logging_callback,
+            state_includes=[],
+            sampling_time_interval=sampling_time_interval,
+            step_size=step_size,
+            start_time=start_time,
+        )
+
+    def logging_callback(
+            self,
+            logger: logging.Logger,
+            simulation: openmm.app.Simulation,
+            state: openmm.State
+    ) -> None:
+
+        sim_time = simulation.context.getTime()
+        sim_time_mag = sim_time.value_in_unit(openmm.unit.picosecond)
+        sim_steps = simulation.context.getStepCount()
+
+        _box_volume = state.getPeriodicBoxVolume()
+        _bvs = state.getPeriodicBoxVectors()
+        _bvs_line = format_box_vectors_line(_bvs)
+
+        logger.info(
+            f"OpenMM simulation unitcell (steps={sim_steps}, sim_time={sim_time_mag:.4f} ps): "
+            f"volume={_box_volume}, vectors={_bvs_line}"
+        )
