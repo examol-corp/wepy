@@ -23,7 +23,7 @@ from wepy.resampling.resamplers.noresampler import NoResampler
 from wepy.util.mdtraj import json_to_mdtraj_topology
 
 from wepy_tools.systems.lennard_jones import LennardJonesPair, PairDistance
-from wepy_tools.systems.alanine_dipeptide import AlanineDipeptideRamachandranDistance
+from wepy_tools.systems.alanine_dipeptide import AlanineDipeptideRamachandranDistance, AlanineDipeptideExplicitSystem
 
 def test_lennard_jones_revo_procpool():
 
@@ -116,20 +116,7 @@ def test_alanine_dipeptide_revo_procpool():
 
     TEMPERATURE = 300. * openmm.unit.kelvin
 
-    # load the system and state information for the simulation
-    ala_files = importlib.resources.files("wepy_tools.systems.data.alanine_dipeptide_explicit")
-    system_xml_path = ala_files / "alanine-dipeptide-explicit.system.omm.xml"
-    state_xml_path = ala_files / "alanine-dipeptide-explicit.state.omm.xml"
-    top_json_path = ala_files / "alanine-dipeptide-explicit.top.json"
-
-    system = openmm.XmlSerializer.deserialize(system_xml_path.read_text())
-
-    init_state_wrapper = OpenMMStateWrapper.from_xml(state_xml_path.read_text())
-    init_state = OpenMMState.from_state_wrapper(init_state_wrapper)
-
-    json_top_str = top_json_path.read_text()
-    mdj_top = json_to_mdtraj_topology(json_top_str)
-    topology = mdj_top.to_openmm()
+    ala_sys = AlanineDipeptideExplicitSystem()
 
     integrator = openmm.LangevinIntegrator(TEMPERATURE, 0.1, 0.002)
 
@@ -138,11 +125,11 @@ def test_alanine_dipeptide_revo_procpool():
         1. * openmm.unit.atmosphere,
         TEMPERATURE,
     )
-    system.addForce(barostat)
+    ala_sys.system.addForce(barostat)
 
     runner_factory = OpenMMRunnerFactory(
-        system=system,
-        topology=topology,
+        system=ala_sys.system,
+        topology=ala_sys.topology,
         integrator=integrator,
         # For this test we do want heart beat at shorter interval
         openmm_reporter_factories=[
@@ -156,7 +143,7 @@ def test_alanine_dipeptide_revo_procpool():
     # TODO: remove the need to deepcopy and have the components make
     # their own copies if necessary
     walker_states = [
-        copy.deepcopy(init_state)
+        copy.deepcopy(ala_sys.state)
         for _
         in range(num_walkers)
     ]
@@ -181,7 +168,7 @@ def test_alanine_dipeptide_revo_procpool():
         num_workers = num_walkers
         cores_per_worker = (num_workers // num_walkers)
 
-    distance_metric = AlanineDipeptideRamachandranDistance(json_top_str)
+    distance_metric = AlanineDipeptideRamachandranDistance(ala_sys.json_top)
 
     resampler = REVOResampler(
         merge_dist=4,

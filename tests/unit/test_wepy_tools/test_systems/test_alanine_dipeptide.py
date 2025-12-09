@@ -5,62 +5,44 @@ import mdtraj
 
 from wepy.util.mdtraj import mdtraj_to_json_topology
 from wepy.runners.openmm import OpenMMState
-from wepy_tools.systems.alanine_dipeptide import AlanineDipeptideExplicit, AlanineDipeptideRamachandranDistance
+from wepy_tools.systems.alanine_dipeptide import AlanineDipeptideExplicitSystem, AlanineDipeptideRamachandranDistance
 
 
-def test_AlanineDipeptideExplicit():
+def test_AlanineDipeptideExplicitSystem():
 
-    AlanineDipeptideExplicit()
+    AlanineDipeptideExplicitSystem()
 
 class Test_AlanineDipeptideRamachandranDistance:
 
     def test_image(self):
 
-        ala_sys = AlanineDipeptideExplicit()
+        ala_sys = AlanineDipeptideExplicitSystem()
 
-        json_top = mdtraj_to_json_topology(
-                mdtraj.Topology.from_openmm(ala_sys.topology)
-            )
+        distance = AlanineDipeptideRamachandranDistance(topology=ala_sys.json_top)
 
-        distance = AlanineDipeptideRamachandranDistance(topology=json_top)
-
-        state = OpenMMState.from_dwim(
-            positions=ala_sys.positions,
-            box_vectors=ala_sys.box_vectors,
-        )
-
-        image = distance.image(state)
+        image = distance.image(ala_sys.state)
 
     def test_image_distance(self):
 
-        ala_sys = AlanineDipeptideExplicit()
+        ala_sys = AlanineDipeptideExplicitSystem()
 
-        json_top = mdtraj_to_json_topology(
-                mdtraj.Topology.from_openmm(ala_sys.topology)
-            )
+        distance = AlanineDipeptideRamachandranDistance(topology=ala_sys.json_top)
 
-        distance = AlanineDipeptideRamachandranDistance(topology=json_top)
-
-        state = OpenMMState.from_dwim(
-            positions=ala_sys.positions,
-            box_vectors=ala_sys.box_vectors,
-        )
-
-        image_a = distance.image(state)
+        image_a = distance.image(ala_sys.state)
 
         assert np.isclose(distance.image_distance(image_a, image_a), 0.)
 
         # then make a jittered atom positions to get something a little
         # different to compare
-        jitter_positions = ala_sys.positions + np.random.uniform(
+        jitter_positions = ala_sys.state.positions + np.random.uniform(
             -0.01,
             0.01,
-            size=ala_sys.positions.shape,
-        ) * ala_sys.positions.unit
+            size=ala_sys.state.positions.shape,
+        ) * ala_sys.state.positions.unit
 
         jitter_state = OpenMMState.from_dwim(
             positions=jitter_positions,
-            box_vectors=ala_sys.box_vectors,
+            box_vectors=ala_sys.state.box_vectors,
         )
 
         jitter_image = distance.image(jitter_state)

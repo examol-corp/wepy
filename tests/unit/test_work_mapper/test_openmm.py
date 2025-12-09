@@ -1,13 +1,10 @@
 from wepy.runners.openmm import (
     OpenMMRunner,
     OpenMMState,
-    gen_sim_state,
 )
-from wepy.work_mapper.openmm import (
-    OpenMMTask,
-    OpenMMSerialWorkMapper,
+from wepy.work_mapper.openmm.proc_pool import (
     OpenMMProcPoolWorkMapper,
-    OpenMMRayPoolWorkMapper,
+    OpenMMProcPoolWorkMapperFactory,
 )
 
 import pytest
@@ -37,129 +34,80 @@ def openmm_runner() -> OpenMMRunner:
 def openmm_state() -> OpenMMState:
 
     lj_sys = LennardJonesPair()
-    
-    state = OpenMMState(gen_sim_state(
-            lj_sys.positions,
-            system=lj_sys.system,
-            integrator=openmm.VerletIntegrator(0.002),
-    ))
+
+    state = OpenMMState.from_dwim(
+        positions=lj_sys.positions,
+    )
 
     return state
-    
 
 
-class TestOpenMMTask:
-
-    def test___call__(self, openmm_runner, openmm_state):
-
-        task = OpenMMTask(
-            runner=openmm_runner,
-            segment_length=2,
-        )
-
-        new_state = task(openmm_state)
-
-class TestOpenMMSerialWorkMapper:
-
-    def test_all(self, openmm_runner):
-
-        lj_sys = LennardJonesPair()
-
-        init_states = [
-            OpenMMState(gen_sim_state(
-                        lj_sys.positions,
-                        system=lj_sys.system,
-                        integrator=openmm.VerletIntegrator(1),
-                ))
-            for _
-            in range(4)
-        ]
-
-        mapper = OpenMMSerialWorkMapper(
-            platform="CPU",
-            global_platform_properties={"Threads" : "2"},
-        )
-
-        mapper.init()
-        new_states = mapper.map(
-            [
-                OpenMMTask(
-                    runner=openmm_runner,
-                    segment_length=2,
-                )
-                for _ in range(len(init_states))
-            ],
-            init_states,
-        )
-        
-class TestOpenMMProcPoolWorkMapper:
+class Test_OpenMMProcPoolWorkMapper:
     def test_all(self, openmm_runner):
 
         lj_sys = LennardJonesPair()
         
         init_states = [
-            OpenMMState(gen_sim_state(
-                        lj_sys.positions,
-                        system=lj_sys.system,
-                        integrator=openmm.VerletIntegrator(1),
-                ))
+            OpenMMState.from_dwim(
+                positions=lj_sys.positions,
+            )
             for _
             in range(4)
         ]
 
         mapper = OpenMMProcPoolWorkMapper(
             platform="CPU",
+            num_procs=2,
             device_ids=[0,1],
             global_platform_properties={"Threads" : "1"},
         )
-
         mapper.init()
+
+        openmm_runner.init()
+        openmm_runner.pre_cycle()
+
         new_states = mapper.map(
+            openmm_runner.run_segment,
+            init_states,
             [
-                OpenMMTask(
-                    runner=openmm_runner,
-                    segment_length=2,
-                )
+                10
                 for _ in range(len(init_states))
             ],
-            init_states,
         )
 
-class TestOpenMMRayPoolWorkMapper:
+# class TestOpenMMRayPoolWorkMapper:
 
-    @pytest.mark.ray
-    def test_all(self, openmm_runner):
+#     @pytest.mark.ray
+#     def test_all(self, openmm_runner):
 
-        lj_sys = LennardJonesPair()
+#         lj_sys = LennardJonesPair()
         
-        init_states = [
-            OpenMMState(gen_sim_state(
-                        lj_sys.positions,
-                        system=lj_sys.system,
-                        integrator=openmm.VerletIntegrator(1),
-                ))
-            for _
-            in range(4)
-        ]
+#         init_states = [
+#             OpenMMState.from_dwim(
+#                 positions=lj_sys.positions,
+#             )
+#             for _
+#             in range(4)
+#         ]
 
-        mapper = OpenMMRayPoolWorkMapper(
-            platform="CPU",
-            device_ids=[0,1],
-            global_platform_properties={"Threads" : "1"},
-            # ray_init_args={
+#         mapper = OpenMMRayPoolWorkMapper(
+#             platform="CPU",
+#             device_ids=[0,1],
+#             global_platform_properties={"Threads" : "1"},
+#             # ray_init_args={
                 
-            # }
-        )
+#             # }
+#         )
 
-        mapper.init()
-        new_states = mapper.map(
-            [
-                OpenMMTask(
-                    runner=openmm_runner,
-                    segment_length=100000,
-                )
-                for _ in range(len(init_states))
-            ],
-            init_states,
-        )
+#         mapper.init()
+#         new_states = mapper.map(
+#             [
+#                 OpenMMTask(
+#                     runner=openmm_runner,
+#                     segment_length=100000,
+#                 )
+#                 for _ in range(len(init_states))
+#             ],
+#             init_states,
+#         )
         

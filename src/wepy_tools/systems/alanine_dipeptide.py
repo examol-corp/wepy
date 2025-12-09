@@ -1,5 +1,5 @@
 from typing import Any
-from importlib.resources import files
+import importlib.resources
 
 import attrs
 import numpy as np
@@ -8,10 +8,38 @@ import openmm.app
 import openmm.unit
 import mdtraj
 
+from wepy.runners.openmm import OpenMMState, OpenMMStateWrapper
 from wepy.walker import WalkerState
 from wepy.runners.openmm import OpenMMState
 from wepy.resampling.distances.distance import Distance
-from wepy.util.mdtraj import traj_fields_to_mdtraj
+from wepy.util.mdtraj import traj_fields_to_mdtraj, json_to_mdtraj_topology
+
+class AlanineDipeptideExplicitSystem:
+
+    system: openmm.System
+    topology: openmm.app.Topology
+    mdtraj_top: mdtraj.Topology
+    json_top: str
+    state_wrapper: OpenMMStateWrapper
+    state: OpenMMState
+
+    def __init__(self) -> None:
+
+        # load the system and state information for the simulation
+        ala_files = importlib.resources.files("wepy_tools.systems.data.alanine_dipeptide_explicit")
+        system_xml_path = ala_files / "alanine-dipeptide-explicit.system.omm.xml"
+        state_xml_path = ala_files / "alanine-dipeptide-explicit.state.omm.xml"
+        top_json_path = ala_files / "alanine-dipeptide-explicit.top.json"
+
+        self.system = openmm.XmlSerializer.deserialize(system_xml_path.read_text())
+
+        self.state_wrapper = OpenMMStateWrapper.from_xml(state_xml_path.read_text())
+        self.state = OpenMMState.from_state_wrapper(self.state_wrapper)
+
+        self.json_top = top_json_path.read_text()
+        self.mdj_top = json_to_mdtraj_topology(self.json_top)
+        self.topology = self.mdj_top.to_openmm()
+        
 
 @attrs.define
 class AlanineDipeptideRamachandranDistanceImage(WalkerState):

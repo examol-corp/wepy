@@ -172,7 +172,6 @@ class Test_OpenMMRunner:
             system=copy.deepcopy(system),
             topology=copy.deepcopy(topology),
             integrator=copy.deepcopy(integrator),
-            platform_name="Reference",
         )
 
         with pytest.raises(RunnerStateError):
@@ -241,7 +240,6 @@ class Test_OpenMMRunner:
             system=copy.deepcopy(system),
             topology=copy.deepcopy(topology),
             integrator=copy.deepcopy(integrator),
-            platform_name="Reference",
         )
 
         with pytest.raises(RunnerStateTransitionError):
@@ -266,7 +264,6 @@ class Test_OpenMMRunner:
             system=copy.deepcopy(system),
             topology=copy.deepcopy(topology),
             integrator=copy.deepcopy(integrator),
-            platform_name="Reference",
         )
 
         with pytest.raises(RunnerStateTransitionError):
@@ -298,4 +295,4 @@ def test_OpenMMRunnerFactory(runner_components):
         integrator=integrator,
     )
 
-    assert isinstance(omm_factory, OpenMMRunner)
+    assert isinstance(omm_factory(), OpenMMRunner)

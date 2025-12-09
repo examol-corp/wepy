@@ -9,13 +9,14 @@ def test__dummy_task():
 
 def test_proc_pool_worker_setup(caplog):
 
-    log_queue = mp.Queue()
+    mp_ctx = mp.get_context(method="spawn")
+    
+    log_queue = mp_ctx.Queue()
     handlers = list(logging.getLogger().handlers)
     listener = logging.handlers.QueueListener(log_queue, *handlers)
     listener.start()
-    
 
-    with mp.Pool(
+    with mp_ctx.Pool(
             processes=1,
             initializer=proc_pool_worker_setup,
             initargs=(log_queue,),

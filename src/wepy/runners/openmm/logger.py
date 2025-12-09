@@ -131,14 +131,6 @@ class SamplingTimeIntervalLoggingReporter(LoggingReporter):
             simulation: openmm.app.Simulation,
     ) -> OpenMMReporterNextReport:
 
-        # Special case for first step
-        if simulation.context.getStepCount() == 0:
-            return OpenMMReporterNextReport(
-                steps=0,
-                include=list(self.state_includes),
-                periodic=False,
-            )
-
         _unit = openmm.unit.attosecond
 
         curr_sampling_time: openmm.unit.Quantity = simulation.context.getTime()

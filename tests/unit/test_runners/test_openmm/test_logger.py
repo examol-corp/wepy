@@ -1,3 +1,4 @@
+import time
 import logging
 import copy
 import pytest
@@ -89,6 +90,7 @@ class Test_StepIntervalLoggingReporter:
             callback=hello_log,
             state_includes=state_includes,
             step_interval=10,
+            start_time=time.time(),
         )
 
 
@@ -160,6 +162,7 @@ class Test_StepIntervalLoggingReporter:
             callback=hello_log,
             state_includes=state_includes,
             step_interval=10,
+            start_time=time.time(),
         )
 
         simulation.reporters.append(step_logger)
@@ -205,6 +208,7 @@ class Test_SamplingTimeIntervalLoggingReporter:
             state_includes=state_includes,
             step_size=STEP_TIME,
             sampling_time_interval=(10 * openmm.unit.femtosecond),
+            start_time=time.time(),
         )
 
         simulation = openmm.app.Simulation(
@@ -215,7 +219,6 @@ class Test_SamplingTimeIntervalLoggingReporter:
         )
         simulation.context.setState(omm_state)
 
-        # at step 0 returns the interval
         assert step_logger.describeNextReport(
             simulation
         ) == OpenMMReporterNextReport(
@@ -310,7 +313,7 @@ class Test_SamplingTimeIntervalLoggingReporter:
                 state: openmm.State,
         ) -> None:
 
-            logger.info("Hello")
+            logger.info(f"Step: {state.getStepCount()}")
 
         state_includes = ["energy"]
 
@@ -320,6 +323,7 @@ class Test_SamplingTimeIntervalLoggingReporter:
             state_includes=state_includes,
             step_size=STEP_TIME,
             sampling_time_interval=(10 * openmm.unit.femtosecond),
+            start_time=time.time(),
         )
 
         simulation = openmm.app.Simulation(
@@ -335,14 +339,16 @@ class Test_SamplingTimeIntervalLoggingReporter:
             simulation.step(1)
 
         assert len(caplog.records) == 0
+        logger.info("Next test")
         caplog.clear()
 
         with caplog.at_level(logging.INFO, logger_name):
             simulation.step(9)
 
         assert len(caplog.records) == 1
-        assert caplog.records[0].msg == "Hello"
+        assert caplog.records[0].msg == "Step: 10"
 
+        logger.info("Next test")
         caplog.clear()
 
         # test something longer
@@ -352,6 +358,7 @@ class Test_SamplingTimeIntervalLoggingReporter:
             state_includes=state_includes,
             step_size=STEP_TIME,
             sampling_time_interval=(2 * openmm.unit.femtosecond),
+            start_time=time.time(),
         )
 
         simulation = openmm.app.Simulation(
@@ -364,7 +371,12 @@ class Test_SamplingTimeIntervalLoggingReporter:
         simulation.reporters.append(time_logger)
 
         with caplog.at_level(logging.INFO, logger_name):
-            simulation.step(10)
+            simulation.step(2)
+            assert len(caplog.records) == 1
+            simulation.step(2)
+            simulation.step(2)
+            simulation.step(2)
+            simulation.step(2)
 
         assert len(caplog.records) == 5
         caplog.clear()
@@ -383,6 +395,7 @@ class Test_HeartBeatLoggingReporter:
         time_logger = HeartBeatLoggingReporter(
             logger,
             step_interval=2,
+            start_time=time.time(),
         )
 
         simulation = openmm.app.Simulation(
@@ -393,15 +406,19 @@ class Test_HeartBeatLoggingReporter:
         )
         simulation.context.setState(omm_state)
 
+        reporter = HeartBeatLoggingReporter(
+            logger,
+            step_interval=2,
+            start_time=time.time(),
+        )
         with caplog.at_level(logging.INFO, logger_name):
-            HeartBeatLoggingReporter.logging_callback(
+            reporter.logging_callback(
                 logger,
                 simulation,
                 omm_state,
             )
 
         assert len(caplog.records) == 1
-        
 
     def test_simulation(self, sim_components, caplog):
 
@@ -415,6 +432,7 @@ class Test_HeartBeatLoggingReporter:
         time_logger = HeartBeatLoggingReporter(
             logger,
             step_interval=2,
+            start_time=time.time(),
         )
 
         simulation = openmm.app.Simulation(
