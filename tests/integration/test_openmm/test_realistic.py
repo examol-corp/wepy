@@ -5,6 +5,7 @@ OpenMM Runner, REVO and WExplore resamplers, paralell work mappers.
 Configurable platforms.
 
 """
+import importlib.resources
 import copy
 import openmm
 import psutil
@@ -12,17 +13,17 @@ import psutil
 import mdtraj
 # TODO: use the high-level API imports
 from wepy.walker import Walker
-from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState, HeartBeatLoggingReporterFactory
+from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState, HeartBeatLoggingReporterFactory, OpenMMStateWrapper
 from wepy.sim_manager import Manager
 from wepy.work_mapper.openmm import OpenMMProcPoolWorkMapperFactory
 from wepy.resampling.resamplers.revo import REVOResampler
 from wepy.util.mdtraj import mdtraj_to_json_topology
 from wepy.runners.openmm.logger import HeartBeatLoggingReporter
 from wepy.resampling.resamplers.noresampler import NoResampler
+from wepy.util.mdtraj import json_to_mdtraj_topology
 
-from wepy_tools.systems.alanine_dipeptide import AlanineDipeptideExplicit, AlanineDipeptideRamachandranDistance
 from wepy_tools.systems.lennard_jones import LennardJonesPair, PairDistance
-
+from wepy_tools.systems.alanine_dipeptide import AlanineDipeptideRamachandranDistance
 
 def test_lennard_jones_revo_procpool():
 
@@ -113,14 +114,35 @@ def test_lennard_jones_revo_procpool():
 
 def test_alanine_dipeptide_revo_procpool():
 
-    # ALERT: Using this system will cause the simulation to stall
-    test_sys = AlanineDipeptideExplicit()
+    TEMPERATURE = 300. * openmm.unit.kelvin
 
-    integrator = openmm.LangevinIntegrator(300.0, 0.1, 0.002)
+    # load the system and state information for the simulation
+    ala_files = importlib.resources.files("wepy_tools.systems.data.alanine_dipeptide_explicit")
+    system_xml_path = ala_files / "alanine-dipeptide-explicit.system.omm.xml"
+    state_xml_path = ala_files / "alanine-dipeptide-explicit.state.omm.xml"
+    top_json_path = ala_files / "alanine-dipeptide-explicit.top.json"
+
+    system = openmm.XmlSerializer.deserialize(system_xml_path.read_text())
+
+    init_state_wrapper = OpenMMStateWrapper.from_xml(state_xml_path.read_text())
+    init_state = OpenMMState.from_state_wrapper(init_state_wrapper)
+
+    json_top_str = top_json_path.read_text()
+    mdj_top = json_to_mdtraj_topology(json_top_str)
+    topology = mdj_top.to_openmm()
+
+    integrator = openmm.LangevinIntegrator(TEMPERATURE, 0.1, 0.002)
+
+    # add the pseudo forces like barostat
+    barostat = openmm.MonteCarloBarostat(
+        1. * openmm.unit.atmosphere,
+        TEMPERATURE,
+    )
+    system.addForce(barostat)
 
     runner_factory = OpenMMRunnerFactory(
-        system=test_sys.system,
-        topology=test_sys.topology,
+        system=system,
+        topology=topology,
         integrator=integrator,
         # For this test we do want heart beat at shorter interval
         openmm_reporter_factories=[
@@ -130,10 +152,6 @@ def test_alanine_dipeptide_revo_procpool():
     )
 
     num_walkers = 4
-
-    init_state = OpenMMState.from_dwim(
-            positions=test_sys.positions,
-        )
 
     # TODO: remove the need to deepcopy and have the components make
     # their own copies if necessary
@@ -163,11 +181,7 @@ def test_alanine_dipeptide_revo_procpool():
         num_workers = num_walkers
         cores_per_worker = (num_workers // num_walkers)
 
-    json_top = mdtraj_to_json_topology(
-            mdtraj.Topology.from_openmm(test_sys.topology)
-        )
-
-    distance_metric = AlanineDipeptideRamachandranDistance(json_top)
+    distance_metric = AlanineDipeptideRamachandranDistance(json_top_str)
 
     resampler = REVOResampler(
         merge_dist=4,
@@ -179,8 +193,11 @@ def test_alanine_dipeptide_revo_procpool():
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
-        resampler=NoResampler(),
+        # resampler=NoResampler(),
+        resampler=resampler,
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
+            # num_procs=2,
+            # platform="Reference",
             platform="CPU",
             num_procs=num_workers,
             global_platform_properties={"Threads" : str(cores_per_worker)},
@@ -188,7 +205,7 @@ def test_alanine_dipeptide_revo_procpool():
     )
 
     new_walkers, sim_components  = sim_manager.run_simulation(
-        n_cycles=1,
-        segment_lengths=10,
+        n_cycles=2,
+        segment_lengths=100,
     )
     

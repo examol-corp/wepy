@@ -34,6 +34,7 @@ except ModuleNotFoundError:
 # First Party Library
 from wepy.runners.runner import Runner, RunnerStatus, RunSegmentData, RunnerStateMachine, RunnerEvent, RunnerStateError
 from wepy.util.util import box_vectors_to_lengths_angles
+from wepy.util.openmm import triclinic_volume_vec3_quantity, format_box_vectors_line
 from wepy.walker import WalkerState
 from .state import OpenMMState, OpenMMStateWrapper, get_context_state
 from .logger import HeartBeatLoggingReporterFactory, LoggingReporterFactory
@@ -74,6 +75,65 @@ class OpenMMRunnerSegmentData(RunSegmentData):
     segment_split_time: float
     openmm_segment_split_time: OpenMMRunnerSegmentSplitTime
 
+def _report_simulation(simulation: openmm.app.Simulation) -> tuple[
+        openmm.unit.Quantity,
+        tuple[openmm.unit.Quantity, openmm.unit.Quantity, openmm.unit.Quantity],
+        openmm.unit.Quantity,
+        openmm.unit.Quantity,
+        openmm.unit.Quantity,
+]:
+
+    # log some info on the constructed simulation
+    _step_count = simulation.context.getStepCount()
+    _time = simulation.context.getTime()
+    _num_molecules = len(simulation.context.getMolecules())
+    _platform = simulation.context.getPlatform()
+    _platform_name = _platform.getName()
+    _platform_prop_names = _platform.getPropertyNames()
+    _props = {
+        name: _platform.getPropertyValue(
+            simulation.context,
+            name,
+        )
+        for name in _platform_prop_names
+    }
+    _openmm_version = _platform.getOpenMMVersion()
+    logger.info(f"Simulation Context: current_step={_step_count}, sampling_time={_time}, num_molecules={_num_molecules}")
+    logger.info(f"Simulation Context Platform: openmm_version={_openmm_version}, name={_platform_name}, properties={_props}")
+
+    # report on the initial state as well
+    _init_state = simulation.context.getState(
+        positions=False,
+        velocities=True,
+        forces=False,
+        energy=True,
+    )
+    _velocities = _init_state.getVelocities()
+    _vel0 = _velocities[0]
+    _vel0_mag = _vel0.value_in_unit(_vel0.unit)
+    _vels_zeroed = (
+        np.isclose(_vel0_mag[0], 0.) and np.isclose(_vel0_mag[1], 0.) and np.isclose(_vel0_mag[2], 0.)
+    )
+
+    if _vels_zeroed:
+        logger.info("Context state velocities are zeroed.")
+    else:
+        logger.info("Context state velocities are set.")
+
+    _pot_e = _init_state.getPotentialEnergy()
+    _kin_e = _init_state.getKineticEnergy()
+    _tot_e = _pot_e + _kin_e
+
+    logger.info(f"Context state energies: kinetic={_kin_e}, potential={_pot_e}, total={_tot_e}")
+
+    _box_volume = _init_state.getPeriodicBoxVolume()
+    _bvs = _init_state.getPeriodicBoxVectors()
+    _bvs_line = format_box_vectors_line(_bvs)
+
+    logger.info(f"Context state box: volume={_box_volume}, vectors={_bvs_line}")
+
+    return _box_volume, _bvs, _pot_e, _kin_e, _tot_e
+
 # the runner for the simulation which runs the actual dynamics
 class OpenMMRunner(Runner):
     """Runner for OpenMM simulations."""
@@ -81,8 +141,6 @@ class OpenMMRunner(Runner):
     system: openmm.System
     topology: openmm.app.Topology
     integrator: openmm.Integrator
-    platform_name: str | None
-    global_platform_kwargs: PlatformKwargs | None
     enforce_box: bool
     get_state_keys: frozenset[str]
     openmm_reporter_factories: list[LoggingReporterFactory] | None
@@ -98,8 +156,6 @@ class OpenMMRunner(Runner):
         system: openmm.System,
         topology: openmm.app.Topology,
         integrator: openmm.Integrator,
-        platform_name: str | None = None,
-        global_platform_kwargs: PlatformKwargs | None = None,
         enforce_box: bool = False,
         get_state_keys: frozenset[str] = GET_STATE_DEFAULT_KEYS,
         openmm_reporter_factories: list[LoggingReporterFactory] | None = None,
@@ -108,8 +164,6 @@ class OpenMMRunner(Runner):
         self.system = system
         self.topology = topology
         self.integrator = integrator
-        self.platform_name = platform_name
-        self.global_platform_args = global_platform_kwargs
         self.enforce_box = enforce_box
         self.get_state_keys = get_state_keys
 
@@ -121,6 +175,70 @@ class OpenMMRunner(Runner):
         self._pre_cycle_time = None
 
         self.state_machine = RunnerStateMachine()
+
+        self._report_configuration()
+
+    def _report_configuration(self) -> None:
+        logger.info("Details of OpenMMRunner initial configuration")
+
+        logger.info(
+            f"OpenMM logger reporters: {','.join(str(v) for v in self.openmm_reporter_factories)}"
+        )
+
+        logger.info(f"Enforce PBCs in getState: {self.enforce_box}")
+        logger.info(f"Get state keys: {self.get_state_keys}")
+
+        # system
+        num_particles = self.system.getNumParticles()
+        num_forces = self.system.getNumForces()
+        uses_pbcs = self.system.usesPeriodicBoundaryConditions()
+        default_bvs = self.system.getDefaultPeriodicBoxVectors()
+
+        default_bv_volume = triclinic_volume_vec3_quantity(default_bvs)
+        default_bv_line = format_box_vectors_line(default_bvs)        
+
+        logger.info(f"System: num_particles={num_particles}, num_forces={num_forces}, uses_pbcs={uses_pbcs}")
+        logger.info(f"System default box vectors: volume={default_bv_volume}, vectors={default_bv_line}")
+
+        # topology
+        num_chains = self.topology.getNumChains()
+        num_residues = self.topology.getNumResidues()
+        num_atoms = self.topology.getNumAtoms()
+        num_bonds = self.topology.getNumBonds()
+
+        top_bvs = self.topology.getPeriodicBoxVectors()
+
+
+        logger.info(
+            f"Topology: num_chains={num_chains}, num_residues={num_residues}, num_atoms={num_atoms}, num_bonds={num_bonds}"
+        )
+        if top_bvs is not None:
+            top_bv_volume = triclinic_volume_vec3_quantity(default_bvs)
+            bv_line = format_box_vectors_line(default_bvs)
+            logger.info(
+                f"Topology box vectors: volume={top_bv_volume} vectors={bv_line}"
+            )
+        else:
+            logger.info("Topology box vectors not set.")
+
+        chain_ids = [
+            chain.id
+            for chain
+            in self.topology.chains()
+        ]
+        logger.info(f"Topology Chains (IDs): {','.join(chain_ids)}")
+
+        for chain in self.topology.chains():
+            num_residues = len(list(chain.residues()))
+            num_atoms = len(list(chain.atoms()))
+            logger.info(
+                f"Chain {chain.index}: id={chain.id}, num_residues={num_residues}, num_atoms={num_atoms}"
+            )
+
+        # integrator
+        # UGLY: just dump the XML for simplicity
+        integrator_xml = openmm.XmlSerializer.serialize(self.integrator).replace("\n", " ")
+        logger.info(f"Integrator: {integrator_xml}")
 
     @property
     def status(self) -> RunnerStatus:
@@ -146,6 +264,7 @@ class OpenMMRunner(Runner):
 
         self.state_machine.send(RunnerEvent.PRE_CYCLE)
 
+        
     
     def run_segment(
         self,
@@ -214,7 +333,7 @@ class OpenMMRunner(Runner):
 
             # get the platform by its name to use
             platform = openmm.Platform.getPlatformByName(platform_name)
-            logger.info(f"Platform object created: {platform}")
+            logger.info(f"Platform instantiated.")
 
             # set properties from the kwargs if they apply to the platform
             for key, value in platform_kwargs.items():
@@ -261,7 +380,6 @@ class OpenMMRunner(Runner):
         logger.info("Generating openmm.State from input OpenMMState")
         state_wrapper = walker_state.to_state_wrapper()
 
-
         # set in the context
         logger.info("Setting openmm.State into current context")
         simulation.context.setState(state_wrapper.state)
@@ -269,7 +387,10 @@ class OpenMMRunner(Runner):
         gen_sim_end = time.time()
         gen_sim_time = gen_sim_end - gen_sim_start
 
-        logger.info("Time to generate the system: {}".format(gen_sim_time))
+        logger.info(f"Time to generate the system: {gen_sim_time:.4f} s")
+
+        logger.info("Information on initial simulation state")
+        before_volume, before_bvs, before_pot_e, before_kin_e, before_tot_e = _report_simulation(simulation)
 
         # actually run the simulation
 
@@ -282,7 +403,42 @@ class OpenMMRunner(Runner):
         steps_end = time.time()
         steps_time = steps_end - steps_start
 
-        logger.info(f"Time to run {segment_length} sim steps: {steps_time} s")
+        logger.info(f"Time to run {segment_length} sim steps: {steps_time:.4f} s")
+
+        logger.info("Information on final simulation state")
+        after_volume, after_bvs, after_pot_e, after_kin_e, after_tot_e = _report_simulation(simulation)
+
+        _before_lengths = (
+            np.linalg.norm(before_bvs[0]),
+            np.linalg.norm(before_bvs[1]),
+            np.linalg.norm(before_bvs[2]),
+        )
+        _after_lengths = (
+            np.linalg.norm(after_bvs[0]),
+            np.linalg.norm(after_bvs[1]),
+            np.linalg.norm(after_bvs[2]),
+        )
+
+        _delta_lengths = [
+            after_length - before_length
+            for after_length, before_length
+            in zip(_after_lengths, _before_lengths, strict=True)
+        ]
+        _delta_lengths_line = f"({_delta_lengths[0]}, {_delta_lengths[1]}, {_delta_lengths[2]})"
+
+        # report on the change in energies and box volume
+        _delta_volume = after_volume - before_volume
+        _delta_pot_e = after_pot_e - before_pot_e
+        _delta_kin_e = after_kin_e - before_kin_e
+        _delta_tot_e = after_tot_e - before_tot_e
+
+        logger.info(
+            f"State changes in Unitcell: box_volume={_delta_volume}, lengths={_delta_lengths_line}, "
+        )
+
+        logger.info(
+            f"State changes in Energy: potential_E={_delta_pot_e}, kinetic_E={_delta_kin_e}, total_E={_delta_tot_e}"
+        )
 
         get_state_start = time.time()
 
@@ -300,11 +456,11 @@ class OpenMMRunner(Runner):
         
         get_state_end = time.time()
         get_state_time = get_state_end - get_state_start
-        logger.info("Getting context state time: {}".format(get_state_time))
+        logger.info(f"Getting context state time: {get_state_time:.4f} s")
 
         run_segment_end = time.time()
         run_segment_time = run_segment_end - run_segment_start
-        logger.info("Total internal run_segment time: {}".format(run_segment_time))
+        logger.info(f"Total internal run_segment time: {run_segment_time:.4f} s")
 
         segment_data = OpenMMRunnerSegmentData(
             segment_split_time=run_segment_time,
@@ -329,8 +485,6 @@ class OpenMMRunnerFactory:
     system: openmm.System
     topology: openmm.app.Topology
     integrator: openmm.Integrator
-    platform_name: str | None = None
-    global_platform_kwargs: PlatformKwargs | None = None
     enforce_box: bool = False
     get_state_keys: frozenset[str] = attrs.field(default=GET_STATE_DEFAULT_KEYS)
     openmm_reporter_factories: list[LoggingReporterFactory] | None = attrs.field(default=DEFAULT_OPENMM_REPORTER_FACTORIES)
@@ -341,8 +495,6 @@ class OpenMMRunnerFactory:
             system=copy.deepcopy(self.system),
             topology=copy.deepcopy(self.topology),
             integrator=copy.deepcopy(self.integrator),
-            platform_name=self.platform_name,
-            global_platform_kwargs=self.global_platform_kwargs,
             enforce_box=self.enforce_box,
             get_state_keys=self.get_state_keys,
             openmm_reporter_factories=self.openmm_reporter_factories,

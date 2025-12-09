@@ -394,70 +394,6 @@ def get_state_fields_present(sim_state: openmm.State) -> frozenset[StateFieldNam
     return frozenset(present_fields)
 
 
-# def resolve_state_data_type_enum_values() -> dict[str, int]:
-#     enum_values = {}
-#     for our_name, enum_name in STATE_DATA_TYPE_ENUM_NAMES.items():
-#         enum_values[our_name] = getattr(openmm.State, enum_name)
-
-#     return enum_values
-
-
-# # reversed since that is the order we check them in and is a frequent operation
-# STATE_DATA_TYPE_ENUM_VALUES: list[tuple[str, int]] = list(
-#     sorted(
-#         [(k, v) for k, v in resolve_state_data_type_enum_values().items()],
-#         key=lambda x: x[1],
-#         reverse=True,
-#     )
-# )
-
-
-# def get_state_fields_present(sim_state: openmm.State) -> list[str]:
-#     """For a state returns a set of the field data types present in it."""
-
-#     flag_sum = sim_state.getDataTypes()
-
-#     flag_fields: list[str] = []
-#     flag_values: list[int] = []
-#     flag_cum: int = flag_sum
-#     for field_name, flag_value in STATE_DATA_TYPE_ENUM_VALUES:
-#         if flag_value > flag_cum:
-#             continue
-#         elif flag_value == flag_cum:
-#             flag_fields.append(field_name)
-#             flag_values.append(flag_value)
-#             break
-
-#         else:
-#             flag_fields.append(field_name)
-#             flag_values.append(flag_value)
-#             flag_cum -= flag_value
-
-#     # double check they sum up
-#     assert sum(flag_values) == flag_sum
-
-#     return flag_fields
-
-
-# the Units objects that OpenMM uses internally and are returned from
-# simulation data
-
-# TODO: this is never used and we only need the unit names. Its okay
-# to use openmm.units here but other runners should use a units sytem
-# like pint which is easier to install. So we should remove this since
-# its not used.
-
-# UNITS = (('positions_unit', openmm.unit.nanometer),
-#          ('time_unit', openmm.unit.picosecond),
-#          ('box_vectors_unit', openmm.unit.nanometer),
-#          ('velocities_unit', openmm.unit.nanometer/openmm.unit.picosecond),
-#          ('forces_unit', openmm.unit.kilojoule / (openmm.unit.nanometer * openmm.unit.mole)),
-#          ('box_volume_unit', openmm.unit.nanometer),
-#          ('kinetic_energy_unit', openmm.unit.kilojoule / openmm.unit.mole),
-#          ('potential_energy_unit', openmm.unit.kilojoule / openmm.unit.mole),
-#         )
-# """Mapping of units identifiers to the corresponding openmm.units Unit objects."""
-
 # the names of the units from the units objects above. This is used
 # for saving them to files
 UNIT_NAMES: tuple[tuple[str, str], ...] = (
@@ -474,9 +410,6 @@ UNIT_NAMES: tuple[tuple[str, str], ...] = (
     ("potential_energy_unit", (openmm.unit.kilojoule / openmm.unit.mole).get_name()),
 )
 """Mapping of unit identifier strings to the serialized string spec of the unit."""
-
-
-
 
 
 ## Wrapper for a openmm.State
