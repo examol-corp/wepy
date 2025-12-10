@@ -2,16 +2,13 @@ import pytest
 from typing import TypedDict
 from enum import IntEnum
 import attrs
-from wepy.resampling.decisions.decision import Decision
+from wepy.resampling.decisions.decision import Decision, DecisionRecord
 from wepy.walker import Walker
 from wepy.runners.mock import MockState
 
 # minimal implementation of the ABC for testing
 class MockDecisionEnum(IntEnum):
     NOTHING = 0
-
-class MockDecisionRecord(TypedDict):
-    decision_id: int
 
 class MockDecision(Decision):
 
@@ -57,7 +54,7 @@ class Test_Decision:
 
     def test_record(self):
 
-        assert MockDecision.record(0) == {"decision_id" : 0}
+        assert MockDecision.record(0) == DecisionRecord(decision_id=0)
 
     def test_action(self):
 
@@ -71,7 +68,7 @@ class Test_Decision:
                     for _ in range(4)
                 ],
                 [
-                    MockDecisionRecord(
+                    DecisionRecord(
                         decision_id=0
                     )
                     for _ in range(4)

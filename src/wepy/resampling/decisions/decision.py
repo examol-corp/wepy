@@ -76,6 +76,8 @@ class Decision:
     DEFAULT_DECISION: int
     """The default decision to choose."""
 
+    DECISION_RECORD: DecisionRecord = DecisionRecord
+
     FIELDS: tuple[str, ...] = ("decision_id",)
     """The names of the fields that go into the decision record."""
 
@@ -214,8 +216,10 @@ class Decision:
             ), "The field {} is not a field for that decision".format(field_key)
             assert field_key != "decision_id", "'decision_id' cannot be an extra field"
 
-        rec = {"decision_id": enum_value}
-        rec.update(fields)
+        rec_d = {"decision_id": enum_value}
+        rec_d.update(fields)
+
+        rec = cls.DECISION_RECORD(**rec_d)
 
         return rec
 

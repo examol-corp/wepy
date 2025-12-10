@@ -71,6 +71,8 @@ class MultiCloneMergeDecision(Decision):
 
     DEFAULT_DECISION = ENUM.NOTHING
 
+    DECISION_RECORD = CloneMergeDecisionRecord
+
     FIELDS = Decision.FIELDS + ("target_idxs",)
     SHAPES = Decision.SHAPES + (Ellipsis,)
     DTYPES = Decision.DTYPES + (int,)
