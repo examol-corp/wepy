@@ -1,7 +1,7 @@
 from typing import TypedDict
 import numpy as np
 from wepy.walker import Walker
-from wepy.resampling.resamplers.resampler import Resampler
+from wepy.resampling.resamplers.resampler import Resampler, ResamplerABC
 from wepy.resampling.decisions.no_decision import (
     NoDecision,
     NoDecisionRecord,
@@ -24,11 +24,11 @@ class NoResampler(Resampler):
     DECISION = NoDecision
 
     # must reset these when you change the decision
-    RESAMPLING_FIELDS = DECISION.FIELDS + Resampler.CYCLE_FIELDS
-    RESAMPLING_SHAPES = DECISION.SHAPES + Resampler.CYCLE_SHAPES
-    RESAMPLING_DTYPES = DECISION.DTYPES + Resampler.CYCLE_DTYPES
+    RESAMPLING_FIELDS = DECISION.FIELDS + ResamplerABC.CYCLE_FIELDS
+    RESAMPLING_SHAPES = DECISION.SHAPES + ResamplerABC.CYCLE_SHAPES
+    RESAMPLING_DTYPES = DECISION.DTYPES + ResamplerABC.CYCLE_DTYPES
 
-    RESAMPLING_RECORD_FIELDS = DECISION.RECORD_FIELDS + Resampler.CYCLE_RECORD_FIELDS
+    RESAMPLING_RECORD_FIELDS = DECISION.RECORD_FIELDS + ResamplerABC.CYCLE_RECORD_FIELDS
 
     def resample(
         self,
@@ -38,9 +38,6 @@ class NoResampler(Resampler):
         list[list[NoResamplerResamplingData]],
         list[NoResamplerResamplerData],
     ]:
-
-        # TODO,REFACT: do we really need this
-        self._resample_init(walkers=walkers)
 
         # normally decide is only for a single step and so does not
         # include the step_idx, so we add this to the records, and
@@ -64,12 +61,4 @@ class NoResampler(Resampler):
         resampler_data: list[NoResamplerResamplerData] = [{}]
 
         # the resampled walkers are just the walkers
-
-        # TODO,REFACT: do we really need this
-        self._resample_cleanup(
-            resampling_data=resampling_data,
-            resampler_data=resampler_data,
-            walkers=walkers,
-        )
-
         return walkers, resampling_data, resampler_data
