@@ -1,6 +1,6 @@
 from wepy.walker import Walker, WalkerState
 from wepy.runners.mock import MockState
-from wepy.resampling.decisions.no_decision import NoDecision, NothingDecisionEnum
+from wepy.resampling.decisions.no_decision import NoDecision, NothingDecisionEnum, NoDecisionRecord
 
 
 class TestNoDecision:
@@ -27,14 +27,14 @@ class TestNoDecision:
                 walkers,
                 [
                     [
-                        {
+                        NoDecisionRecord(**{
                             "decision_id": NothingDecisionEnum.NOTHING,
-                            "target_idxs": [0],
-                        },
-                        {
+                            "target_idx": 0,
+                        }),
+                        NoDecisionRecord(**{
                             "decision_id": NothingDecisionEnum.NOTHING,
-                            "target_idxs": [1],
-                        },
+                            "target_idx": 1,
+                        }),
                     ]
                 ],
             )
@@ -45,14 +45,42 @@ class TestNoDecision:
             walkers,
             [
                 [
-                    {
+                    NoDecisionRecord(**{
                         "decision_id": NothingDecisionEnum.NOTHING,
-                        "target_idxs": [1],
-                    },
-                    {
+                        "target_idx": 1,
+                    }),
+                    NoDecisionRecord(**{
                         "decision_id": NothingDecisionEnum.NOTHING,
-                        "target_idxs": [0],
-                    },
+                        "target_idx": 0,
+                    }),
                 ]
             ],
         ) == [walker_2, walker_1]
+
+    def test_parents(self):
+
+        assert NoDecision.parents(
+                [
+                    NoDecisionRecord(**{
+                        "decision_id": NothingDecisionEnum.NOTHING,
+                        "target_idx": 0,
+                    }),
+                    NoDecisionRecord(**{
+                        "decision_id": NothingDecisionEnum.NOTHING,
+                        "target_idx": 1,
+                    }),
+                ]
+        ) == [0, 1]
+
+        assert NoDecision.parents(
+                [
+                    NoDecisionRecord(**{
+                        "decision_id": NothingDecisionEnum.NOTHING,
+                        "target_idx": 1,
+                    }),
+                    NoDecisionRecord(**{
+                        "decision_id": NothingDecisionEnum.NOTHING,
+                        "target_idx": 0,
+                    }),
+                ]
+        ) == [1, 0]

@@ -6,6 +6,7 @@ from wepy.runners.mock import MockState
 from wepy.resampling.decisions.clone_merge import (
     MultiCloneMergeDecision,
     CloneMergeDecisionEnum,
+    CloneMergeDecisionRecord,
 )
 
 
@@ -37,14 +38,14 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        {
+                        CloneMergeDecisionRecord(**{
                             "decision_id": 1000,
                             "target_idxs": [0],
-                        },
-                        {
+                        }),
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.NOTHING,
                             "target_idxs": [1],
-                        },
+                        }),
                     ]
                 ],
             )
@@ -54,14 +55,14 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        {
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.NOTHING,
                             "target_idxs": [0],
-                        },
-                        {
+                        }),
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.NOTHING,
                             "target_idxs": [1],
-                        },
+                        }),
                     ]
                 ],
             )
@@ -73,14 +74,14 @@ class TestMultiCloneMergeDecision:
             walkers,
             [
                 [
-                    {
+                    CloneMergeDecisionRecord(**{
                         "decision_id": CloneMergeDecisionEnum.NOTHING,
                         "target_idxs": [1],
-                    },
-                    {
+                    }),
+                    CloneMergeDecisionRecord(**{
                         "decision_id": CloneMergeDecisionEnum.NOTHING,
                         "target_idxs": [0],
-                    },
+                    }),
                 ]
             ],
         ) == [walker_2, walker_1]
@@ -91,14 +92,14 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        {
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.NOTHING,
                             "target_idxs": [0],
-                        },
-                        {
+                        }),
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.NOTHING,
                             "target_idxs": [0],
-                        },
+                        }),
                     ]
                 ],
             )
@@ -111,14 +112,14 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        {
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.NOTHING,
                             "target_idxs": [0],
-                        },
-                        {
+                        }),
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.SQUASH,
                             "target_idxs": [1],
-                        },
+                        }),
                     ]
                 ],
             )
@@ -127,14 +128,14 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        {
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.NOTHING,
                             "target_idxs": [0],
-                        },
-                        {
+                        }),
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.SQUASH,
                             "target_idxs": [0],
-                        },
+                        }),
                     ]
                 ],
             )
@@ -145,14 +146,14 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        {
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.KEEP_MERGE,
                             "target_idxs": [0],
-                        },
-                        {
+                        }),
+                        CloneMergeDecisionRecord(**{
                             "decision_id": CloneMergeDecisionEnum.SQUASH,
                             "target_idxs": [0],
-                        },
+                        }),
                     ]
                 ],
             )
@@ -165,18 +166,18 @@ class TestMultiCloneMergeDecision:
             ],
             [
                 [
-                    {
+                    CloneMergeDecisionRecord(**{
                         "decision_id": CloneMergeDecisionEnum.CLONE,
                         "target_idxs": [0, 2],
-                    },
-                    {
+                    }),
+                    CloneMergeDecisionRecord(**{
                         "decision_id": CloneMergeDecisionEnum.KEEP_MERGE,
                         "target_idxs": [1],
-                    },
-                    {
+                    }),
+                    CloneMergeDecisionRecord(**{
                         "decision_id": CloneMergeDecisionEnum.SQUASH,
                         "target_idxs": [1],
-                    },
+                    }),
                 ]
             ],
         ) == [
@@ -187,3 +188,15 @@ class TestMultiCloneMergeDecision:
             ),
             attrs.evolve(walker_1, weight=0.5),
         ]
+
+    def test_parents(self):
+
+        MultiCloneMergeDecision.parents(
+            [
+                CloneMergeDecisionRecord(
+                    decision_id=0,
+                    target_idxs=idx,
+                )
+                for idx in range(4)
+            ],
+        )

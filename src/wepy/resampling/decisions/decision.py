@@ -52,13 +52,14 @@ import logging
 # Standard Library
 from enum import IntEnum
 
+import attrs
+
 from wepy.walker import Walker
 
 logger = logging.getLogger(__name__)
 
-
-class DecisionRecord(TypedDict):
-
+@attrs.define
+class DecisionRecord:
     decision_id: int
 
 
@@ -189,34 +190,34 @@ class Decision:
         d = cls.enum_dict_by_name()
         return d[enum_name]
 
-    # @classmethod
-    # def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord:
-    #     """Generate a record for the enum_value and the other fields.
+    @classmethod
+    def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord:
+        """Generate a record for the enum_value and the other fields.
 
-    #     Parameters
-    #     ----------
-    #     enum_value : int
+        Parameters
+        ----------
+        enum_value : int
 
-    #     Returns
-    #     -------
-    #     rec : dict of str: value
+        Returns
+        -------
+        rec : dict of str: value
 
-    #     """
+        """
 
-    #     assert (
-    #         enum_value in cls.enum_dict_by_value()
-    #     ), "value is not a valid Enumerated value"
+        assert (
+            enum_value in cls.enum_dict_by_value()
+        ), "value is not a valid Enumerated value"
 
-    #     for field_key in fields.keys():
-    #         assert (
-    #             field_key in cls.FIELDS
-    #         ), "The field {} is not a field for that decision".format(field_key)
-    #         assert field_key != "decision_id", "'decision_id' cannot be an extra field"
+        for field_key in fields.keys():
+            assert (
+                field_key in cls.FIELDS
+            ), "The field {} is not a field for that decision".format(field_key)
+            assert field_key != "decision_id", "'decision_id' cannot be an extra field"
 
-    #     rec = {"decision_id": enum_value}
-    #     rec.update(fields)
+        rec = {"decision_id": enum_value}
+        rec.update(fields)
 
-    #     return rec
+        return rec
 
     @classmethod
     def action(
@@ -259,37 +260,3 @@ class Decision:
         """
         raise NotImplementedError
 
-    @classmethod
-    def parents(cls, step: list[DecisionRecord]) -> list[int]:
-        """Given a step of resampling records (for a single resampling step)
-        returns the parents of the children of this step.
-
-        Parameters
-        ----------
-        step : list of decision records
-            The decision records for a step of resampling for each walker.
-
-        Returns
-        -------
-        walker_step_parents : list of int
-            For each element, the index of it in the list corresponds
-            to the child index and the value of the element is the
-            index of it's parent before the decision action.
-
-        """
-
-        # initialize a list for the parents of this stages walkers
-        step_parents = [None for i in range(len(step))]
-
-        # the rest of the stages parents are based on the previous stage
-        for parent_idx, parent_rec in enumerate(step):
-            # if the decision is an ancestor then the instruction
-            # values will be the children
-            if parent_rec[0] in cls.ANCESTOR_DECISION_IDS:
-                # the first value of the parent record is the target
-                # idxs
-                child_idxs = parent_rec[1]
-                for child_idx in child_idxs:
-                    step_parents[child_idx] = parent_idx
-
-        return step_parents

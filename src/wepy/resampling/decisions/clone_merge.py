@@ -5,9 +5,10 @@ import logging
 # Standard Library
 from collections import defaultdict
 from enum import IntEnum
+import attrs
 
 # First Party Library
-from wepy.resampling.decisions.decision import Decision
+from wepy.resampling.decisions.decision import Decision, DecisionRecord
 from wepy.walker import keep_merge, split, Walker
 
 logger = logging.getLogger(__name__)
@@ -39,8 +40,8 @@ class CloneMergeDecisionEnum(IntEnum):
     """Do nothing with the sample value (state) but squashed walkers will
     donate their weight to it."""
 
-
-class CloneMergeDecisionRecord(TypedDict):
+@attrs.define
+class CloneMergeDecisionRecord(DecisionRecord):
     decision_id: int
     target_idxs: list[int]
 
@@ -85,7 +86,9 @@ class MultiCloneMergeDecision(Decision):
 
     @classmethod
     def action(
-        cls, walkers: list[Walker], decisions: list[CloneMergeDecisionRecord]
+        cls,
+        walkers: list[Walker],
+        decisions: list[CloneMergeDecisionRecord],
     ) -> list[Walker]:
         # list for the modified walkers
         mod_walkers = [None for i in range(len(walkers))]
@@ -99,8 +102,8 @@ class MultiCloneMergeDecision(Decision):
             # go through each decision and perform the decision
             # instructions
             for walker_idx, walker_rec in enumerate(step_recs):
-                decision_value = walker_rec["decision_id"]
-                instruction = walker_rec["target_idxs"]
+                decision_value = walker_rec.decision_id
+                instruction = walker_rec.target_idxs
 
                 if decision_value == cls.ENUM.NOTHING.value:
                     # check to make sure a walker doesn't already exist
@@ -181,3 +184,39 @@ class MultiCloneMergeDecision(Decision):
             raise ValueError("Some walkers were not created")
 
         return mod_walkers
+
+    @classmethod
+    def parents(cls, step: list[CloneMergeDecisionRecord]) -> list[int]:
+        """Given a step of resampling records (for a single resampling step)
+        returns the parents of the children of this step.
+
+        Parameters
+        ----------
+        step : list of decision records
+            The decision records for a step of resampling for each walker.
+
+        Returns
+        -------
+        walker_step_parents : list of int
+            For each element, the index of it in the list corresponds
+            to the child index and the value of the element is the
+            index of it's parent before the decision action.
+
+        """
+
+        # initialize a list for the parents of this stages walkers
+        step_parents = [None for i in range(len(step))]
+
+        # the rest of the stages parents are based on the previous stage
+        for parent_idx, parent_rec in enumerate(step):
+            # if the decision is an ancestor then the instruction
+            # values will be the children
+            if parent_rec.decision_id in cls.ANCESTOR_DECISION_IDS:
+                # the first value of the parent record is the target
+                # idxs
+                child_idxs = parent_rec.target_idxs
+                for child_idx in child_idxs:
+                    step_parents[child_idx] = parent_idx
+
+        return step_parents
+    

@@ -1,6 +1,6 @@
 from typing import TypedDict
 from enum import IntEnum
-
+import attrs
 from wepy.walker import Walker
 from wepy.resampling.decisions.decision import Decision, DecisionRecord
 
@@ -12,9 +12,10 @@ class NothingDecisionEnum(IntEnum):
     """Do nothing with the walker."""
 
 
-class NoDecisionRecord(TypedDict):
+@attrs.define
+class NoDecisionRecord(DecisionRecord):
     decision_id: int
-    target_idxs: list[int]
+    target_idx: int
 
 
 class NoDecision(Decision):
@@ -44,18 +45,28 @@ class NoDecision(Decision):
         for step_idx, step_recs in enumerate(decisions):
             for walker_idx, decision in enumerate(step_recs):
 
-                if decision["decision_id"] == cls.ENUM.NOTHING.value:
+                if decision.decision_id == cls.ENUM.NOTHING.value:
                     # check to make sure a walker doesn't already exist
                     # where you are going to put it
-                    if mod_walkers[decision["target_idxs"][0]] is not None:
+                    if mod_walkers[decision.target_idx] is not None:
                         raise ValueError(
                             "Multiple walkers assigned to position {}".format(
-                                decision["target_idxs"][0]
+                                decision.target_idx
                             )
                         )
 
                     # put the walker in the position specified by the
                     # instruction
-                    mod_walkers[decision["target_idxs"][0]] = walkers[walker_idx]
+                    mod_walkers[decision.target_idx] = walkers[walker_idx]
 
         return mod_walkers
+
+    @classmethod
+    def parents(cls, step: list[NoDecisionRecord]) -> list[int]:
+
+        step_parents = [None for i in range(len(step))]
+        for parent_idx, parent_rec in enumerate(step):
+
+            step_parents[parent_rec.target_idx] = parent_idx
+
+        return step_parents
