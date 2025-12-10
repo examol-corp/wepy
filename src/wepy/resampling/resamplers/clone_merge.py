@@ -1,12 +1,15 @@
+from typing import TypeVar, Generic
 # Third Party Library
 import numpy as np
 
 # First Party Library
-from wepy.resampling.decisions.clone_merge import MultiCloneMergeDecision
-from wepy.resampling.resamplers.resampler import Resampler, ResamplerError
+from wepy.resampling.decisions.clone_merge import MultiCloneMergeDecision, CloneMergeDecisionRecord
+from wepy.resampling.resamplers.resampler import Resampler, ResamplerABC, ResamplerError
+from wepy.walker import WalkerState, Walker
 
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 
-class CloneMergeResampler(Resampler):
+class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
     """Abstract base class for resamplers using the clone-merge decision
     class.
 
@@ -23,11 +26,11 @@ class CloneMergeResampler(Resampler):
 
     DECISION = MultiCloneMergeDecision
 
-    RESAMPLING_FIELDS = DECISION.FIELDS + Resampler.CYCLE_FIELDS
-    RESAMPLING_SHAPES = DECISION.SHAPES + Resampler.CYCLE_SHAPES
-    RESAMPLING_DTYPES = DECISION.DTYPES + Resampler.CYCLE_DTYPES
+    RESAMPLING_FIELDS = DECISION.FIELDS + ResamplerABC.CYCLE_FIELDS
+    RESAMPLING_SHAPES = DECISION.SHAPES + ResamplerABC.CYCLE_SHAPES
+    RESAMPLING_DTYPES = DECISION.DTYPES + ResamplerABC.CYCLE_DTYPES
 
-    RESAMPLING_RECORD_FIELDS = DECISION.RECORD_FIELDS + Resampler.CYCLE_RECORD_FIELDS
+    RESAMPLING_RECORD_FIELDS = DECISION.RECORD_FIELDS + ResamplerABC.CYCLE_RECORD_FIELDS
 
     def __init__(
         self,
@@ -36,7 +39,7 @@ class CloneMergeResampler(Resampler):
         min_num_walkers=Ellipsis,
         max_num_walkers=Ellipsis,
         **kwargs,
-    ):
+    ) -> None:
         """Constructor for CloneMegerResampler class.
 
         Parameters
@@ -50,21 +53,36 @@ class CloneMergeResampler(Resampler):
         """
 
         super().__init__(
-            min_num_walkers=min_num_walkers, max_num_walkers=max_num_walkers, **kwargs
+            min_num_walkers=min_num_walkers,
+            max_num_walkers=max_num_walkers, **kwargs
         )
+
+        if pmin >= 1.0:
+            raise ResamplerError(
+                f"pmin ({pmin}) must be less 1.0"
+            )
+        if pmax >= 1.0:
+            raise ResamplerError(
+                f"pmax ({pmax}) must be less 1.0"
+            )
+
+        if pmin > pmax:
+            raise ResamplerError(
+                f"pmin ({pmin}) must be less than pmax ({pmax})"
+            )
 
         self._pmin = pmin
         self._pmax = pmax
 
     @property
-    def pmin(self):
+    def pmin(self) -> float:
         return self._pmin
 
     @property
-    def pmax(self):
+    def pmax(self) -> float:
         return self._pmax
 
-    def _init_walker_actions(self, n_walkers):
+    def _init_walker_actions(self, n_walkers: int) -> list[CloneMergeDecisionRecord]:
         """Returns a list of default resampling records for a single
         resampling step.
 
@@ -91,7 +109,7 @@ class CloneMergeResampler(Resampler):
 
         return walker_actions
 
-    def _check_resampled_walkers(self, resampled_walkers):
+    def _check_resampled_walkers(self, resampled_walkers: list[Walker[WalkerState_]]) -> None:
         """Check constraints on resampled walkers.
 
         Raises errors when constraints are violated.
@@ -101,6 +119,8 @@ class CloneMergeResampler(Resampler):
         resampled_walkers : list of Walker objects
 
         """
+
+        # TODO: should we check that the sums are unity here?
 
         walker_weights = np.array([walker.weight for walker in resampled_walkers])
 
@@ -124,7 +144,11 @@ class CloneMergeResampler(Resampler):
                 )
             )
 
-    def assign_clones(self, merge_groups, walker_clone_nums):
+    def assign_clones(
+            self,
+            merge_groups: list[list[int]],
+            walker_clone_nums: list[int],
+    ) -> list[CloneMergeDecisionRecord]:
         """Convert two convenient data structures to a list of almost
         normalized resampling records.
 
@@ -163,6 +187,11 @@ class CloneMergeResampler(Resampler):
 
         """
 
+        if len(merge_groups) != len(walker_clone_nums):
+            raise ResamplerError(
+                f"Size of merge_groups ({len(merge_groups)}) and walker_clone_nums ({len(walker_clone_nums)}) must be equal."
+            )
+
         n_walkers = len(walker_clone_nums)
 
         walker_actions = self._init_walker_actions(n_walkers)
@@ -196,7 +225,7 @@ class CloneMergeResampler(Resampler):
         for walker_idx, num_clones in enumerate(walker_clone_nums):
             if num_clones > 0 and len(merge_groups[walker_idx]) > 0:
                 raise ResamplerError(
-                    "Error! cloning and merging occuring with the same walker"
+                    f"Cloning and merging occuring with the same walker: {walker_idx}"
                 )
 
             # if this walker is to be cloned do so and consume the free

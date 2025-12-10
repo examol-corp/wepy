@@ -1,6 +1,6 @@
 # Standard Library
 import logging
-from typing import Any
+from typing import Any, Protocol, TypeVar, Generic, Literal, Union
 
 # Standard Library
 from warnings import warn
@@ -10,9 +10,11 @@ import numpy as np
 
 # First Party Library
 from wepy.resampling.decisions.decision import Decision, DecisionRecord
-from wepy.walker import Walker
+from wepy.walker import Walker, WalkerState
 
 logger = logging.getLogger(__name__)
+
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 
 
 class ResamplerError(Exception):
@@ -22,8 +24,83 @@ class ResamplerError(Exception):
 
     pass
 
+class Resampler(Protocol, Generic[WalkerState_]):
 
-class Resampler:
+    DECISION: Decision
+    CYCLE_FIELDS: tuple[str, ...]
+    CYCLE_SHAPES: tuple[tuple[int, ...], ...]
+    CYCLE_DTYPES: tuple[int | float, ...]
+    CYCLE_RECORD_FIELDS: None | tuple[str, ...]
+    RESAMPLING_FIELDS: tuple[str, ...]
+    RESAMPLING_SHAPES: tuple[
+        Union[
+            tuple[int, ...],
+            Literal[Ellipsis],
+            None,
+        ],
+        ...
+    ]
+    RESAMPLING_DTYPES: tuple[
+        Union[
+            np.dtype,
+            None
+        ],
+        ...
+    ]
+    RESAMPLING_RECORD_FIELDS: None | tuple[str, ...]
+    RESAMPLER_FIELDS: tuple[str, ...]
+    RESAMPLER_SHAPES: tuple[
+        Union[
+            tuple[int, ...],
+            Literal[Ellipsis],
+            None,
+        ],
+        ...
+    ]
+
+    RESAMPLER_DTYPES: tuple[
+        Union[np.dtype, None], ...
+    ]
+    RESAMPLER_RECORD_FIELDS: None | tuple[str, ...]
+
+    def resampling_fields(self) -> tuple[
+            tuple[str, ...],
+            tuple[
+                Union[
+                    tuple[int, ...],
+                    Literal[Ellipsis],
+                    None,
+                ],
+                ...
+            ],
+            tuple[
+                Union[
+                    np.dtype,
+                    None
+                ],
+                ...
+            ],
+    ]:
+        ...
+
+    def resampling_record_field_names(self) -> None | tuple[str, ...]:
+        ...
+
+    def resampler_record_field_names(self) -> None | tuple[str, ...]:
+        ...
+        
+    def resample(
+            self,
+            walkers: list[Walker[WalkerState_]]
+    ) -> tuple[
+        list[Walker[WalkerState_]],
+        # TODO: better types for this
+        list[dict[str, Any]],
+        list[dict[str, Any]],
+    ]:
+        ...
+
+class ResamplerABC(Resampler):
     """Abstract base class for implementing resamplers.
 
     All subclasses of Resampler must implement the 'resample' method.
@@ -308,7 +385,7 @@ class Resampler:
 
         """
 
-        # the min and max number of walkers that can be generated in
+        # The min and max number of walkers that can be generated in
         # resampling.
 
         # Ellipsis means to keep bound it by the number of
@@ -323,10 +400,15 @@ class Resampler:
         # min_num_walkers of None in practice is 1 since there must
         # always be at least 1 walker
 
-        if min_num_walkers not in (Ellipsis, None):
+        if min_num_walkers not in {Ellipsis, None}:
             if min_num_walkers < 1:
                 raise ResamplerError(
                     "The minimum number of walkers should be at least 1"
+                )
+
+            if max_num_walkers not in {Ellipsis, None} and  min_num_walkers > max_num_walkers:
+                raise ResamplerError(
+                    f"min_num_walkers ({min_num_walkers}) must be less than or equal to max_num_walkers ({max_num_walkers})"
                 )
 
         self._min_num_walkers = min_num_walkers
@@ -458,12 +540,12 @@ class Resampler:
         self.set_debug_mode(False)
 
     @property
-    def max_num_walkers_setting(self):
+    def max_num_walkers_setting(self) -> int:
         """The specification for the maximum number of walkers for the resampler."""
         return self._max_num_walkers
 
     @property
-    def min_num_walkers_setting(self):
+    def min_num_walkers_setting(self) -> int:
         """The specification for the minimum number of walkers for the resampler."""
         return self._min_num_walkers
 
@@ -562,7 +644,7 @@ class Resampler:
 
     def _resample_init(
         self,
-        walkers: list[Walker],
+        walkers: list[Walker[WalkerState_]],
     ) -> None:
         """Common initialization stuff for resamplers.
 
@@ -589,10 +671,10 @@ class Resampler:
 
     def resample(
         self,
-        walkers: list[Walker],
+        walkers: list[Walker[WalkerState_]],
         debug_mode: bool = False,
     ) -> tuple[
-        list[Walker],
+        list[Walker[WalkerState_]],
         list[dict[str, Any]],
         list[dict[str, Any]],
     ]:
