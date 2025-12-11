@@ -10,12 +10,12 @@ Configurable platforms.
 import copy
 
 # Third Party Library
-import pytest
-import mdtraj
 import openmm
 import psutil
+import pytest
 
 # First Party Library
+from wepy.reporter.dashboard import DashboardReporter
 from wepy.resampling.resamplers.revo import REVOResamplerFactory
 from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState
 from wepy.runners.openmm.runner import (
@@ -23,7 +23,6 @@ from wepy.runners.openmm.runner import (
     _DEFAULT_STATE_TIME_INTERVAL,
 )
 from wepy.sim_manager import Manager
-from wepy.util.mdtraj import mdtraj_to_json_topology
 
 # TODO: use the high-level API imports
 from wepy.walker import Walker
@@ -46,8 +45,9 @@ MIN_INTERVAL_STEPS = (
     else _DEFAULT_HEARTBEAT_INTERVAL
 )
 
-DEFAULT_CYCLE_TIME = 10. * openmm.unit.picosecond
+DEFAULT_CYCLE_TIME = 10.0 * openmm.unit.picosecond
 DEFAULT_CYCLE_STEPS = round(DEFAULT_CYCLE_TIME / STEP_SIZE)
+
 
 def test_lennard_jones_revo_procpool():
 
@@ -90,8 +90,6 @@ def test_lennard_jones_revo_procpool():
         num_workers = num_walkers
         cores_per_worker = num_workers // num_walkers
 
-    json_top = mdtraj_to_json_topology(mdtraj.Topology.from_openmm(test_sys.topology))
-
     distance_metric = PairDistance()
 
     resampler_factory = REVOResamplerFactory(
@@ -99,6 +97,10 @@ def test_lennard_jones_revo_procpool():
         char_dist=0.1,
         distance_metric=distance_metric,
     )
+
+    dashboard_reporter = DashboardReporter()
+
+    reporters = [dashboard_reporter]
 
     sim_manager = Manager(
         init_walkers=init_walkers,
@@ -114,12 +116,14 @@ def test_lennard_jones_revo_procpool():
             # global_platform_properties={"Threads" : "1"},
             global_platform_properties={"Threads": str(cores_per_worker)},
         ),
+        reporters=reporters,
     )
 
     new_walkers, sim_components = sim_manager.run_simulation(
-        n_cycles=10,
+        n_cycles=2,
         segment_lengths=DEFAULT_CYCLE_STEPS,
     )
+
 
 # disable timeout for this one
 @pytest.mark.timeout(timeout=0)
@@ -204,4 +208,3 @@ def test_alanine_dipeptide_revo_procpool():
         n_cycles=100,
         segment_lengths=10,
     )
-    

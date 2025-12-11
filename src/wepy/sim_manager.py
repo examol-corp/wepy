@@ -47,7 +47,7 @@ import copy
 import enum
 import logging
 import time
-from typing import Any, Callable, Final, Generic, Literal, TypedDict, TypeVar
+from typing import Callable, Final, Generic, Literal, TypeVar
 
 # Third Party Library
 import attrs
@@ -57,7 +57,7 @@ from immutables import Map as frozenmap
 # First Party Library
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.monitor import Monitor
-from wepy.reporter.reporter import Reporter
+from wepy.reporter.base import CycleReportDict, Reporter
 from wepy.resampling.resamplers.resampler import Resampler
 from wepy.runners.runner import Runner, RunnerFactory, RunSegmentData
 from wepy.walker import Walker
@@ -65,28 +65,6 @@ from wepy.work_mapper.base import WorkMapper
 from wepy.work_mapper.serial import SerialMapper
 
 logger = logging.getLogger(__name__)
-
-
-class CycleReportDict(TypedDict):
-    cycle_idx: int
-    new_walkers: list[Walker]
-    # TODO: types for all the Anys
-    warp_data: list[Any]
-    bc_data: list[Any]
-    progress_data: dict[Any]
-    resampling_data: Any
-    resampler_data: Any
-    n_segment_steps: int
-    resampled_walkers: list[Walker]
-    runner_precycle_time: float
-    runner_postcycle_time: float
-    sim_manager_segment_overhead_time: float
-    runner_splits_time: dict[str, float] | None
-    worker_segment_times: dict[int, list[float]] | None
-    cycle_sim_manager_segment_time: float
-    cycle_runner_time: float
-    cycle_bc_time: float
-    cycle_resampling_time: float
 
 
 class ManagerStatus(enum.IntEnum):
@@ -658,6 +636,7 @@ class Manager(Generic[State_]):
         for reporter in self.reporters:
             logger.info(f"Cleaning up reporter: {reporter}")
             reporter.cleanup(
+                init_walkers=self.init_walkers,
                 runner=self._runner,
                 work_mapper=self._work_mapper,
                 resampler=self._resampler,

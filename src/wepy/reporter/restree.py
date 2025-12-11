@@ -27,10 +27,10 @@ from wepy.analysis.parents import (
     parent_panel,
     resampling_panel,
 )
-from wepy.reporter.reporter import ProgressiveFileReporter
+from wepy.reporter.reporter import ProgressiveFileReporterABC
 
 
-class ResTreeReporter(ProgressiveFileReporter):
+class ResTreeReporter(ProgressiveFileReporterABC):
     """Reporter that generates resampling parent trees in the GEXF
     format.
     """

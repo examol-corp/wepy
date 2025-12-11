@@ -1478,8 +1478,8 @@ handle new ones, e.g.:
 
 #+end_src
 
-In addition to the ABC ~Reporter~ class the ~FileReporter~ and
-~ProgressiveFileReporter~ are very useful to inherit from as they
+In addition to the ABC ~Reporter~ class the ~FileReporterABC~ and
+~ProgressiveFileReporterABC~ are very useful to inherit from as they
 handle some file path and file mode logic, the latter updates modes to
 allow for repeated writes to the same file for each cycle of a
 simulation.
@@ -1489,9 +1489,9 @@ specific to its own function and all the handling of filenames is done
 by a call to the superclass constructor:
 
 #+begin_src python
-  from wepy.reporter.reporter import ProgressiveFileReporter
+  from wepy.reporter.reporter import ProgressiveFileReporterABC
 
-  class DashboardReporter(ProgressiveFileReporter):
+  class DashboardReporter(ProgressiveFileReporterABC):
 
       def __init__(self,
                    step_time=None,

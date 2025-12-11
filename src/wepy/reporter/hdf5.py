@@ -9,12 +9,12 @@ import numpy as np
 
 # First Party Library
 from wepy.hdf5 import WepyHDF5
-from wepy.reporter.reporter import FileReporter
+from wepy.reporter.reporter import FileReporterABC
 from wepy.util.json_top import json_top_atom_count
 from wepy.walker import Walker, WalkerState
 
 
-class WepyHDF5Reporter(FileReporter):
+class WepyHDF5Reporter(FileReporterABC):
     """Reporter for generating an HDF5 format (WepyHDF5) data file from
     simulations.
 

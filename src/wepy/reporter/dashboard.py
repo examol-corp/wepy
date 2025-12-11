@@ -4,9 +4,7 @@ information on the progress of a simulation.
 
 # Standard Library
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
+import textwrap
 import time
 from copy import copy
 from datetime import datetime
@@ -18,10 +16,12 @@ from jinja2 import Template
 from tabulate import tabulate
 
 # First Party Library
-from wepy.reporter.reporter import ProgressiveFileReporter
+from wepy.reporter.file import ProgressiveFileReporterABC
+
+logger = logging.getLogger(__name__)
 
 
-class DashboardReporter(ProgressiveFileReporter):
+class DashboardReporter(ProgressiveFileReporterABC):
     """A text based report of the status of a wepy simulation.
 
     This serves as a container for different dashboard components to
@@ -30,56 +30,61 @@ class DashboardReporter(ProgressiveFileReporter):
     """
 
     FILE_ORDER = ("dashboard_path",)
-    SUGGESTED_EXTENSIONS = ("dash.org",)
+    SUGGESTED_EXTENSIONS = ("wepy_dash.org",)
 
     # TODO: add in a section for showing the number of walkers in each
     # cycle. This isn't relevant for our constant walker number
     # simulations though so I have elided it following YAGNI
 
-    SIMULATION_SECTION_TEMPLATE = """
-Init Datetime: {{ init_date_time }}
-Last write Datetime: {{ curr_date_time }}
-Total Run time: {{ total_run_time }} s
-Last Cycle Index: {{ last_cycle_idx }}
-Number of Cycles: {{ n_cycles }}
+    SIMULATION_SECTION_TEMPLATE = textwrap.dedent(
+        """
+        Init Datetime: {{ init_date_time }}
+        Last write Datetime: {{ curr_date_time }}
+        Total Run time: {{ total_run_time }} s
+        Last Cycle Index: {{ last_cycle_idx }}
+        Number of Cycles: {{ n_cycles }}
 
-** Walkers Summary
-{{ walker_cycle_summary_table }}
-"""
+        ** Walkers Summary
+        {{ walker_cycle_summary_table }}
+        """
+    )
 
-    PERFORMANCE_SECTION_TEMPLATE = """
-Average Cycle Time: {{ avg_cycle_time }}
-{% if avg_runner_time %}Average Runner Time: {{ avg_runner_time }}{% else %}{% endif %}
-{% if avg_bc_time %}Average Boundary Conditions Time: {{ avg_bc_time }}{% else %}{% endif %}
-{% if avg_resampling_time %}Average Resampling Time: {{ avg_resampling_time }}{% else %}{% endif %}
+    PERFORMANCE_SECTION_TEMPLATE = textwrap.dedent(
+        """
+        Average Cycle Time: {{ avg_cycle_time }}
+        {% if avg_runner_time %}Average Runner Time: {{ avg_runner_time }}{% else %}{% endif %}
+        {% if avg_bc_time %}Average Boundary Conditions Time: {{ avg_bc_time }}{% else %}{% endif %}
+        {% if avg_resampling_time %}Average Resampling Time: {{ avg_resampling_time }}{% else %}{% endif %}
 
-** Worker Avg. Segment Times:
-{{ worker_avg_segment_time }}
+        ** Worker Avg. Segment Times:
+        {{ worker_avg_segment_time }}
 
-** Cycle Performance Log
-{{ cycle_log }}
+        ** Cycle Performance Log
+        {{ cycle_log }}
 
-** Worker Performance Log
-{{ performance_log }}
-"""
+        ** Worker Performance Log
+        {{ performance_log }}
+        """
+    )
+    DASHBOARD_TEMPLATE = textwrap.dedent(
+        """* Simulation
+        {{ simulation }}
 
-    DASHBOARD_TEMPLATE = """* Simulation
-{{ simulation }}
 
+        {% if resampler %}* Resampler{% else %}{% endif %}
+        {% if resampler %}{{ resampler }}{% else %}{% endif %}
 
-{% if resampler %}* Resampler{% else %}{% endif %}
-{% if resampler %}{{ resampler }}{% else %}{% endif %}
+        {% if boundary_condition %}* Boundary Condition{% else %}{% endif %}
+        {% if boundary_condition %}{{ boundary_condition }}{% else %}{% endif %}
 
-{% if boundary_condition %}* Boundary Condition{% else %}{% endif %}
-{% if boundary_condition %}{{ boundary_condition }}{% else %}{% endif %}
+        {% if runner %}* Runner{% else %}{% endif %}
 
-{% if runner %}* Runner{% else %}{% endif %}
+        {% if runner %}{{ runner }}{% else %}{% endif %}
 
-{% if runner %}{{ runner }}{% else %}{% endif %}
-
-* Performance
-{{ performance }}
-"""
+        * Performance
+        {{ performance }}
+        """
+    )
 
     def __init__(self, resampler_dash=None, runner_dash=None, bc_dash=None, **kwargs):
         """Parameters

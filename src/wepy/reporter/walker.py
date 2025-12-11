@@ -16,7 +16,7 @@ import mdtraj as mdj
 import numpy as np
 
 # First Party Library
-from wepy.reporter.reporter import ProgressiveFileReporter
+from wepy.reporter.reporter import ProgressiveFileReporterABC
 from wepy.util.json_top import json_top_subset
 from wepy.util.mdtraj import json_to_mdtraj_topology
 from wepy.util.util import (
@@ -25,7 +25,7 @@ from wepy.util.util import (
 )
 
 
-class WalkerReporter(ProgressiveFileReporter):
+class WalkerReporter(ProgressiveFileReporterABC):
     """Reporter for generating 3D molecular structure files of the walkers
     produced by a cycle.
 
