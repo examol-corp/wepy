@@ -328,21 +328,27 @@ class DashboardReporter(ProgressiveFileReporterABC):
         """
     )
     DASHBOARD_TEMPLATE = textwrap.dedent(
-        """* Simulation
+        """
+        * Simulation
         {{ simulation }}
-
-
-        {% if resampler %}* Resampler{% else %}{% endif %}
-        {% if resampler %}{{ resampler }}{% else %}{% endif %}
-
-        {% if boundary_condition %}* Boundary Condition{% else %}{% endif %}
-        {% if boundary_condition %}{{ boundary_condition }}{% else %}{% endif %}
-
-        {% if runner %}* Runner{% else %}{% endif %}
-
-        {% if runner %}{{ runner }}{% else %}{% endif %}
-
-
+        {% if resampler -%}
+        
+        * Resampler
+        {{ resampler }}
+        
+        {%- endif %}
+        {% if boundary_condition -%}
+        
+        * Boundary Condition
+        {{ boundary_condition }}
+        
+        {%- endif %}
+        {% if runner -%}
+        
+        * Runner
+        {{ runner }}
+        
+        {%- endif %}
         * Performance
 
         {{ performance }}
