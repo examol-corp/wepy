@@ -8,7 +8,7 @@ from scipy.spatial.distance import euclidean
 import attrs
 
 # First Party Library
-from wepy.resampling.distances.distance import Distance
+from wepy.resampling.distances.base import Distance
 from wepy.runners.openmm import OpenMMState
 
 class LennardJonesPair:

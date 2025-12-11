@@ -11,7 +11,7 @@ import mdtraj
 from wepy.runners.openmm import OpenMMState, OpenMMStateWrapper
 from wepy.walker import WalkerState
 from wepy.runners.openmm import OpenMMState
-from wepy.resampling.distances.distance import Distance
+from wepy.resampling.distances.base import Distance
 from wepy.util.mdtraj import traj_fields_to_mdtraj, json_to_mdtraj_topology
 
 class AlanineDipeptideExplicitSystem:
