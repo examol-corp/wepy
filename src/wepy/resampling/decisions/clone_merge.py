@@ -1,15 +1,14 @@
 # Standard Library
-from typing import TypedDict
 import logging
-
-# Standard Library
 from collections import defaultdict
 from enum import IntEnum
+
+# Third Party Library
 import attrs
 
 # First Party Library
 from wepy.resampling.decisions.decision import Decision, DecisionRecord
-from wepy.walker import keep_merge, split, Walker
+from wepy.walker import Walker, keep_merge, split
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +38,7 @@ class CloneMergeDecisionEnum(IntEnum):
     KEEP_MERGE = 4
     """Do nothing with the sample value (state) but squashed walkers will
     donate their weight to it."""
+
 
 @attrs.define
 class CloneMergeDecisionRecord(DecisionRecord):
@@ -221,4 +221,3 @@ class MultiCloneMergeDecision(Decision):
                     step_parents[child_idx] = parent_idx
 
         return step_parents
-    

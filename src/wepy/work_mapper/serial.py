@@ -1,13 +1,17 @@
 """Reference implementation of a serial WorkMapper"""
-import time
-import sys
-import traceback
 
-from typing import Callable, Literal, Generic, TypeVar, Protocol, Any, ParamSpec, Concatenate, Sequence
+# Standard Library
 import logging
+import time
+from typing import (
+    Callable,
+    Generic,
+    TypeVar,
+)
 
-from wepy.walker import Walker, WalkerState
+# First Party Library
 from wepy.runners.runner import RunSegmentData
+from wepy.walker import WalkerState
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +19,19 @@ logger = logging.getLogger(__name__)
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 RunSegmentData_ = TypeVar("RunSegmentData_", bound=RunSegmentData)
 
+
 class SerialMapper(
-        Generic[
-            WalkerState_,
-            RunSegmentData_,
-        ]):
+    Generic[
+        WalkerState_,
+        RunSegmentData_,
+    ]
+):
     """Basic non-parallel reference implementation of a mapper."""
 
     def __init__(
         self,
     ) -> None:
         self._worker_segment_times: dict[int, list[float]] = {0: []}
-
 
     def get_worker_segment_times(self) -> dict[int, list[float]]:
         """The run timings for each segment for each walker.
@@ -46,25 +51,25 @@ class SerialMapper(
         pass
 
     def map(
-            self,
-            task: Callable[
-                [
-                    WalkerState_,
-                    int,
-                ],
-                WalkerState_
+        self,
+        task: Callable[
+            [
+                WalkerState_,
+                int,
             ],
-            walker_states: list[WalkerState_],
-            segment_lengths: list[int],
+            WalkerState_,
+        ],
+        walker_states: list[WalkerState_],
+        segment_lengths: list[int],
     ) -> list[tuple[WalkerState_, RunSegmentData_]]:
         segment_times: list[float] = []
         results: list[WalkerState_] = []
         for task_idx, task_args in enumerate(
-                zip(
-                    walker_states,
-                    segment_lengths,
-                    strict=True,
-                )
+            zip(
+                walker_states,
+                segment_lengths,
+                strict=True,
+            )
         ):
 
             tic = time.time()

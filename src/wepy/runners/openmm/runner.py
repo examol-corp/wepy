@@ -1,22 +1,23 @@
 # Standard Library
-from typing import Any, Annotated, TypedDict, NotRequired, Literal, Final, Self, get_args, TypeAlias, Callable
-import logging
-import multiprocessing as mp
-import itertools
-import time
-from warnings import warn
 import copy
+import logging
+import time
+from typing import (
+    Literal,
+)
+from warnings import warn
 
 # Third Party Library
-from immutables import Map as frozenmap
 import attrs
 import numpy as np
 
+# Local Modules
 from .reporter import OpenMMReporter
 
 logger = logging.getLogger(__name__)
 
 try:
+    # Third Party Library
     import mdtraj
 except ModuleNotFoundError:
     warn("Module 'mdtraj' not found, those features will not be available.")
@@ -32,12 +33,24 @@ except ModuleNotFoundError:
     )
 
 # First Party Library
-from wepy.runners.runner import Runner, RunnerStatus, RunSegmentData, RunnerStateMachine, RunnerEvent, RunnerStateError
-from wepy.util.util import box_vectors_to_lengths_angles
-from wepy.util.openmm import triclinic_volume_vec3_quantity, format_box_vectors_line
-from wepy.walker import WalkerState
+from wepy.runners.runner import (
+    Runner,
+    RunnerEvent,
+    RunnerStateError,
+    RunnerStateMachine,
+    RunnerStatus,
+    RunSegmentData,
+)
+from wepy.util.openmm import format_box_vectors_line, triclinic_volume_vec3_quantity
+
+# Local Modules
+from .logger import (
+    EnergyLoggingReporterFactory,
+    HeartBeatLoggingReporterFactory,
+    LoggingReporterFactory,
+    UnitCellLoggingReporterFactory,
+)
 from .state import OpenMMState, OpenMMStateWrapper, get_context_state
-from .logger import HeartBeatLoggingReporterFactory, LoggingReporterFactory, EnergyLoggingReporterFactory, UnitCellLoggingReporterFactory
 
 PlatformKwargs = dict[str, str]
 
@@ -45,23 +58,24 @@ OpenMMPlatformName = Literal["Reference", "CPU", "CUDA", "OpenCL", "HIP"]
 GPU_PLATFORMS = frozenset({"CUDA", "OpenCL", "HIP"})
 
 
-
-GET_STATE_DEFAULT_KEYS = frozenset({
-            "positions",
-            "velocities",
-            "forces",
-            "parameters",
-            "parameter_derivatives",
-            "kinetic_energy",
-            "potential_energy",
-            "time",
-            "box_vectors",
-            "box_volume",
-})
+GET_STATE_DEFAULT_KEYS = frozenset(
+    {
+        "positions",
+        "velocities",
+        "forces",
+        "parameters",
+        "parameter_derivatives",
+        "kinetic_energy",
+        "potential_energy",
+        "time",
+        "box_vectors",
+        "box_volume",
+    }
+)
 
 # default heart beat every 500 steps, should be around 0.5 - 1 picoseconds
 _DEFAULT_HEARTBEAT_INTERVAL = 500
-_DEFAULT_STATE_TIME_INTERVAL = (10 * openmm.unit.picosecond)
+_DEFAULT_STATE_TIME_INTERVAL = 10 * openmm.unit.picosecond
 
 DEFAULT_OPENMM_REPORTER_FACTORIES = [
     HeartBeatLoggingReporterFactory(step_interval=_DEFAULT_HEARTBEAT_INTERVAL),
@@ -69,23 +83,26 @@ DEFAULT_OPENMM_REPORTER_FACTORIES = [
     EnergyLoggingReporterFactory(sampling_time_interval=_DEFAULT_STATE_TIME_INTERVAL),
 ]
 
+
 @attrs.define
 class OpenMMRunnerSegmentSplitTime:
     gen_sim_time: float
     steps_time: float
     get_state_time: float
 
+
 @attrs.define
 class OpenMMRunnerSegmentData(RunSegmentData):
     segment_split_time: float
     openmm_segment_split_time: OpenMMRunnerSegmentSplitTime
 
+
 def _report_simulation(simulation: openmm.app.Simulation) -> tuple[
-        openmm.unit.Quantity,
-        tuple[openmm.unit.Quantity, openmm.unit.Quantity, openmm.unit.Quantity],
-        openmm.unit.Quantity,
-        openmm.unit.Quantity,
-        openmm.unit.Quantity,
+    openmm.unit.Quantity,
+    tuple[openmm.unit.Quantity, openmm.unit.Quantity, openmm.unit.Quantity],
+    openmm.unit.Quantity,
+    openmm.unit.Quantity,
+    openmm.unit.Quantity,
 ]:
 
     # log some info on the constructed simulation
@@ -103,8 +120,12 @@ def _report_simulation(simulation: openmm.app.Simulation) -> tuple[
         for name in _platform_prop_names
     }
     _openmm_version = _platform.getOpenMMVersion()
-    logger.info(f"Simulation Context: current_step={_step_count}, sampling_time={_time}, num_molecules={_num_molecules}")
-    logger.info(f"Simulation Context Platform: openmm_version={_openmm_version}, name={_platform_name}, properties={_props}")
+    logger.info(
+        f"Simulation Context: current_step={_step_count}, sampling_time={_time}, num_molecules={_num_molecules}"
+    )
+    logger.info(
+        f"Simulation Context Platform: openmm_version={_openmm_version}, name={_platform_name}, properties={_props}"
+    )
 
     # report on the initial state as well
     _init_state = simulation.context.getState(
@@ -117,7 +138,9 @@ def _report_simulation(simulation: openmm.app.Simulation) -> tuple[
     _vel0 = _velocities[0]
     _vel0_mag = _vel0.value_in_unit(_vel0.unit)
     _vels_zeroed = (
-        np.isclose(_vel0_mag[0], 0.) and np.isclose(_vel0_mag[1], 0.) and np.isclose(_vel0_mag[2], 0.)
+        np.isclose(_vel0_mag[0], 0.0)
+        and np.isclose(_vel0_mag[1], 0.0)
+        and np.isclose(_vel0_mag[2], 0.0)
     )
 
     if _vels_zeroed:
@@ -129,7 +152,9 @@ def _report_simulation(simulation: openmm.app.Simulation) -> tuple[
     _kin_e = _init_state.getKineticEnergy()
     _tot_e = _pot_e + _kin_e
 
-    logger.info(f"Context state energies: kinetic={_kin_e}, potential={_pot_e}, total={_tot_e}")
+    logger.info(
+        f"Context state energies: kinetic={_kin_e}, potential={_pot_e}, total={_tot_e}"
+    )
 
     _box_volume = _init_state.getPeriodicBoxVolume()
     _bvs = _init_state.getPeriodicBoxVectors()
@@ -138,6 +163,7 @@ def _report_simulation(simulation: openmm.app.Simulation) -> tuple[
     logger.info(f"Context state box: volume={_box_volume}, vectors={_bvs_line}")
 
     return _box_volume, _bvs, _pot_e, _kin_e, _tot_e
+
 
 # the runner for the simulation which runs the actual dynamics
 class OpenMMRunner(Runner):
@@ -174,7 +200,9 @@ class OpenMMRunner(Runner):
 
         if openmm_reporter_factories is None or len(openmm_reporter_factories) == 0:
             logger.warning("No OpenMM reporter factories configured.")
-        self.openmm_reporter_factories = openmm_reporter_factories if openmm_reporter_factories is not None else []
+        self.openmm_reporter_factories = (
+            openmm_reporter_factories if openmm_reporter_factories is not None else []
+        )
 
         self._openmm_reporters = None
         self._init_time = None
@@ -201,10 +229,14 @@ class OpenMMRunner(Runner):
         default_bvs = self.system.getDefaultPeriodicBoxVectors()
 
         default_bv_volume = triclinic_volume_vec3_quantity(default_bvs)
-        default_bv_line = format_box_vectors_line(default_bvs)        
+        default_bv_line = format_box_vectors_line(default_bvs)
 
-        logger.info(f"System: num_particles={num_particles}, num_forces={num_forces}, uses_pbcs={uses_pbcs}")
-        logger.info(f"System default box vectors: volume={default_bv_volume}, vectors={default_bv_line}")
+        logger.info(
+            f"System: num_particles={num_particles}, num_forces={num_forces}, uses_pbcs={uses_pbcs}"
+        )
+        logger.info(
+            f"System default box vectors: volume={default_bv_volume}, vectors={default_bv_line}"
+        )
 
         # topology
         num_chains = self.topology.getNumChains()
@@ -213,7 +245,6 @@ class OpenMMRunner(Runner):
         num_bonds = self.topology.getNumBonds()
 
         top_bvs = self.topology.getPeriodicBoxVectors()
-
 
         logger.info(
             f"Topology: num_chains={num_chains}, num_residues={num_residues}, num_atoms={num_atoms}, num_bonds={num_bonds}"
@@ -227,11 +258,7 @@ class OpenMMRunner(Runner):
         else:
             logger.info("Topology box vectors not set.")
 
-        chain_ids = [
-            chain.id
-            for chain
-            in self.topology.chains()
-        ]
+        chain_ids = [chain.id for chain in self.topology.chains()]
         logger.info(f"Topology Chains (IDs): {','.join(chain_ids)}")
 
         for chain in self.topology.chains():
@@ -243,7 +270,9 @@ class OpenMMRunner(Runner):
 
         # integrator
         # UGLY: just dump the XML for simplicity
-        integrator_xml = openmm.XmlSerializer.serialize(self.integrator).replace("\n", " ")
+        integrator_xml = openmm.XmlSerializer.serialize(self.integrator).replace(
+            "\n", " "
+        )
         logger.info(f"Integrator: {integrator_xml}")
 
     @property
@@ -270,8 +299,6 @@ class OpenMMRunner(Runner):
 
         self.state_machine.send(RunnerEvent.PRE_CYCLE)
 
-        
-    
     def run_segment(
         self,
         walker_state: OpenMMState,
@@ -339,7 +366,7 @@ class OpenMMRunner(Runner):
 
             # get the platform by its name to use
             platform = openmm.Platform.getPlatformByName(platform_name)
-            logger.info(f"Platform instantiated.")
+            logger.info("Platform instantiated.")
 
             # set properties from the kwargs if they apply to the platform
             for key, value in platform_kwargs.items():
@@ -371,7 +398,9 @@ class OpenMMRunner(Runner):
         logger.info("Generating OpenMM reporters for this segment.")
         openmm_reporters = []
         for omm_reporter_factory in self.openmm_reporter_factories:
-            logger.info(f"Generating and configuring reporter for factory: {omm_reporter_factory}")
+            logger.info(
+                f"Generating and configuring reporter for factory: {omm_reporter_factory}"
+            )
             openmm_reporters.append(
                 omm_reporter_factory(
                     logger,
@@ -396,7 +425,9 @@ class OpenMMRunner(Runner):
         logger.info(f"Time to generate the system: {gen_sim_time:.4f} s")
 
         logger.info("Information on initial simulation state")
-        before_volume, before_bvs, before_pot_e, before_kin_e, before_tot_e = _report_simulation(simulation)
+        before_volume, before_bvs, before_pot_e, before_kin_e, before_tot_e = (
+            _report_simulation(simulation)
+        )
 
         # actually run the simulation
 
@@ -412,7 +443,9 @@ class OpenMMRunner(Runner):
         logger.info(f"Time to run {segment_length} sim steps: {steps_time:.4f} s")
 
         logger.info("Information on final simulation state")
-        after_volume, after_bvs, after_pot_e, after_kin_e, after_tot_e = _report_simulation(simulation)
+        after_volume, after_bvs, after_pot_e, after_kin_e, after_tot_e = (
+            _report_simulation(simulation)
+        )
 
         _before_lengths = (
             np.linalg.norm(before_bvs[0]),
@@ -427,10 +460,13 @@ class OpenMMRunner(Runner):
 
         _delta_lengths = [
             after_length - before_length
-            for after_length, before_length
-            in zip(_after_lengths, _before_lengths, strict=True)
+            for after_length, before_length in zip(
+                _after_lengths, _before_lengths, strict=True
+            )
         ]
-        _delta_lengths_line = f"({_delta_lengths[0]}, {_delta_lengths[1]}, {_delta_lengths[2]})"
+        _delta_lengths_line = (
+            f"({_delta_lengths[0]}, {_delta_lengths[1]}, {_delta_lengths[2]})"
+        )
 
         # report on the change in energies and box volume
         _delta_volume = after_volume - before_volume
@@ -459,7 +495,7 @@ class OpenMMRunner(Runner):
 
         new_state_wrapper = OpenMMStateWrapper(new_omm_state)
         new_state = OpenMMState.from_state_wrapper(new_state_wrapper)
-        
+
         get_state_end = time.time()
         get_state_time = get_state_end - get_state_start
         logger.info(f"Getting context state time: {get_state_time:.4f} s")
@@ -485,6 +521,7 @@ class OpenMMRunner(Runner):
         logger.info("Nothing to do")
         self.state_machine.send(RunnerEvent.POST_CYCLE)
 
+
 @attrs.define
 class OpenMMRunnerFactory:
 
@@ -493,7 +530,9 @@ class OpenMMRunnerFactory:
     integrator: openmm.Integrator
     enforce_box: bool = False
     get_state_keys: frozenset[str] = attrs.field(default=GET_STATE_DEFAULT_KEYS)
-    openmm_reporter_factories: list[LoggingReporterFactory] | None = attrs.field(default=DEFAULT_OPENMM_REPORTER_FACTORIES)
+    openmm_reporter_factories: list[LoggingReporterFactory] | None = attrs.field(
+        default=DEFAULT_OPENMM_REPORTER_FACTORIES
+    )
 
     def __call__(self) -> OpenMMRunner:
 

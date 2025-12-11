@@ -1,7 +1,15 @@
+# Third Party Library
 import pytest
-from wepy.runners.mock import MockRunner, MockState, MockError
-from wepy.runners.runner import RunnerStatus, Runner, RunnerStateTransitionError, RunnerStateMachineError, RunnerEvent
-    
+
+# First Party Library
+from wepy.runners.mock import MockRunner, MockState
+from wepy.runners.runner import (
+    RunnerStateMachineError,
+    RunnerStateTransitionError,
+    RunnerStatus,
+)
+
+
 class TestMockRunner:
 
     def test_init(self):
@@ -49,7 +57,6 @@ class TestMockRunner:
         runner.pre_cycle()
         runner.post_cycle(None)
 
-
     def test_run_segment(self):
 
         runner = MockRunner()
@@ -66,4 +73,6 @@ class TestMockRunner:
         assert runner.run_segment(
             MockState(0),
             10,
-        )[0] == MockState(10)
+        )[
+            0
+        ] == MockState(10)

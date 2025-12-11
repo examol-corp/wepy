@@ -1,27 +1,29 @@
+# Standard Library
 import copy
 
+# Third Party Library
 import pytest
-import attrs
-from wepy.walker import Walker
-from wepy.work_mapper.serial import SerialMapper
-from wepy.resampling.resamplers.noresampler import NoResampler
-from wepy.runners.runner import NoRunner, RunnerStatus, RunSegmentData
-from wepy.runners.mock import MockRunnerFactory, MockState, MockError
 
+# First Party Library
+from wepy.resampling.resamplers.noresampler import NoResampler
+from wepy.runners.mock import MockError, MockRunnerFactory, MockState
+from wepy.runners.runner import RunnerStatus, RunSegmentData
 from wepy.sim_manager import (
     Manager,
+    ManagerEvent,
     ManagerStateMachine,
     ManagerStateTransitionError,
-    ManagerStateError,
     ManagerStatus,
-    ManagerEvent,
 )
+from wepy.walker import Walker
+from wepy.work_mapper.serial import SerialMapper
+
 
 @pytest.fixture
 def sim_components() -> tuple[
-        list[Walker],
-        MockRunnerFactory,
-        type[NoResampler],
+    list[Walker],
+    MockRunnerFactory,
+    type[NoResampler],
 ]:
 
     num_walkers = 4
@@ -32,11 +34,11 @@ def sim_components() -> tuple[
             state=MockState(1),
             weight=init_walker_weight,
         )
-        for walker_state
-        in range(num_walkers)
+        for walker_state in range(num_walkers)
     ]
 
     return init_walkers, MockRunnerFactory(fail=False), NoResampler
+
 
 class Test_ManagerStateMachine:
 
@@ -48,7 +50,7 @@ class Test_ManagerStateMachine:
         sm = ManagerStateMachine()
         with pytest.raises(ManagerStateTransitionError):
             sm.validate_event(ManagerEvent.FINISH_SIMULATION)
-        
+
     def test_send(self):
 
         sm = ManagerStateMachine(state=ManagerStatus.CONSTRUCTED)
@@ -63,7 +65,6 @@ class Test_ManagerStateMachine:
 
         # Test all the transitions are what we expect
         # sm = ManagerStateMachine(state=ManagerStatus.PRE_INITIALIZATION)
-
 
 
 class Test_Manager:
@@ -132,17 +133,18 @@ class Test_Manager:
             0,
         )
 
-        manager.post_segment([
-            RunSegmentData(
-                segment_split_time=2.,
-            )
-            for _
-            in range(len(sim_components[0]))
-        ])
+        manager.post_segment(
+            [
+                RunSegmentData(
+                    segment_split_time=2.0,
+                )
+                for _ in range(len(sim_components[0]))
+            ]
+        )
 
         assert manager.status == ManagerStatus.POST_SEGMENT_FINISHED
         assert manager._runner.status == RunnerStatus.POST_CYCLE
-        
+
     def test_cleanup(self, sim_components):
 
         manager = Manager(*sim_components)
@@ -159,7 +161,7 @@ class Test_Manager:
 
         with pytest.raises(ManagerStateTransitionError):
             manager.cleanup()
-        
+
     def test_run_segment(self, sim_components):
 
         init_walkers, runner_factory, resampler = sim_components

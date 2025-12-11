@@ -19,20 +19,27 @@ See the openmm.py module for an example.
 
 # Standard Library
 import logging
-from typing import Protocol, Any, TypedDict, TypeVar, ParamSpec, Callable, Literal
 from enum import IntEnum
+from typing import Callable, Literal, Protocol, TypeVar
+
+# Third Party Library
 import attrs
 from immutables import Map as frozenmap
-from wepy.walker import Walker, WalkerState
+
+# First Party Library
+from wepy.walker import WalkerState
 
 logger = logging.getLogger(__name__)
+
 
 @attrs.define
 class RunSegmentData:
     segment_split_time: float
 
+
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 RunSegmentData_ = TypeVar("RunSegmentData_", bound=RunSegmentData)
+
 
 class RunnerStatus(IntEnum):
     PRE_INITIALIZATION = 0
@@ -41,45 +48,65 @@ class RunnerStatus(IntEnum):
     POST_SEGMENT = 3
     POST_CYCLE = 4
 
+
 class RunnerEvent(IntEnum):
     INIT = 0
     PRE_CYCLE = 1
     POST_SEGMENT = 2
     POST_CYCLE = 3
 
+
 class RunnerStateMachineError(Exception):
     pass
 
+
 class RunnerStateTransitionError(RunnerStateMachineError):
     """Indicates an error with the runner state machine transition."""
+
     pass
+
 
 class RunnerStateError(RunnerStateMachineError):
     """Indicates an error relating to the current state of the runner."""
+
     pass
+
 
 # State machine table that defines what are the valid states to
 # transition to another state. None for the initial states
 RUNNER_STATE_TRANSITION_TABLE: frozenmap[
     RunnerStatus,
     frozenmap[RunnerEvent, RunnerStatus],
-] = frozenmap({
-    RunnerStatus.PRE_INITIALIZATION: frozenmap({
-        RunnerEvent.INIT : RunnerStatus.INITIALIZED,
-    }),
-    RunnerStatus.INITIALIZED: frozenmap({
-        RunnerEvent.PRE_CYCLE : RunnerStatus.PRE_CYCLE,
-    }),
-    RunnerStatus.PRE_CYCLE: frozenmap({
-        RunnerEvent.POST_SEGMENT : RunnerStatus.POST_SEGMENT,
-    }),
-    RunnerStatus.POST_SEGMENT: frozenmap({
-        RunnerEvent.POST_CYCLE : RunnerStatus.POST_CYCLE,
-    }),
-    RunnerStatus.POST_CYCLE: frozenmap({
-        RunnerEvent.PRE_CYCLE : RunnerStatus.PRE_CYCLE,
-    }),
-})
+] = frozenmap(
+    {
+        RunnerStatus.PRE_INITIALIZATION: frozenmap(
+            {
+                RunnerEvent.INIT: RunnerStatus.INITIALIZED,
+            }
+        ),
+        RunnerStatus.INITIALIZED: frozenmap(
+            {
+                RunnerEvent.PRE_CYCLE: RunnerStatus.PRE_CYCLE,
+            }
+        ),
+        RunnerStatus.PRE_CYCLE: frozenmap(
+            {
+                RunnerEvent.POST_SEGMENT: RunnerStatus.POST_SEGMENT,
+            }
+        ),
+        RunnerStatus.POST_SEGMENT: frozenmap(
+            {
+                RunnerEvent.POST_CYCLE: RunnerStatus.POST_CYCLE,
+            }
+        ),
+        RunnerStatus.POST_CYCLE: frozenmap(
+            {
+                RunnerEvent.PRE_CYCLE: RunnerStatus.PRE_CYCLE,
+            }
+        ),
+    }
+)
+
 
 @attrs.define
 class RunnerStateMachine:
@@ -102,7 +129,7 @@ class RunnerStateMachine:
 
         logger.info(f"Received event: {event.name}:{event.value}")
         self.validate_event(event)
-        
+
         state_transitions = RUNNER_STATE_TRANSITION_TABLE[self.state]
         new_state = state_transitions[event]
 
@@ -113,14 +140,13 @@ class RunnerStateMachine:
         self.state = new_state
 
         return self.state
-    
+
+
 class Runner(Protocol[WalkerState_, RunSegmentData_]):
     """Abstract base class for the Runner interface."""
 
     @property
-    def status(self) -> RunnerStatus:
-        ...
-
+    def status(self) -> RunnerStatus: ...
 
     def init(self) -> None: ...
 
@@ -152,17 +178,18 @@ class Runner(Protocol[WalkerState_, RunSegmentData_]):
         ...
 
     def post_cycle(
-            self,
-            segments_data: list[RunSegmentData_] | None,
+        self,
+        segments_data: list[RunSegmentData_] | None,
     ) -> None:
         """Perform post-cycle behavior."""
         ...
 
-        
 
 RunnerFactory = Callable[
-    [], Runner,
+    [],
+    Runner,
 ]
+
 
 @attrs.define
 class NoRunner(Runner):
@@ -187,7 +214,6 @@ class NoRunner(Runner):
     def pre_cycle(self) -> None:
         self.state_machine.send(RunnerEvent.PRE_CYCLE)
 
-        
     def run_segment(
         self,
         state: WalkerState_,
@@ -198,11 +224,10 @@ class NoRunner(Runner):
             raise RunnerStateError(
                 f"Cannot run a segment in state ({self.status.name}:{self.status.value})"
             )
-        
+
         return state, None
 
     def post_cycle(self, segments_data: None) -> None:
 
         self.state_machine.send(RunnerEvent.POST_SEGMENT)
         self.state_machine.send(RunnerEvent.POST_CYCLE)
-    

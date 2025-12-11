@@ -6,30 +6,29 @@ import pytest
 from immutables import Map as frozenmap
 from lxml import etree
 
-from wepy_tools.systems.lennard_jones import LennardJonesPair
-
+# First Party Library
 from wepy.runners.openmm.state import (
+    OpenMMState,
+    OpenMMStateValidationError,
+    OpenMMStateWrapper,
+    _gen_vec3_element,
     dummy_context,
-    resolve_state_data_type_enum_values,
     get_context_state,
     get_state_core_fields_present,
     get_state_fields_present,
-    OpenMMStateWrapper,
-    OpenMMStateValidationError,
-    OpenMMState,
-    _gen_vec3_element,
+    resolve_state_data_type_enum_values,
     state_to_xml,
 )
-
-# First Party Library
+from wepy_tools.systems.lennard_jones import LennardJonesPair
 
 UNIT_CUBE = np.array(
-            [
-                [1.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [0.0, 0.0, 1.0],
-            ]
-        )
+    [
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ]
+)
+
 
 def test_dummy_context():
     lj_sys = LennardJonesPair()
@@ -42,7 +41,7 @@ def test_dummy_context():
                 [1.0, 0.0, 0.0],
             ]
         )
-        * openmm.unit.nanometer
+        * openmm.unit.nanometer,
     )
 
     dummy_context(
@@ -56,6 +55,7 @@ def test_dummy_context():
         * openmm.unit.angstrom,
         unitcell=UNIT_CUBE * openmm.unit.nanometer,
     )
+
 
 def test_resolve_state_data_type_enum_values():
 
@@ -76,7 +76,6 @@ def test_resolve_state_data_type_enum_values():
 def omm_context() -> openmm.Context:
 
     lj_sys = LennardJonesPair()
-
 
     ctx = dummy_context(lj_sys.system, lj_sys.positions)
 
@@ -424,7 +423,6 @@ class Test_OpenMMStateWrapper:
             forces=forces,
         )
         assert OpenMMState.from_dict(d) == OpenMMState(**d)
-        
 
     def test_from_xml(self, omm_context):
 
@@ -493,6 +491,7 @@ class Test_OpenMMStateWrapper:
                     }
                 },
             )
+
 
 class Test_OpenMMState:
 
@@ -616,38 +615,48 @@ class Test_OpenMMState:
         )
 
     def test___len__(self):
-        assert len(OpenMMState(
-            time=0.0 * openmm.unit.picosecond,
-            box_vectors=UNIT_CUBE * openmm.unit.nanometer,
-        )) == 2
+        assert (
+            len(
+                OpenMMState(
+                    time=0.0 * openmm.unit.picosecond,
+                    box_vectors=UNIT_CUBE * openmm.unit.nanometer,
+                )
+            )
+            == 2
+        )
 
-        assert len(OpenMMState(
-            time=0.0 * openmm.unit.picosecond,
-            box_vectors=UNIT_CUBE * openmm.unit.nanometer,
-            positions=np.array(
-                [
-                    [1.0, 0.0, 0.0],
-                    [1.0, 0.0, 0.0],
-                ]
+        assert (
+            len(
+                OpenMMState(
+                    time=0.0 * openmm.unit.picosecond,
+                    box_vectors=UNIT_CUBE * openmm.unit.nanometer,
+                    positions=np.array(
+                        [
+                            [1.0, 0.0, 0.0],
+                            [1.0, 0.0, 0.0],
+                        ]
+                    )
+                    * openmm.unit.nanometer,
+                    velocities=np.array(
+                        [
+                            [1.0, 0.0, 0.0],
+                            [1.0, 0.0, 0.0],
+                        ]
+                    )
+                    * openmm.unit.nanometer
+                    / openmm.unit.picosecond,
+                    forces=np.array(
+                        [
+                            [1.0, 0.0, 0.0],
+                            [1.0, 0.0, 0.0],
+                        ]
+                    )
+                    * openmm.unit.kilojoule
+                    / (openmm.unit.nanometer * openmm.unit.mole),
+                )
             )
-            * openmm.unit.nanometer,
-            velocities=np.array(
-                [
-                    [1.0, 0.0, 0.0],
-                    [1.0, 0.0, 0.0],
-                ]
-            )
-            * openmm.unit.nanometer
-            / openmm.unit.picosecond,
-            forces=np.array(
-                [
-                    [1.0, 0.0, 0.0],
-                    [1.0, 0.0, 0.0],
-                ]
-            )
-            * openmm.unit.kilojoule
-            / (openmm.unit.nanometer * openmm.unit.mole),
-        )) == 5
+            == 5
+        )
 
     def test___contains__(self):
         small_state = OpenMMState(
@@ -704,8 +713,7 @@ class Test_OpenMMState:
         assert "potential_energy" not in large_state
         assert "parameters" not in large_state
         assert "parameter_derivatives" not in large_state
-        
-        
+
     def test___getitem__(self):
 
         bvs = UNIT_CUBE * openmm.unit.nanometer
@@ -723,7 +731,7 @@ class Test_OpenMMState:
 
         with pytest.raises(ValueError):
             state["positions"]
-        
+
         state = OpenMMState(
             time=0.0 * openmm.unit.picosecond,
             box_vectors=bvs,
@@ -755,7 +763,6 @@ class Test_OpenMMState:
         assert state["positions"] is not None
         assert state["velocities"] is not None
         assert state["forces"] is not None
-        
 
     def test_from_state(self, omm_context):
         s = OpenMMState.from_state(omm_context.getState())
@@ -820,7 +827,6 @@ class Test_OpenMMState:
         )
         OpenMMState.from_state_wrapper(sw)
 
-
     def test_from_dwim(self):
         positions = (
             np.array(
@@ -869,8 +875,8 @@ class Test_OpenMMState:
         bv = np.array(
             [
                 [2.0, 0.0, 0.0],
-                [0., 2.0, 0.0],
-                [0., 0.0, 2.0],
+                [0.0, 2.0, 0.0],
+                [0.0, 0.0, 2.0],
             ]
         )
 
@@ -935,7 +941,7 @@ class Test_OpenMMState:
             "velocities",
             "forces",
         }
-        
+
     def test_to_state_wrapper(self):
 
         time = 0.0 * openmm.unit.picosecond
@@ -994,7 +1000,7 @@ class Test_OpenMMState:
         )
 
         os.to_state_wrapper()
-    
+
 
 def test__gen_vec3_element():
 
@@ -1056,4 +1062,3 @@ def test_state_to_xml():
     full_xml = state_to_xml(full_state)
 
     assert isinstance(openmm.XmlSerializer.deserialize(full_xml), openmm.State)
-        

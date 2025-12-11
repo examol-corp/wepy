@@ -1,25 +1,37 @@
-import copy
+# Standard Library
 import logging
-from typing import Literal, get_args, TypeAlias, Union, Any, Self, TypedDict, NotRequired, ClassVar
-from collections.abc import Mapping, Collection
+from collections.abc import Collection
+from typing import (
+    Any,
+    ClassVar,
+    Literal,
+    NotRequired,
+    Self,
+    TypeAlias,
+    TypedDict,
+    get_args,
+)
+
+# Third Party Library
+import attrs
+import numpy as np
 import openmm
 import openmm.unit
-import numpy as np
-
-import attrs
-
-from lxml import etree
 from immutables import Map as frozenmap
+from lxml import etree
 
-from wepy.missing import MISSING
-from wepy.walker import WalkerState
+# First Party Library
 from wepy.core import BugError
+from wepy.missing import MISSING
 from wepy.util.openmm import array3d_to_vec3
+from wepy.walker import WalkerState
 
 logger = logging.getLogger(__name__)
 
+
 class OpenMMStateValidationError(Exception):
     pass
+
 
 PREFERRED_UNITS_LUT = frozenmap(
     {
@@ -33,7 +45,8 @@ PREFERRED_UNITS_LUT = frozenmap(
         "energy": openmm.unit.kilojoule,
         "subtance": openmm.unit.mole,
         "velocity": openmm.unit.nanometer / openmm.unit.picosecond,
-        "molar_force": (openmm.unit.kilojoule / openmm.unit.nanometer) / openmm.unit.mole,
+        "molar_force": (openmm.unit.kilojoule / openmm.unit.nanometer)
+        / openmm.unit.mole,
         "molar_energy_density": openmm.unit.kilojoule / openmm.unit.mole,
     }
 )
@@ -82,16 +95,16 @@ ACCESSORY_FIELDS: frozenset[StateFieldName] = frozenset(
 FieldDataType: TypeAlias = openmm.unit.Quantity | frozenmap[str, Any]
 
 STATE_FIELD_TYPES: frozenmap[str, type[FieldDataType]] = frozenmap(
-    time = openmm.unit.Quantity,
-    box_vectors = openmm.unit.Quantity,
-    box_volume = openmm.unit.Quantity,
-    positions = openmm.unit.Quantity,
-    velocities = openmm.unit.Quantity,
-    forces = openmm.unit.Quantity,
-    kinetic_energy = openmm.unit.Quantity,
-    potential_energy = openmm.unit.Quantity,
-    parameters = frozenmap[str, Any],
-    parameter_derivatives = frozenmap[str, Any],
+    time=openmm.unit.Quantity,
+    box_vectors=openmm.unit.Quantity,
+    box_volume=openmm.unit.Quantity,
+    positions=openmm.unit.Quantity,
+    velocities=openmm.unit.Quantity,
+    forces=openmm.unit.Quantity,
+    kinetic_energy=openmm.unit.Quantity,
+    potential_energy=openmm.unit.Quantity,
+    parameters=frozenmap[str, Any],
+    parameter_derivatives=frozenmap[str, Any],
 )
 
 StateDataTypeName: TypeAlias = Literal[
@@ -107,26 +120,26 @@ StateDataTypeName: TypeAlias = Literal[
 ]
 
 STATE_DATA_TYPE_ENUM_NAMES: frozenmap[str, str] = frozenmap(
-        positions = "Positions",
-        velocities = "Velocities",
-        forces = "Forces",
-        energy = "Energy",
-        parameters = "Parameters",
-        parameter_derivatives = "ParameterDerivatives",
-        integrator_parameters = "IntegratorParameters",
+    positions="Positions",
+    velocities="Velocities",
+    forces="Forces",
+    energy="Energy",
+    parameters="Parameters",
+    parameter_derivatives="ParameterDerivatives",
+    integrator_parameters="IntegratorParameters",
 )
 
 FIELD_GETTER_NAMES: frozenmap[str, str] = frozenmap(
-        positions = "getPositions",
-        velocities = "getVelocities",
-        forces = "getForces",
-        kinetic_energy = "getKineticEnergy",
-        potential_energy = "getPotentialEnergy",
-        time = "getTime",
-        box_vectors = "getPeriodicBoxVectors",
-        box_volume = "getPeriodicBoxVolume",
-        parameters = "getParameters",
-        parameter_derivatives = "getEnergyParameterDerivatives",
+    positions="getPositions",
+    velocities="getVelocities",
+    forces="getForces",
+    kinetic_energy="getKineticEnergy",
+    potential_energy="getPotentialEnergy",
+    time="getTime",
+    box_vectors="getPeriodicBoxVectors",
+    box_volume="getPeriodicBoxVolume",
+    parameters="getParameters",
+    parameter_derivatives="getEnergyParameterDerivatives",
 )
 
 UNREQUESTED_FIELDS: frozenset[StateFieldName] = frozenset(
@@ -179,39 +192,39 @@ GetStateKeyWords = Literal[
 ]
 
 GET_STATE_KEYWORDS: frozenmap[str, GetStateKeyWords | None] = frozenmap(
-    positions = "positions",
-    velocities = "velocities",
-    forces = "forces",
-    kinetic_energy = "energy",
-    potential_energy = "energy",
-    time = None,
-    box_vectors = None,
-    box_volume = None,
-    parameters = "parameters",
-    parameter_derivatives = "parameterDerivatives",
+    positions="positions",
+    velocities="velocities",
+    forces="forces",
+    kinetic_energy="energy",
+    potential_energy="energy",
+    time=None,
+    box_vectors=None,
+    box_volume=None,
+    parameters="parameters",
+    parameter_derivatives="parameterDerivatives",
 )
-
 
 
 GET_STATE_DEFAULT_ENFORCE_PERIODIC_BOX = False
 
 OPENMM_DEFAULT_DIMENSION_UNITS: frozenmap[str, openmm.unit.Unit] = frozenmap(
-    length = openmm.unit.nanometer,
-    time = openmm.unit.picosecond,
-    energy = openmm.unit.kilojoule,
-    substance = openmm.unit.mole,
+    length=openmm.unit.nanometer,
+    time=openmm.unit.picosecond,
+    energy=openmm.unit.kilojoule,
+    substance=openmm.unit.mole,
 )
 
 OPENMM_DEFAULT_UNITS: frozenmap[str, openmm.unit.Unit] = frozenmap(
-    positions = openmm.unit.nanometer,
-    time = openmm.unit.picosecond,
-    box_vectors = openmm.unit.nanometer,
-    box_volume = openmm.unit.nanometer**3,
-    velocities = openmm.unit.nanometer / openmm.unit.picosecond,
-    forces = openmm.unit.kilojoule / openmm.unit.nanometer,
-    kinetic_energy = openmm.unit.kilojoule,
-    potential_energy = openmm.unit.kilojoule,
+    positions=openmm.unit.nanometer,
+    time=openmm.unit.picosecond,
+    box_vectors=openmm.unit.nanometer,
+    box_volume=openmm.unit.nanometer**3,
+    velocities=openmm.unit.nanometer / openmm.unit.picosecond,
+    forces=openmm.unit.kilojoule / openmm.unit.nanometer,
+    kinetic_energy=openmm.unit.kilojoule,
+    potential_energy=openmm.unit.kilojoule,
 )
+
 
 class StateFieldData(TypedDict):
     time: openmm.unit.Quantity
@@ -226,6 +239,7 @@ class StateFieldData(TypedDict):
     parameters: NotRequired[frozenmap[str, Any]]
     parameter_derivatives: NotRequired[frozenmap[str, Any]]
 
+
 class StateFieldDataInput(TypedDict):
     time: openmm.unit.Quantity
     box_vectors: openmm.unit.Quantity
@@ -234,9 +248,11 @@ class StateFieldDataInput(TypedDict):
     velocities: NotRequired[openmm.unit.Quantity]
     parameters: NotRequired[frozenmap[str, Any]]
 
+
 STATE_REQUIRED_INPUT_FIELDS: frozenset[StateFieldName] = frozenset(
     {"time", "box_vectors"}
 )
+
 
 def dummy_context(
     system: openmm.System,
@@ -260,6 +276,7 @@ def dummy_context(
         context.setPeriodicBoxVectors(*unitcell)
 
     return context
+
 
 def get_context_state(
     context: openmm.Context,
@@ -344,6 +361,7 @@ def get_state_core_fields_present(
 
     return frozenset(flag_fields)
 
+
 def get_state_fields_present(sim_state: openmm.State) -> frozenset[StateFieldName]:
     """Figure out which accessible state fields are present in a State.
 
@@ -414,6 +432,7 @@ UNIT_NAMES: tuple[tuple[str, str], ...] = (
 
 ## Wrapper for a openmm.State
 
+
 class OpenMMStateWrapper(WalkerState):
     """Useful wrapper around an openmm.State object.
 
@@ -467,9 +486,7 @@ class OpenMMStateWrapper(WalkerState):
             getter_method = getattr(self.state, getter_name, None)
 
             if getter_method is None:
-                raise BugError(
-                    f"No getter ('{getter_name}') for key '{key}'"
-                )
+                raise BugError(f"No getter ('{getter_name}') for key '{key}'")
 
             elif key in ARRAYLIKE_FIELDS:
                 field_val = getter_method(asNumpy=True)
@@ -478,9 +495,7 @@ class OpenMMStateWrapper(WalkerState):
             elif key in MAPPING_FIELDS:
                 field_val = frozenmap(dict(getter_method()))
             else:
-                raise BugError(
-                    f"Unhandled field key {key}, getter '{getter_name}'"
-                )
+                raise BugError(f"Unhandled field key {key}, getter '{getter_name}'")
 
             return field_val
 
@@ -553,8 +568,8 @@ class OpenMMStateWrapper(WalkerState):
             missing_fields_str = ", ".join(missing_fields)
 
             raise OpenMMStateValidationError(
-                    f"Missing required fields: {missing_fields_str}"
-                )
+                f"Missing required fields: {missing_fields_str}"
+            )
 
         # a dummy context used to generate a state only
         ctx = openmm.Context(
@@ -566,7 +581,10 @@ class OpenMMStateWrapper(WalkerState):
         # the fields which are always in a state dict
         ctx.setTime(state_dict["time"].in_units_of(OPENMM_DEFAULT_UNITS["time"]))
 
-        bvs_vec3 = tuple(v for v in array3d_to_vec3(state_dict["box_vectors"])) * state_dict["box_vectors"].unit
+        bvs_vec3 = (
+            tuple(v for v in array3d_to_vec3(state_dict["box_vectors"]))
+            * state_dict["box_vectors"].unit
+        )
         ctx.setPeriodicBoxVectors(*bvs_vec3)
 
         if "positions" in state_dict:
@@ -583,14 +601,16 @@ class OpenMMStateWrapper(WalkerState):
                     ctx.setParameter(name, value)
                 except openmm.OpenMMException:
                     raise OpenMMStateValidationError(
-                            f"Could not set parameter '{name}' as there is no matching parameter in the system forces."
-                        )
+                        f"Could not set parameter '{name}' as there is no matching parameter in the system forces."
+                    )
 
         state = get_context_state(ctx, frozenset(state_dict.keys()))
 
         return cls(state)
 
+
 # A plain data structure state
+
 
 def _maybe_array_equal(
     arr0: openmm.unit.Quantity | None,
@@ -605,12 +625,16 @@ def _maybe_array_equal(
     else:
         return np.array_equal(arr0, arr1)
 
+
 def _gen_unit_cube() -> np.typing.ArrayLike:
-    return np.array([
-        [1., 0., 0.],
-        [0., 1., 0.],
-        [0., 0., 1.],]
+    return np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
     )
+
 
 @attrs.define
 class OpenMMState(WalkerState):
@@ -652,8 +676,12 @@ class OpenMMState(WalkerState):
     # that is somewhat arbitrary but typically the ergonomic single
     # way to do something
     DWIM_DEFAULT_TIME: ClassVar[openmm.unit.Quantity] = 0 * openmm.unit.picosecond
-    DWIM_DEFAULT_UNITCELL: ClassVar[openmm.unit.Quantity] = _gen_unit_cube() * openmm.unit.nanometer
-    DWIM_DEFAULT_BOX_VOLUME: ClassVar[openmm.unit.Quantity] = 0. * (openmm.unit.nanometer ** 3)
+    DWIM_DEFAULT_UNITCELL: ClassVar[openmm.unit.Quantity] = (
+        _gen_unit_cube() * openmm.unit.nanometer
+    )
+    DWIM_DEFAULT_BOX_VOLUME: ClassVar[openmm.unit.Quantity] = 0.0 * (
+        openmm.unit.nanometer**3
+    )
 
     @staticmethod
     def _validate_array3ds(
@@ -680,8 +708,8 @@ class OpenMMState(WalkerState):
             report = ", ".join(f"{name}={maybe_nums[name]}" for name in which_given)
 
             raise OpenMMStateValidationError(
-                    f"The number of particles do not match: {report}"
-                )
+                f"The number of particles do not match: {report}"
+            )
 
         elif len(which_given) == 3 and (
             maybe_nums[which_given[0]] != maybe_nums[which_given[1]]
@@ -691,8 +719,8 @@ class OpenMMState(WalkerState):
             report = ", ".join(f"{name}={maybe_nums[name]}" for name in which_given)
 
             raise OpenMMStateValidationError(
-                    f"The number of particles do not match: {report}"
-                )
+                f"The number of particles do not match: {report}"
+            )
 
         else:
             return True
@@ -733,7 +761,7 @@ class OpenMMState(WalkerState):
 
         else:
             return True
-        
+
     def __getitem__(self, key: str) -> openmm.unit.Quantity:
 
         if key not in STATE_FIELD_NAMES:
@@ -749,38 +777,29 @@ class OpenMMState(WalkerState):
     def from_dict(cls, data_dict: StateFieldData) -> Self:
         return cls(**data_dict)
 
-        
     @classmethod
     def from_dwim(
-            cls,
-            positions: openmm.unit.Quantity,
-            time: openmm.unit.Quantity | None = None,
-            box_volume: openmm.unit.Quantity | None = None,
-            box_vectors: openmm.unit.Quantity | None = None, 
-            velocities: openmm.unit.Quantity | None = None,
-            forces: openmm.unit.Quantity | None = None,
-            kinetic_energy: openmm.unit.Quantity | None = None,
-            potential_energy: openmm.unit.Quantity | None = None,
-            parameters: frozenmap[str, Any] | None = None,
-            parameter_derivatives: frozenmap[str, Any] | None = None,
+        cls,
+        positions: openmm.unit.Quantity,
+        time: openmm.unit.Quantity | None = None,
+        box_volume: openmm.unit.Quantity | None = None,
+        box_vectors: openmm.unit.Quantity | None = None,
+        velocities: openmm.unit.Quantity | None = None,
+        forces: openmm.unit.Quantity | None = None,
+        kinetic_energy: openmm.unit.Quantity | None = None,
+        potential_energy: openmm.unit.Quantity | None = None,
+        parameters: frozenmap[str, Any] | None = None,
+        parameter_derivatives: frozenmap[str, Any] | None = None,
     ):
 
         return cls(
-            time=(
-                cls.DWIM_DEFAULT_TIME
-                if time is None
-                else time
-            ),
+            time=(cls.DWIM_DEFAULT_TIME if time is None else time),
             box_volume=(
-                cls.DWIM_DEFAULT_BOX_VOLUME
-                if box_volume is None
-                else box_volume
+                cls.DWIM_DEFAULT_BOX_VOLUME if box_volume is None else box_volume
             ),
             positions=positions,
             box_vectors=(
-                cls.DWIM_DEFAULT_UNITCELL
-                if box_vectors is None
-                else box_vectors
+                cls.DWIM_DEFAULT_UNITCELL if box_vectors is None else box_vectors
             ),
             velocities=velocities,
             forces=forces,
@@ -798,7 +817,6 @@ class OpenMMState(WalkerState):
     def from_state(cls, state: openmm.State) -> Self:
         return cls.from_state_wrapper(OpenMMStateWrapper(state))
 
-
     def to_dict(self) -> StateFieldData:
         return StateFieldData(
             {
@@ -807,7 +825,7 @@ class OpenMMState(WalkerState):
                 if v is not None
             }
         )
-    
+
     def to_state_wrapper(
         self,
         system: openmm.System | None = None,
@@ -832,6 +850,7 @@ class OpenMMState(WalkerState):
             wrapper = OpenMMStateWrapper(state)
 
         return wrapper
+
 
 def _gen_vec3_element(
     name: str, parent: etree.Element, vec: tuple[int, int, int]
@@ -978,4 +997,3 @@ def state_to_xml(
     )
 
     return xml_str.decode()
-    

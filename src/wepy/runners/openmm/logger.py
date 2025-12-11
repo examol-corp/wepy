@@ -1,16 +1,22 @@
-import time
+# Standard Library
 import logging
-from typing import Callable
+import time
 from collections.abc import Collection
-import openmm.app
-import openmm
-import openmm.unit
+from typing import Callable
+
+# Third Party Library
 import attrs
+import openmm
+import openmm.app
+import openmm.unit
+
+# First Party Library
 from wepy.util.openmm import format_box_vectors_line
 
+# Local Modules
 from .reporter import (
-    OpenMMReporter,
     OpenMMGetStateKeys,
+    OpenMMReporter,
     OpenMMReporterNextReport,
 )
 
@@ -52,6 +58,7 @@ class LoggingReporter(OpenMMReporter):
             state,
         )
 
+
 LoggingReporterFactory = Callable[
     [
         logging.Logger,
@@ -60,6 +67,7 @@ LoggingReporterFactory = Callable[
     ],
     LoggingReporter,
 ]
+
 
 class StepIntervalLoggingReporter(LoggingReporter):
     """Reporter that reports at intervals in steps."""
@@ -125,8 +133,8 @@ class SamplingTimeIntervalLoggingReporter(LoggingReporter):
         self.start_time = start_time
 
     def describeNextReport(
-            self,
-            simulation: openmm.app.Simulation,
+        self,
+        simulation: openmm.app.Simulation,
     ) -> OpenMMReporterNextReport:
 
         _unit = openmm.unit.attosecond
@@ -137,19 +145,20 @@ class SamplingTimeIntervalLoggingReporter(LoggingReporter):
         step_size = simulation.context.getIntegrator().getStepSize()
 
         sampling_time_left = (
-            self.sampling_time_interval.value_in_unit(_unit) - (
+            self.sampling_time_interval.value_in_unit(_unit)
+            - (
                 curr_sampling_time.value_in_unit(_unit)
                 % self.sampling_time_interval.value_in_unit(_unit)
             )
         ) * _unit
 
-        if sampling_time_left < (0. * _unit):
+        if sampling_time_left < (0.0 * _unit):
             estimated_steps_left = 0
 
         else:
-            estimated_steps_left = (
-                round(sampling_time_left.value_in_unit(_unit)) // round(step_size.value_in_unit(_unit))
-            )
+            estimated_steps_left = round(
+                sampling_time_left.value_in_unit(_unit)
+            ) // round(step_size.value_in_unit(_unit))
 
         return OpenMMReporterNextReport(
             steps=estimated_steps_left,
@@ -174,12 +183,12 @@ class HeartBeatLoggingReporter(StepIntervalLoggingReporter):
             step_interval=step_interval,
             start_time=start_time,
         )
-    
+
     def logging_callback(
-            self,
-            logger: logging.Logger,
-            simulation: openmm.app.Simulation,
-            state: openmm.State,
+        self,
+        logger: logging.Logger,
+        simulation: openmm.app.Simulation,
+        state: openmm.State,
     ) -> None:
 
         current_time = time.time()
@@ -195,15 +204,16 @@ class HeartBeatLoggingReporter(StepIntervalLoggingReporter):
             f"OpenMM simulation progress: clock_time={current_time:.4f} s, elapsed_time={elapsed_time:.4f} s, sim_time={sim_time_mag:.4f} ps, sim_steps={sim_steps}",
         )
 
+
 @attrs.define
 class HeartBeatLoggingReporterFactory:
 
     step_interval: int
 
     def __call__(
-            self,
-            logger: logging.Logger,
-            start_time: int,
+        self,
+        logger: logging.Logger,
+        start_time: int,
     ) -> HeartBeatLoggingReporter:
 
         return HeartBeatLoggingReporter(
@@ -211,6 +221,7 @@ class HeartBeatLoggingReporterFactory:
             step_interval=self.step_interval,
             start_time=start_time,
         )
+
 
 class EnergyLoggingReporter(SamplingTimeIntervalLoggingReporter):
 
@@ -230,10 +241,10 @@ class EnergyLoggingReporter(SamplingTimeIntervalLoggingReporter):
         )
 
     def logging_callback(
-            self,
-            logger: logging.Logger,
-            simulation: openmm.app.Simulation,
-            state: openmm.State
+        self,
+        logger: logging.Logger,
+        simulation: openmm.app.Simulation,
+        state: openmm.State,
     ) -> None:
 
         sim_time = simulation.context.getTime()
@@ -249,15 +260,16 @@ class EnergyLoggingReporter(SamplingTimeIntervalLoggingReporter):
             f"kinetic={_kin_e}, potential={_pot_e}, total={_tot_e}"
         )
 
+
 @attrs.define
 class EnergyLoggingReporterFactory:
 
     sampling_time_interval: int
 
     def __call__(
-            self,
-            logger: logging.Logger,
-            start_time: int,
+        self,
+        logger: logging.Logger,
+        start_time: int,
     ) -> EnergyLoggingReporter:
 
         return EnergyLoggingReporter(
@@ -265,7 +277,7 @@ class EnergyLoggingReporterFactory:
             sampling_time_interval=self.sampling_time_interval,
             start_time=start_time,
         )
-        
+
 
 class UnitCellLoggingReporter(SamplingTimeIntervalLoggingReporter):
 
@@ -285,10 +297,10 @@ class UnitCellLoggingReporter(SamplingTimeIntervalLoggingReporter):
         )
 
     def logging_callback(
-            self,
-            logger: logging.Logger,
-            simulation: openmm.app.Simulation,
-            state: openmm.State
+        self,
+        logger: logging.Logger,
+        simulation: openmm.app.Simulation,
+        state: openmm.State,
     ) -> None:
 
         sim_time = simulation.context.getTime()
@@ -304,15 +316,16 @@ class UnitCellLoggingReporter(SamplingTimeIntervalLoggingReporter):
             f"volume={_box_volume}, vectors={_bvs_line}"
         )
 
+
 @attrs.define
 class UnitCellLoggingReporterFactory:
 
     sampling_time_interval: int
 
     def __call__(
-            self,
-            logger: logging.Logger,
-            start_time: int,
+        self,
+        logger: logging.Logger,
+        start_time: int,
     ) -> EnergyLoggingReporter:
 
         return UnitCellLoggingReporter(

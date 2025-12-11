@@ -1,11 +1,17 @@
+# Third Party Library
 import pytest
-from wepy.resampling.resamplers.resampler import ResamplerError, Resampler, ResamplerABC
+
+# First Party Library
+from wepy.resampling.decisions.clone_merge import (
+    CloneMergeDecisionRecord,
+)
 from wepy.resampling.resamplers.clone_merge import CloneMergeResampler
-from wepy.resampling.decisions.clone_merge import MultiCloneMergeDecision, CloneMergeDecisionRecord, CloneMergeDecisionEnum
-from wepy.walker import Walker
+from wepy.resampling.resamplers.resampler import ResamplerError
 from wepy.runners.mock import MockState
+from wepy.walker import Walker
 
 # class MockCloneMergeResampler(ResamplerABC):
+
 
 class Test_CloneMergeResampler:
 
@@ -34,10 +40,10 @@ class Test_CloneMergeResampler:
     def test__init_walker_actions(self):
 
         assert CloneMergeResampler()._init_walker_actions(4) == [
-                CloneMergeDecisionRecord(decision_id=1, target_idxs=(0,)),
-                CloneMergeDecisionRecord(decision_id=1, target_idxs=(1,)),
-                CloneMergeDecisionRecord(decision_id=1, target_idxs=(2,)),
-                CloneMergeDecisionRecord(decision_id=1, target_idxs=(3,)),
+            CloneMergeDecisionRecord(decision_id=1, target_idxs=(0,)),
+            CloneMergeDecisionRecord(decision_id=1, target_idxs=(1,)),
+            CloneMergeDecisionRecord(decision_id=1, target_idxs=(2,)),
+            CloneMergeDecisionRecord(decision_id=1, target_idxs=(3,)),
         ]
 
     def test__check_resampled_walkers(self):
@@ -101,7 +107,10 @@ class Test_CloneMergeResampler:
 
         with pytest.raises(ResamplerError):
             resampler.assign_clones(
-                merge_groups=[[], [],],
+                merge_groups=[
+                    [],
+                    [],
+                ],
                 walker_clone_nums=[0, 0, 0],
             )
 
@@ -114,7 +123,11 @@ class Test_CloneMergeResampler:
         ]
 
         assert resampler.assign_clones(
-            merge_groups=[[], [2], [],],
+            merge_groups=[
+                [],
+                [2],
+                [],
+            ],
             walker_clone_nums=[1, 0, 0],
         ) == [
             CloneMergeDecisionRecord(decision_id=2, target_idxs=(0, 2)),
@@ -125,6 +138,10 @@ class Test_CloneMergeResampler:
         with pytest.raises(ResamplerError):
 
             resampler.assign_clones(
-                merge_groups=[[2], [], [],],
+                merge_groups=[
+                    [2],
+                    [],
+                    [],
+                ],
                 walker_clone_nums=[1, 0, 0],
             )

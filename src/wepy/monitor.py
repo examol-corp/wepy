@@ -1,5 +1,6 @@
 """Interface definition for simulation monitors."""
 
+# First Party Library
 from wepy.walker import Walker
 
 

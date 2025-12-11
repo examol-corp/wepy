@@ -1,8 +1,11 @@
+# Standard Library
 import math
 
+# First Party Library
 from wepy.resampling.distances.base import DistanceABC
-from wepy.runners.mock import MockState
 from wepy.resampling.distances.mock import MockDistance
+from wepy.runners.mock import MockState
+
 # minimal implementation of a Distance from the ABC, in this case the
 # image and state are the same
 
@@ -19,7 +22,7 @@ class Test_DistanceABC:
                 MockState(1),
                 MockState(3),
             ),
-            2.
+            2.0,
         )
 
     def test_image_distance(self):
@@ -28,5 +31,5 @@ class Test_DistanceABC:
                 MockState(1),
                 MockState(3),
             ),
-            2.
+            2.0,
         )

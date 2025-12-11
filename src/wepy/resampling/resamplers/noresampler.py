@@ -1,12 +1,15 @@
+# Standard Library
 from typing import TypedDict
-import numpy as np
-from wepy.walker import Walker
-from wepy.resampling.resamplers.resampler import Resampler, ResamplerABC
+
+# Third Party Library
+
+# First Party Library
 from wepy.resampling.decisions.no_decision import (
     NoDecision,
-    NoDecisionRecord,
     NothingDecisionEnum,
 )
+from wepy.resampling.resamplers.resampler import Resampler, ResamplerABC
+from wepy.walker import Walker
 
 
 class NoResamplerResamplingData(TypedDict):

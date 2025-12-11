@@ -1,4 +1,7 @@
+# Standard Library
 import math
+
+# First Party Library
 from wepy.resampling.distances.simple import (
     XYDistanceState,
     XYEuclideanDistance,
@@ -14,7 +17,7 @@ class Test_XYEuclideanDistance:
                 XYDistanceState((0, 0)),
                 XYDistanceState((0, 2)),
             ),
-            2.
+            2.0,
         )
 
     def test_distance(self):
@@ -24,5 +27,5 @@ class Test_XYEuclideanDistance:
                 XYDistanceState((0, 0)),
                 XYDistanceState((0, 2)),
             ),
-            2.
+            2.0,
         )

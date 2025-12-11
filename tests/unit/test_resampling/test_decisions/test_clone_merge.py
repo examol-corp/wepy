@@ -1,13 +1,15 @@
-import pytest
+# Third Party Library
 import attrs
+import pytest
 
-from wepy.walker import Walker
-from wepy.runners.mock import MockState
+# First Party Library
 from wepy.resampling.decisions.clone_merge import (
-    MultiCloneMergeDecision,
     CloneMergeDecisionEnum,
     CloneMergeDecisionRecord,
+    MultiCloneMergeDecision,
 )
+from wepy.runners.mock import MockState
+from wepy.walker import Walker
 
 
 class TestMultiCloneMergeDecision:
@@ -38,14 +40,18 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": 1000,
-                            "target_idxs": [0],
-                        }),
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.NOTHING,
-                            "target_idxs": [1],
-                        }),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": 1000,
+                                "target_idxs": [0],
+                            }
+                        ),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.NOTHING,
+                                "target_idxs": [1],
+                            }
+                        ),
                     ]
                 ],
             )
@@ -55,14 +61,18 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.NOTHING,
-                            "target_idxs": [0],
-                        }),
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.NOTHING,
-                            "target_idxs": [1],
-                        }),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.NOTHING,
+                                "target_idxs": [0],
+                            }
+                        ),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.NOTHING,
+                                "target_idxs": [1],
+                            }
+                        ),
                     ]
                 ],
             )
@@ -74,14 +84,18 @@ class TestMultiCloneMergeDecision:
             walkers,
             [
                 [
-                    CloneMergeDecisionRecord(**{
-                        "decision_id": CloneMergeDecisionEnum.NOTHING,
-                        "target_idxs": [1],
-                    }),
-                    CloneMergeDecisionRecord(**{
-                        "decision_id": CloneMergeDecisionEnum.NOTHING,
-                        "target_idxs": [0],
-                    }),
+                    CloneMergeDecisionRecord(
+                        **{
+                            "decision_id": CloneMergeDecisionEnum.NOTHING,
+                            "target_idxs": [1],
+                        }
+                    ),
+                    CloneMergeDecisionRecord(
+                        **{
+                            "decision_id": CloneMergeDecisionEnum.NOTHING,
+                            "target_idxs": [0],
+                        }
+                    ),
                 ]
             ],
         ) == [walker_2, walker_1]
@@ -92,14 +106,18 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.NOTHING,
-                            "target_idxs": [0],
-                        }),
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.NOTHING,
-                            "target_idxs": [0],
-                        }),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.NOTHING,
+                                "target_idxs": [0],
+                            }
+                        ),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.NOTHING,
+                                "target_idxs": [0],
+                            }
+                        ),
                     ]
                 ],
             )
@@ -112,14 +130,18 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.NOTHING,
-                            "target_idxs": [0],
-                        }),
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.SQUASH,
-                            "target_idxs": [1],
-                        }),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.NOTHING,
+                                "target_idxs": [0],
+                            }
+                        ),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.SQUASH,
+                                "target_idxs": [1],
+                            }
+                        ),
                     ]
                 ],
             )
@@ -128,14 +150,18 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.NOTHING,
-                            "target_idxs": [0],
-                        }),
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.SQUASH,
-                            "target_idxs": [0],
-                        }),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.NOTHING,
+                                "target_idxs": [0],
+                            }
+                        ),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.SQUASH,
+                                "target_idxs": [0],
+                            }
+                        ),
                     ]
                 ],
             )
@@ -146,14 +172,18 @@ class TestMultiCloneMergeDecision:
                 walkers,
                 [
                     [
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.KEEP_MERGE,
-                            "target_idxs": [0],
-                        }),
-                        CloneMergeDecisionRecord(**{
-                            "decision_id": CloneMergeDecisionEnum.SQUASH,
-                            "target_idxs": [0],
-                        }),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.KEEP_MERGE,
+                                "target_idxs": [0],
+                            }
+                        ),
+                        CloneMergeDecisionRecord(
+                            **{
+                                "decision_id": CloneMergeDecisionEnum.SQUASH,
+                                "target_idxs": [0],
+                            }
+                        ),
                     ]
                 ],
             )
@@ -166,18 +196,24 @@ class TestMultiCloneMergeDecision:
             ],
             [
                 [
-                    CloneMergeDecisionRecord(**{
-                        "decision_id": CloneMergeDecisionEnum.CLONE,
-                        "target_idxs": [0, 2],
-                    }),
-                    CloneMergeDecisionRecord(**{
-                        "decision_id": CloneMergeDecisionEnum.KEEP_MERGE,
-                        "target_idxs": [1],
-                    }),
-                    CloneMergeDecisionRecord(**{
-                        "decision_id": CloneMergeDecisionEnum.SQUASH,
-                        "target_idxs": [1],
-                    }),
+                    CloneMergeDecisionRecord(
+                        **{
+                            "decision_id": CloneMergeDecisionEnum.CLONE,
+                            "target_idxs": [0, 2],
+                        }
+                    ),
+                    CloneMergeDecisionRecord(
+                        **{
+                            "decision_id": CloneMergeDecisionEnum.KEEP_MERGE,
+                            "target_idxs": [1],
+                        }
+                    ),
+                    CloneMergeDecisionRecord(
+                        **{
+                            "decision_id": CloneMergeDecisionEnum.SQUASH,
+                            "target_idxs": [1],
+                        }
+                    ),
                 ]
             ],
         ) == [

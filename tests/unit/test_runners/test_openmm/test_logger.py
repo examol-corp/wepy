@@ -1,43 +1,49 @@
-import time
-import logging
+# Standard Library
 import copy
-import pytest
+import logging
+import time
+
+# Third Party Library
 import openmm
 import openmm.app
 import openmm.unit
-from wepy.runners.openmm.state import OpenMMState
-from wepy.runners.openmm.reporter import OpenMMReporterNextReport
+import pytest
+
+# First Party Library
 from wepy.runners.openmm.logger import (
-    LoggingReporter,
-    StepIntervalLoggingReporter,
-    SamplingTimeIntervalLoggingReporter,
-    HeartBeatLoggingReporter,
     EnergyLoggingReporter,
+    HeartBeatLoggingReporter,
+    LoggingReporter,
+    SamplingTimeIntervalLoggingReporter,
+    StepIntervalLoggingReporter,
     UnitCellLoggingReporter,
 )
+from wepy.runners.openmm.reporter import OpenMMReporterNextReport
+from wepy.runners.openmm.state import OpenMMState
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 
 STEP_TIME = 1 * openmm.unit.femtosecond
 
+
 @pytest.fixture(scope="function")
 def sim_components() -> tuple[
-        openmm.State,
-        openmm.app.Topology,
-        openmm.System,
-        openmm.LangevinIntegrator,
-        openmm.Platform,
+    openmm.State,
+    openmm.app.Topology,
+    openmm.System,
+    openmm.LangevinIntegrator,
+    openmm.Platform,
 ]:
 
     lj_sys = LennardJonesPair()
-    integrator  = openmm.VerletIntegrator(STEP_TIME)
-    omm_state = OpenMMState.from_dwim(positions=lj_sys.positions).to_state_wrapper().state
-
+    integrator = openmm.VerletIntegrator(STEP_TIME)
+    omm_state = (
+        OpenMMState.from_dwim(positions=lj_sys.positions).to_state_wrapper().state
+    )
 
     platform = openmm.Platform.getPlatformByName("Reference")
 
     return omm_state, lj_sys.topology, lj_sys.system, integrator, platform
-    
-    
+
 
 class Test_LoggingReporter:
 
@@ -46,9 +52,9 @@ class Test_LoggingReporter:
         logger = logging.getLogger("test-LoggingReporter")
 
         def hello_log(
-                logger: logging.Logger,
-                simulation: openmm.app.Simulation,
-                state: openmm.State,
+            logger: logging.Logger,
+            simulation: openmm.app.Simulation,
+            state: openmm.State,
         ) -> None:
 
             logger.info("Hello")
@@ -69,6 +75,7 @@ class Test_LoggingReporter:
 
         caplog.clear()
 
+
 class Test_StepIntervalLoggingReporter:
 
     def test_describeNextReport(self, sim_components):
@@ -78,9 +85,9 @@ class Test_StepIntervalLoggingReporter:
         logger = logging.getLogger("test-StepIntervalLoggingReporter")
 
         def hello_log(
-                logger: logging.Logger,
-                simulation: openmm.app.Simulation,
-                state: openmm.State,
+            logger: logging.Logger,
+            simulation: openmm.app.Simulation,
+            state: openmm.State,
         ) -> None:
 
             logger.info("Hello")
@@ -95,33 +102,24 @@ class Test_StepIntervalLoggingReporter:
             start_time=time.time(),
         )
 
-
-        simulation = openmm.app.Simulation(
-            *sim_args
-        )
+        simulation = openmm.app.Simulation(*sim_args)
         simulation.context.setState(omm_state)
 
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=10,
             include=list(state_includes),
             periodic=False,
         )
 
         simulation.step(1)
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=9,
             include=list(state_includes),
             periodic=False,
         )
 
         simulation.step(2)
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=7,
             include=list(state_includes),
             periodic=False,
@@ -129,30 +127,25 @@ class Test_StepIntervalLoggingReporter:
 
         # wraps back around at 0
         simulation.step(7)
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=10,
             include=list(state_includes),
             periodic=False,
         )
 
-
     def test_simulation(self, sim_components, caplog):
         omm_state, sim_args = sim_components[0], sim_components[1:]
 
-        simulation = openmm.app.Simulation(
-            *sim_args
-        )
+        simulation = openmm.app.Simulation(*sim_args)
         simulation.context.setState(omm_state)
 
         logger_name = "test-StepIntervalLoggingReporter"
         logger = logging.getLogger(logger_name)
 
         def hello_log(
-                logger: logging.Logger,
-                simulation: openmm.app.Simulation,
-                state: openmm.State,
+            logger: logging.Logger,
+            simulation: openmm.app.Simulation,
+            state: openmm.State,
         ) -> None:
 
             logger.info("Hello")
@@ -191,13 +184,12 @@ class Test_SamplingTimeIntervalLoggingReporter:
         omm_state, sim_args = sim_components[0], sim_components[1:]
         topology, system, integrator, platform = sim_args
 
-
         logger = logging.getLogger("test-SamplingTimeIntervalLoggingReporter")
 
         def hello_log(
-                logger: logging.Logger,
-                simulation: openmm.app.Simulation,
-                state: openmm.State,
+            logger: logging.Logger,
+            simulation: openmm.app.Simulation,
+            state: openmm.State,
         ) -> None:
 
             logger.info("Hello")
@@ -220,45 +212,35 @@ class Test_SamplingTimeIntervalLoggingReporter:
         )
         simulation.context.setState(omm_state)
 
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=10,
             include=list(state_includes),
             periodic=False,
         )
 
         simulation.step(1)
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=9,
             include=list(state_includes),
             periodic=False,
         )
 
         simulation.step(2)
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=7,
             include=list(state_includes),
             periodic=False,
         )
 
         simulation.step(7)
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=10,
             include=list(state_includes),
             periodic=False,
         )
 
         simulation.step(3)
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=7,
             include=list(state_includes),
             periodic=False,
@@ -273,9 +255,7 @@ class Test_SamplingTimeIntervalLoggingReporter:
         simulation.context.setState(omm_state)
 
         simulation.step(10)
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=10,
             include=list(state_includes),
             periodic=False,
@@ -291,14 +271,11 @@ class Test_SamplingTimeIntervalLoggingReporter:
         simulation.context.setState(omm_state)
 
         simulation.step(11)
-        assert step_logger.describeNextReport(
-            simulation
-        ) == OpenMMReporterNextReport(
+        assert step_logger.describeNextReport(simulation) == OpenMMReporterNextReport(
             steps=9,
             include=list(state_includes),
             periodic=False,
         )
-
 
     def test_simulation(self, sim_components, caplog):
         omm_state, sim_args = sim_components[0], sim_components[1:]
@@ -309,9 +286,9 @@ class Test_SamplingTimeIntervalLoggingReporter:
         logger = logging.getLogger(logger_name)
 
         def hello_log(
-                logger: logging.Logger,
-                simulation: openmm.app.Simulation,
-                state: openmm.State,
+            logger: logging.Logger,
+            simulation: openmm.app.Simulation,
+            state: openmm.State,
         ) -> None:
 
             logger.info(f"Step: {state.getStepCount()}")
@@ -379,6 +356,7 @@ class Test_SamplingTimeIntervalLoggingReporter:
 
         assert len(caplog.records) == 5
         caplog.clear()
+
 
 class Test_HeartBeatLoggingReporter:
 
@@ -455,6 +433,7 @@ class Test_HeartBeatLoggingReporter:
         assert len(caplog.records) == 5
         caplog.clear()
 
+
 class Test_EnergyLoggingReporter:
 
     def test_logging_callback(self, sim_components, caplog):
@@ -525,6 +504,7 @@ class Test_EnergyLoggingReporter:
         assert len(caplog.records) == 5
         caplog.clear()
 
+
 class Test_UnitCellLoggingReporter:
 
     def test_logging_callback(self, sim_components, caplog):
@@ -594,4 +574,3 @@ class Test_UnitCellLoggingReporter:
 
         assert len(caplog.records) == 5
         caplog.clear()
-        

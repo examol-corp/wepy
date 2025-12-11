@@ -1,6 +1,11 @@
-from wepy.walker import Walker, WalkerState
+# First Party Library
+from wepy.resampling.decisions.no_decision import (
+    NoDecision,
+    NoDecisionRecord,
+    NothingDecisionEnum,
+)
 from wepy.runners.mock import MockState
-from wepy.resampling.decisions.no_decision import NoDecision, NothingDecisionEnum, NoDecisionRecord
+from wepy.walker import Walker
 
 
 class TestNoDecision:
@@ -27,14 +32,18 @@ class TestNoDecision:
                 walkers,
                 [
                     [
-                        NoDecisionRecord(**{
-                            "decision_id": NothingDecisionEnum.NOTHING,
-                            "target_idx": 0,
-                        }),
-                        NoDecisionRecord(**{
-                            "decision_id": NothingDecisionEnum.NOTHING,
-                            "target_idx": 1,
-                        }),
+                        NoDecisionRecord(
+                            **{
+                                "decision_id": NothingDecisionEnum.NOTHING,
+                                "target_idx": 0,
+                            }
+                        ),
+                        NoDecisionRecord(
+                            **{
+                                "decision_id": NothingDecisionEnum.NOTHING,
+                                "target_idx": 1,
+                            }
+                        ),
                     ]
                 ],
             )
@@ -45,14 +54,18 @@ class TestNoDecision:
             walkers,
             [
                 [
-                    NoDecisionRecord(**{
-                        "decision_id": NothingDecisionEnum.NOTHING,
-                        "target_idx": 1,
-                    }),
-                    NoDecisionRecord(**{
-                        "decision_id": NothingDecisionEnum.NOTHING,
-                        "target_idx": 0,
-                    }),
+                    NoDecisionRecord(
+                        **{
+                            "decision_id": NothingDecisionEnum.NOTHING,
+                            "target_idx": 1,
+                        }
+                    ),
+                    NoDecisionRecord(
+                        **{
+                            "decision_id": NothingDecisionEnum.NOTHING,
+                            "target_idx": 0,
+                        }
+                    ),
                 ]
             ],
         ) == [walker_2, walker_1]
@@ -60,27 +73,35 @@ class TestNoDecision:
     def test_parents(self):
 
         assert NoDecision.parents(
-                [
-                    NoDecisionRecord(**{
+            [
+                NoDecisionRecord(
+                    **{
                         "decision_id": NothingDecisionEnum.NOTHING,
                         "target_idx": 0,
-                    }),
-                    NoDecisionRecord(**{
+                    }
+                ),
+                NoDecisionRecord(
+                    **{
                         "decision_id": NothingDecisionEnum.NOTHING,
                         "target_idx": 1,
-                    }),
-                ]
+                    }
+                ),
+            ]
         ) == [0, 1]
 
         assert NoDecision.parents(
-                [
-                    NoDecisionRecord(**{
+            [
+                NoDecisionRecord(
+                    **{
                         "decision_id": NothingDecisionEnum.NOTHING,
                         "target_idx": 1,
-                    }),
-                    NoDecisionRecord(**{
+                    }
+                ),
+                NoDecisionRecord(
+                    **{
                         "decision_id": NothingDecisionEnum.NOTHING,
                         "target_idx": 0,
-                    }),
-                ]
+                    }
+                ),
+            ]
         ) == [1, 0]

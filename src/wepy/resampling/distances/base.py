@@ -25,16 +25,16 @@ the 'image_distance' to compute distances using only those images.
 # Standard Library
 import logging
 from abc import ABC
-from typing import TypeVar, Generic, Protocol
+from typing import Generic, Protocol, TypeVar
 
 # First Party Library
 from wepy.walker import WalkerState
-from wepy.util.util import box_vectors_to_lengths_angles
 
 logger = logging.getLogger(__name__)
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState, covariant=True)
 DistanceImage_ = TypeVar("DistanceImage_")
+
 
 class Distance(Protocol[DistanceImage_, WalkerState_]):
     def image(self, state: WalkerState_) -> DistanceImage_:
@@ -100,8 +100,6 @@ class Distance(Protocol[DistanceImage_, WalkerState_]):
 
         ...
 
-
-        
 
 class DistanceABC(ABC, Generic[DistanceImage_, WalkerState_]):
     """Abstract Base class for Distance classes."""

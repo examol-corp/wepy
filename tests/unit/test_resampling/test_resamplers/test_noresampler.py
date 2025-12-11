@@ -1,8 +1,8 @@
-from wepy.resampling.resamplers.noresampler import NoResampler
+# First Party Library
 from wepy.resampling.decisions.no_decision import NothingDecisionEnum
-from wepy.walker import Walker
+from wepy.resampling.resamplers.noresampler import NoResampler
 from wepy.runners.mock import MockState
-
+from wepy.walker import Walker
 
 
 class TestNoResampler:

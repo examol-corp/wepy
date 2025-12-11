@@ -1,16 +1,20 @@
-import json
+# Standard Library
 
+# Third Party Library
 import numpy as np
-import mdtraj
 
-from wepy.util.mdtraj import mdtraj_to_json_topology
+# First Party Library
 from wepy.runners.openmm import OpenMMState
-from wepy_tools.systems.alanine_dipeptide import AlanineDipeptideExplicitSystem, AlanineDipeptideRamachandranDistance
+from wepy_tools.systems.alanine_dipeptide import (
+    AlanineDipeptideExplicitSystem,
+    AlanineDipeptideRamachandranDistance,
+)
 
 
 def test_AlanineDipeptideExplicitSystem():
 
     AlanineDipeptideExplicitSystem()
+
 
 class Test_AlanineDipeptideRamachandranDistance:
 
@@ -30,15 +34,19 @@ class Test_AlanineDipeptideRamachandranDistance:
 
         image_a = distance.image(ala_sys.state)
 
-        assert np.isclose(distance.image_distance(image_a, image_a), 0.)
+        assert np.isclose(distance.image_distance(image_a, image_a), 0.0)
 
         # then make a jittered atom positions to get something a little
         # different to compare
-        jitter_positions = ala_sys.state.positions + np.random.uniform(
-            -0.01,
-            0.01,
-            size=ala_sys.state.positions.shape,
-        ) * ala_sys.state.positions.unit
+        jitter_positions = (
+            ala_sys.state.positions
+            + np.random.uniform(
+                -0.01,
+                0.01,
+                size=ala_sys.state.positions.shape,
+            )
+            * ala_sys.state.positions.unit
+        )
 
         jitter_state = OpenMMState.from_dwim(
             positions=jitter_positions,
@@ -52,7 +60,7 @@ class Test_AlanineDipeptideRamachandranDistance:
                 image_a,
                 jitter_image,
             ),
-            0.,
+            0.0,
         )
 
         # test it is symmetric

@@ -3,15 +3,14 @@
 # Standard Library
 import abc
 import logging
-from collections.abc import Callable, Collection
 from typing import Literal, NotRequired, TypedDict, get_args
 
 # Third Party Library
 import openmm as omm
 import openmm.app as omma
-import openmm.unit as unit
 
 logger = logging.getLogger(__name__)
+
 
 class OpenMMReporterNextReport(TypedDict):
 
@@ -34,7 +33,6 @@ OPENMM_GET_STATE_KEYS: frozenset[OpenMMGetStateKeys] = frozenset(
 )
 
 
-
 class OpenMMReporter(metaclass=abc.ABCMeta):
     """ABC for openmm.app Reporter.
 
@@ -53,5 +51,3 @@ class OpenMMReporter(metaclass=abc.ABCMeta):
     ) -> None:
 
         raise NotImplementedError
-
-

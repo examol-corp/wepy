@@ -1,21 +1,27 @@
-import logging
-import pytest
-import psutil
+# Standard Library
+
+# Third Party Library
 import openmm
 import openmm.unit
-from wepy.walker import Walker
-from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState, HeartBeatLoggingReporterFactory
-from wepy.work_mapper.serial import SerialMapper
-from wepy.work_mapper.openmm import (
-    OpenMMSerialWorkMapperFactory,
-    OpenMMProcPoolWorkMapperFactory,
+import psutil
+
+# First Party Library
+from wepy.resampling.resamplers.noresampler import NoResampler
+from wepy.runners.openmm import (
+    HeartBeatLoggingReporterFactory,
+    OpenMMRunnerFactory,
+    OpenMMState,
 )
 from wepy.sim_manager import Manager
-from wepy.resampling.resamplers.noresampler import NoResampler
-
+from wepy.walker import Walker
+from wepy.work_mapper.openmm import (
+    OpenMMProcPoolWorkMapperFactory,
+    OpenMMSerialWorkMapperFactory,
+)
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 
 STEP_SIZE = 2 * openmm.unit.femtosecond
+
 
 def test_serial_mapper():
 
@@ -34,7 +40,7 @@ def test_serial_mapper():
         openmm_reporter_factories=[
             # heart beat every step
             HeartBeatLoggingReporterFactory(step_interval=1)
-        ]
+        ],
     )
 
     num_walkers = 4
@@ -43,8 +49,7 @@ def test_serial_mapper():
         OpenMMState.from_dwim(
             positions=lj_sys.positions,
         )
-        for _
-        in range(num_walkers)
+        for _ in range(num_walkers)
     ]
 
     init_walker_weight = 1 / num_walkers
@@ -53,8 +58,7 @@ def test_serial_mapper():
             state=walker_state,
             weight=init_walker_weight,
         )
-        for walker_state
-        in walker_states
+        for walker_state in walker_states
     ]
 
     sim_manager = Manager(
@@ -63,10 +67,10 @@ def test_serial_mapper():
         resampler_factory=NoResampler,
         work_mapper_factory=OpenMMSerialWorkMapperFactory(
             platform="Reference",
-        )
+        ),
     )
 
-    new_walkers, sim_components  = sim_manager.run_simulation(
+    new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=1,
         segment_lengths=100,
     )
@@ -77,11 +81,11 @@ def test_serial_mapper():
         resampler_factory=NoResampler,
         work_mapper_factory=OpenMMSerialWorkMapperFactory(
             platform="CPU",
-            global_platform_properties={"Threads" : "1"},
-        )
+            global_platform_properties={"Threads": "1"},
+        ),
     )
 
-    new_walkers, sim_components  = sim_manager.run_simulation(
+    new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=1,
         segment_lengths=100,
     )
@@ -92,14 +96,15 @@ def test_serial_mapper():
         resampler_factory=NoResampler,
         work_mapper_factory=OpenMMSerialWorkMapperFactory(
             platform="CPU",
-            global_platform_properties={"Threads" : "4"},
-        )
+            global_platform_properties={"Threads": "4"},
+        ),
     )
 
-    new_walkers, sim_components  = sim_manager.run_simulation(
+    new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=1,
         segment_lengths=100,
     )
+
 
 def test_proc_pool_mapper():
 
@@ -117,7 +122,7 @@ def test_proc_pool_mapper():
         openmm_reporter_factories=[
             # heart beat every step
             HeartBeatLoggingReporterFactory(step_interval=10)
-        ]
+        ],
     )
 
     num_walkers = 4
@@ -126,8 +131,7 @@ def test_proc_pool_mapper():
         OpenMMState.from_dwim(
             positions=lj_sys.positions,
         )
-        for _
-        in range(num_walkers)
+        for _ in range(num_walkers)
     ]
 
     init_walker_weight = 1 / num_walkers
@@ -136,8 +140,7 @@ def test_proc_pool_mapper():
             state=walker_state,
             weight=init_walker_weight,
         )
-        for walker_state
-        in walker_states
+        for walker_state in walker_states
     ]
 
     # As an example of a useful configuration for Reference
@@ -153,7 +156,7 @@ def test_proc_pool_mapper():
         ),
     )
 
-    new_walkers, sim_components  = sim_manager.run_simulation(
+    new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=1,
         segment_lengths=100,
     )
@@ -164,7 +167,7 @@ def test_proc_pool_mapper():
     # on how many CPUs you have. Here we use psutil to reliably get
     # the number of cores and divide that by the number of walkers.
     num_cores = len(psutil.Process().cpu_affinity())
-    cores_per_worker = (num_cores // num_walkers)
+    cores_per_worker = num_cores // num_walkers
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
@@ -172,11 +175,11 @@ def test_proc_pool_mapper():
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
             num_procs=len(walker_states),
-            global_platform_properties={"Threads" : str(cores_per_worker)},
+            global_platform_properties={"Threads": str(cores_per_worker)},
         ),
     )
 
-    new_walkers, sim_components  = sim_manager.run_simulation(
+    new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=2,
         segment_lengths=100,
     )
@@ -192,20 +195,18 @@ def test_proc_pool_mapper():
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
             num_procs=len(walker_states),
-            global_platform_properties={"Threads" : "1"},
-            device_ids=[0,1,2,3],
-            device_platform_properties=[
-                {}, {}, {},
-                {"Threads" : "3"}
-            ]
+            global_platform_properties={"Threads": "1"},
+            device_ids=[0, 1, 2, 3],
+            device_platform_properties=[{}, {}, {}, {"Threads": "3"}],
         ),
     )
 
-    new_walkers, sim_components  = sim_manager.run_simulation(
+    new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=2,
         segment_lengths=100,
     )
-    
+
+
 # def test_ray_mapper():
 #     lj_sys = LennardJonesPair()
 #     integrator = openmm.LangevinIntegrator(300.0, 0.002, 0.1)

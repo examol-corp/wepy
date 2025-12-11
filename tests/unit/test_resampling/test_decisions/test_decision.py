@@ -1,20 +1,26 @@
-import pytest
-from typing import TypedDict
+# Standard Library
 from enum import IntEnum
-import attrs
+
+# Third Party Library
+import pytest
+
+# First Party Library
 from wepy.resampling.decisions.decision import Decision, DecisionRecord
-from wepy.walker import Walker
 from wepy.runners.mock import MockState
+from wepy.walker import Walker
+
 
 # minimal implementation of the ABC for testing
 class MockDecisionEnum(IntEnum):
     NOTHING = 0
+
 
 class MockDecision(Decision):
 
     ENUM = MockDecisionEnum
     DEFAULT_DECISION = ENUM.NOTHING
     ANCESTOR_DECISION_IDS = (ENUM.NOTHING.value,)
+
 
 class Test_Decision:
 
@@ -32,23 +38,29 @@ class Test_Decision:
 
     def test_fields(self):
         assert MockDecision.fields() == [
-            ("decision_id", (1,), int,)
+            (
+                "decision_id",
+                (1,),
+                int,
+            )
         ]
+
     def test_record_field_names(self):
         assert MockDecision.record_field_names() == ("decision_id",)
 
     def test_enum_dict_by_name(self):
         assert MockDecision.enum_dict_by_name() == {
-            "NOTHING" : 0,
+            "NOTHING": 0,
         }
 
     def test_enum_dict_by_value(self):
         assert MockDecision.enum_dict_by_value() == {
-            0 : MockDecisionEnum.NOTHING,
+            0: MockDecisionEnum.NOTHING,
         }
 
     def test_enum_by_value(self):
         assert MockDecision.enum_by_value(0) == MockDecisionEnum.NOTHING
+
     def test_enum_by_name(self):
         assert MockDecision.enum_by_name("NOTHING") == MockDecisionEnum.NOTHING
 
@@ -60,18 +72,6 @@ class Test_Decision:
 
         with pytest.raises(NotImplementedError):
             MockDecision.action(
-                [
-                    Walker(
-                        MockState(1),
-                        0.1
-                    )
-                    for _ in range(4)
-                ],
-                [
-                    DecisionRecord(
-                        decision_id=0
-                    )
-                    for _ in range(4)
-                ],
+                [Walker(MockState(1), 0.1) for _ in range(4)],
+                [DecisionRecord(decision_id=0) for _ in range(4)],
             )
-

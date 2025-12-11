@@ -1,25 +1,31 @@
-import math
+# Standard Library
 from typing import Literal, TypedDict
+
+# Third Party Library
+import attrs
+
+# First Party Library
 from wepy.missing import MISSING
 from wepy.walker import (
-    clone,
-    squash,
-    split,
-    keep_merge,
-    merge,
     Walker,
     WalkerState,
+    clone,
+    keep_merge,
+    merge,
+    split,
+    squash,
 )
-
-import attrs
 
 # attrs provide the __eq__ method
 
 MockKeys = Literal["a", "b"]
 MockDataValue = int | str
+
+
 class MockData(TypedDict):
     a: int
     b: str
+
 
 @attrs.define
 class MockWalkerState(WalkerState):
@@ -34,7 +40,7 @@ class MockWalkerState(WalkerState):
 
     def dict(self) -> MockData:
         return attrs.asdict(self)
-        
+
 
 class TestWalkerState:
 
@@ -97,6 +103,7 @@ class TestWalker:
             weight=0.05,
         )
 
+
 def test_clone():
     state = MockWalkerState(a=1, b="hello")
     walker = Walker(
@@ -115,6 +122,7 @@ def test_clone():
         state=state,
         weight=0.05,
     )
+
 
 def test_squash():
 
@@ -137,6 +145,7 @@ def test_squash():
         state=MockWalkerState(a=1, b="hello"),
         weight=0.2,
     )
+
 
 def test_split():
 

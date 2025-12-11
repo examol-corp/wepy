@@ -1,5 +1,7 @@
+# Third Party Library
 import pytest
 
+# First Party Library
 from wepy.resampling.resamplers.resampler import ResamplerABC, ResamplerError
 
 
@@ -13,7 +15,7 @@ class Test_ResamplerABC:
             min_num_walkers=None,
             max_num_walkers=None,
         )
-        
+
         ResamplerABC(
             min_num_walkers=3,
             max_num_walkers=3,
@@ -26,7 +28,4 @@ class Test_ResamplerABC:
             )
 
         with pytest.raises(ResamplerError):
-            ResamplerABC(
-                min_num_walkers=0
-            )
-
+            ResamplerABC(min_num_walkers=0)

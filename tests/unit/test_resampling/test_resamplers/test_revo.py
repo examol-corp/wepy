@@ -1,10 +1,20 @@
-import pytest
-import numpy as np
+# Standard Library
 import pickle
-from wepy.runners.mock import MockState
+
+# Third Party Library
+import numpy as np
+import pytest
+
+# First Party Library
 from wepy.resampling.distances.mock import MockDistance
-from wepy.resampling.resamplers.revo import REVOResampler, REVOResamplerFactory, _ImageWrapper
+from wepy.resampling.resamplers.revo import (
+    REVOResampler,
+    REVOResamplerFactory,
+    _ImageWrapper,
+)
+from wepy.runners.mock import MockState
 from wepy.walker import Walker
+
 
 def test__ImageWrapper():
 
@@ -15,6 +25,7 @@ def test__ImageWrapper():
     # check that it is pickleable for sending to subprocesses
     pickle.loads(pickle.dumps(wrapped))
 
+
 class Test_REVOResamplerFactory:
 
     resampler = REVOResamplerFactory(
@@ -22,6 +33,7 @@ class Test_REVOResamplerFactory:
         merge_dist=1,
         char_dist=1,
     )
+
 
 class Test_REVOResampler:
 
@@ -43,19 +55,21 @@ class Test_REVOResampler:
         assert resampler.seed == 1
         assert np.isclose(resampler.lpmin, np.log(0.1 / 100))
 
-        assert REVOResampler(
-            merge_dist=1.0,
-            char_dist=1.0,
-            dist_exponent=3,
-            distance=MockDistance(),
-            weights=True,
-            merge_alg="pairs",
-            pmin=0.1,
-            pmax=0.4,
-            seed=None,
-            num_proc=1,
-        ).seed is None
-
+        assert (
+            REVOResampler(
+                merge_dist=1.0,
+                char_dist=1.0,
+                dist_exponent=3,
+                distance=MockDistance(),
+                weights=True,
+                merge_alg="pairs",
+                pmin=0.1,
+                pmax=0.4,
+                seed=None,
+                num_proc=1,
+            ).seed
+            is None
+        )
 
     def test__novelty(self):
 
@@ -74,13 +88,13 @@ class Test_REVOResampler:
 
         # UGLY,TOREV: there shouldn't be the possibility of negatives
         # of these values but current code accepts them.
-        assert resampler._novelty(-1, 1) == 0.
-        assert resampler._novelty(0.1, -1) == 0.
-        assert resampler._novelty(0., 0) == 0.
-        assert resampler._novelty(0.1, 0) == 0.
-        assert resampler._novelty(0., 1) == 0.
+        assert resampler._novelty(-1, 1) == 0.0
+        assert resampler._novelty(0.1, -1) == 0.0
+        assert resampler._novelty(0.0, 0) == 0.0
+        assert resampler._novelty(0.1, 0) == 0.0
+        assert resampler._novelty(0.0, 1) == 0.0
 
-        assert resampler._novelty(0.1, 1) == 1.
+        assert resampler._novelty(0.1, 1) == 1.0
 
         # with weights
         resampler = REVOResampler(
@@ -96,10 +110,10 @@ class Test_REVOResampler:
             num_proc=1,
         )
 
-        assert resampler._novelty(.4, 1) > 0.
-        assert resampler._novelty(.1, 1) > 0.
+        assert resampler._novelty(0.4, 1) > 0.0
+        assert resampler._novelty(0.1, 1) > 0.0
 
-        assert np.isclose(resampler._novelty(.4, 1000), 0.)
+        assert np.isclose(resampler._novelty(0.4, 1000), 0.0)
 
     def test__calc_variation(self):
 
@@ -120,8 +134,14 @@ class Test_REVOResampler:
             [0.4, 0.1],
             [1, 1],
             [
-                [0., 1.,],
-                [1., 0.,]
+                [
+                    0.0,
+                    1.0,
+                ],
+                [
+                    1.0,
+                    0.0,
+                ],
             ],
         )
 
@@ -159,11 +179,14 @@ class Test_REVOResampler:
         )
 
         # if no suitable pairs are found returns None
-        assert resampler._calc_variation_loss(
-            [0.1, 0.4, 0.3],
-            [0.01, 0.02, 0.03],
-            [],
-        ) is None
+        assert (
+            resampler._calc_variation_loss(
+                [0.1, 0.4, 0.3],
+                [0.01, 0.02, 0.03],
+                [],
+            )
+            is None
+        )
 
     def test__find_eligible_merge_pairs(self):
 
@@ -182,16 +205,19 @@ class Test_REVOResampler:
 
         # TODO: figure out some combinations of outputs that generates
         # some eligible pairs
-        assert resampler._find_eligible_merge_pairs(
-            [0.1, 0.4, 0.3],
-            [
-                [0., 1., 2.],
-                [1., 0., 1.5],
-                [2., 1.5, 0.],
-            ],
-            2,
-            [2, 2, 2],
-        ) == []
+        assert (
+            resampler._find_eligible_merge_pairs(
+                [0.1, 0.4, 0.3],
+                [
+                    [0.0, 1.0, 2.0],
+                    [1.0, 0.0, 1.5],
+                    [2.0, 1.5, 0.0],
+                ],
+                2,
+                [2, 2, 2],
+            )
+            == []
+        )
 
     def test_decide(self):
 
@@ -212,9 +238,9 @@ class Test_REVOResampler:
             [0.1, 0.4, 0.3],
             [1, 1, 1],
             [
-                [0., 1., 2.],
-                [1., 0., 1.5],
-                [2., 1.5, 0.],
+                [0.0, 1.0, 2.0],
+                [1.0, 0.0, 1.5],
+                [2.0, 1.5, 0.0],
             ],
         )
 
@@ -246,13 +272,10 @@ class Test_REVOResampler:
             ]
         ) == (
             [
-                [0., 2.],
-                [2., 0.],
+                [0.0, 2.0],
+                [2.0, 0.0],
             ],
-            [
-                MockState(0),
-                MockState(2)
-            ]
+            [MockState(0), MockState(2)],
         )
 
     @pytest.mark.flaky(reruns=4)
@@ -286,13 +309,10 @@ class Test_REVOResampler:
             ]
         ) == (
             [
-                [0., 2.],
-                [2., 0.],
+                [0.0, 2.0],
+                [2.0, 0.0],
             ],
-            [
-                MockState(0),
-                MockState(2)
-            ]
+            [MockState(0), MockState(2)],
         )
 
     def test_resample(self):
@@ -310,7 +330,8 @@ class Test_REVOResampler:
             num_proc=1,
         )
 
-        resampled_walkers, resampling_data, resampler_data = resampler.resample([
+        resampled_walkers, resampling_data, resampler_data = resampler.resample(
+            [
                 Walker(
                     MockState(1),
                     0.1,
@@ -319,6 +340,7 @@ class Test_REVOResampler:
                     MockState(2),
                     0.1,
                 ),
-            ])
+            ]
+        )
 
         assert len(resampled_walkers) == 2

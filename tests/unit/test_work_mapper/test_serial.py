@@ -1,9 +1,13 @@
-import functools
+# Standard Library
+
+# Third Party Library
 import attrs
-from wepy.walker import Walker, WalkerState
+
+# First Party Library
 from wepy.work_mapper.serial import SerialMapper
 
 # some minimal definitions for testing a concrete work mapper
+
 
 @attrs.define
 class RizzWalkerState:
@@ -17,6 +21,7 @@ def rizz_run(walker_state: RizzWalkerState, segment_length: int) -> RizzWalkerSt
         rizz=(walker_state.rizz + segment_length),
     )
 
+
 @attrs.define
 class RizzTask:
 
@@ -25,6 +30,7 @@ class RizzTask:
     def __call__(self, state: RizzWalkerState, segment_length: int) -> RizzWalkerState:
 
         return rizz_run(state, segment_length=segment_length, multiple=self.multiple)
+
 
 def test_rizz_walker():
     assert rizz_run(
@@ -40,7 +46,7 @@ class TestMapper:
         mapper = SerialMapper()
 
         mapper.init()
-        
+
         assert mapper.map(
             rizz_run,
             [

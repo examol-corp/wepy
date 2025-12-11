@@ -1,18 +1,19 @@
-from typing import Any
+# Standard Library
 import importlib.resources
 
+# Third Party Library
 import attrs
+import mdtraj
 import numpy as np
 import openmm
 import openmm.app
-import openmm.unit
-import mdtraj
 
-from wepy.runners.openmm import OpenMMState, OpenMMStateWrapper
-from wepy.walker import WalkerState
-from wepy.runners.openmm import OpenMMState
+# First Party Library
 from wepy.resampling.distances.base import Distance
-from wepy.util.mdtraj import traj_fields_to_mdtraj, json_to_mdtraj_topology
+from wepy.runners.openmm import OpenMMState, OpenMMStateWrapper
+from wepy.util.mdtraj import json_to_mdtraj_topology, traj_fields_to_mdtraj
+from wepy.walker import WalkerState
+
 
 class AlanineDipeptideExplicitSystem:
 
@@ -26,7 +27,9 @@ class AlanineDipeptideExplicitSystem:
     def __init__(self) -> None:
 
         # load the system and state information for the simulation
-        ala_files = importlib.resources.files("wepy_tools.systems.data.alanine_dipeptide_explicit")
+        ala_files = importlib.resources.files(
+            "wepy_tools.systems.data.alanine_dipeptide_explicit"
+        )
         system_xml_path = ala_files / "alanine-dipeptide-explicit.system.omm.xml"
         state_xml_path = ala_files / "alanine-dipeptide-explicit.state.omm.xml"
         top_json_path = ala_files / "alanine-dipeptide-explicit.top.json"
@@ -39,13 +42,14 @@ class AlanineDipeptideExplicitSystem:
         self.json_top = top_json_path.read_text()
         self.mdj_top = json_to_mdtraj_topology(self.json_top)
         self.topology = self.mdj_top.to_openmm()
-        
+
 
 @attrs.define
 class AlanineDipeptideRamachandranDistanceImage(WalkerState):
 
     phis: np.typing.ArrayLike
     psis: np.typing.ArrayLike
+
 
 @attrs.define
 class AlanineDipeptideRamachandranDistance(Distance):
@@ -54,13 +58,11 @@ class AlanineDipeptideRamachandranDistance(Distance):
 
     def image(self, state: OpenMMState) -> AlanineDipeptideRamachandranDistanceImage:
 
-
         _unit = state["positions"].unit
         state_dict = {
             # traj shape to match interface requirements
-            key : np.array([quantity.value_in_unit(_unit)])
-            for key, quantity
-            in state.to_dict().items()
+            key: np.array([quantity.value_in_unit(_unit)])
+            for key, quantity in state.to_dict().items()
             if key in {"positions", "box_vectors"}
         }
         traj = traj_fields_to_mdtraj(
@@ -86,11 +88,10 @@ class AlanineDipeptideRamachandranDistance(Distance):
             psis=psis,
         )
 
-
     def image_distance(
-            self,
-            image_a: AlanineDipeptideRamachandranDistanceImage,
-            image_b: AlanineDipeptideRamachandranDistanceImage,
+        self,
+        image_a: AlanineDipeptideRamachandranDistanceImage,
+        image_b: AlanineDipeptideRamachandranDistanceImage,
     ) -> float:
 
         angles_a = np.concatenate((image_a.phis, image_a.psis))

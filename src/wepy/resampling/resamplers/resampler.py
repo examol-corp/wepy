@@ -1,15 +1,13 @@
 # Standard Library
 import logging
-from typing import Any, Protocol, TypeVar, Generic, Literal, Union
-
-# Standard Library
+from typing import Any, Generic, Literal, Protocol, TypeVar, Union
 from warnings import warn
 
 # Third Party Library
 import numpy as np
 
 # First Party Library
-from wepy.resampling.decisions.decision import Decision, DecisionRecord
+from wepy.resampling.decisions.decision import Decision
 from wepy.walker import Walker, WalkerState
 
 logger = logging.getLogger(__name__)
@@ -23,6 +21,7 @@ class ResamplerError(Exception):
     """
 
     pass
+
 
 class Resampler(Protocol, Generic[WalkerState_]):
 
@@ -38,15 +37,9 @@ class Resampler(Protocol, Generic[WalkerState_]):
             Literal[Ellipsis],
             None,
         ],
-        ...
+        ...,
     ]
-    RESAMPLING_DTYPES: tuple[
-        Union[
-            np.dtype,
-            None
-        ],
-        ...
-    ]
+    RESAMPLING_DTYPES: tuple[Union[np.dtype, None], ...]
     RESAMPLING_RECORD_FIELDS: None | tuple[str, ...]
     RESAMPLER_FIELDS: tuple[str, ...]
     RESAMPLER_SHAPES: tuple[
@@ -55,50 +48,36 @@ class Resampler(Protocol, Generic[WalkerState_]):
             Literal[Ellipsis],
             None,
         ],
-        ...
+        ...,
     ]
 
-    RESAMPLER_DTYPES: tuple[
-        Union[np.dtype, None], ...
-    ]
+    RESAMPLER_DTYPES: tuple[Union[np.dtype, None], ...]
     RESAMPLER_RECORD_FIELDS: None | tuple[str, ...]
 
     def resampling_fields(self) -> tuple[
-            tuple[str, ...],
-            tuple[
-                Union[
-                    tuple[int, ...],
-                    Literal[Ellipsis],
-                    None,
-                ],
-                ...
+        tuple[str, ...],
+        tuple[
+            Union[
+                tuple[int, ...],
+                Literal[Ellipsis],
+                None,
             ],
-            tuple[
-                Union[
-                    np.dtype,
-                    None
-                ],
-                ...
-            ],
-    ]:
-        ...
+            ...,
+        ],
+        tuple[Union[np.dtype, None], ...],
+    ]: ...
 
-    def resampling_record_field_names(self) -> None | tuple[str, ...]:
-        ...
+    def resampling_record_field_names(self) -> None | tuple[str, ...]: ...
 
-    def resampler_record_field_names(self) -> None | tuple[str, ...]:
-        ...
-        
-    def resample(
-            self,
-            walkers: list[Walker[WalkerState_]]
-    ) -> tuple[
+    def resampler_record_field_names(self) -> None | tuple[str, ...]: ...
+
+    def resample(self, walkers: list[Walker[WalkerState_]]) -> tuple[
         list[Walker[WalkerState_]],
         # TODO: better types for this
         list[dict[str, Any]],
         list[dict[str, Any]],
-    ]:
-        ...
+    ]: ...
+
 
 class ResamplerABC(Resampler):
     """Abstract base class for implementing resamplers.
@@ -406,7 +385,10 @@ class ResamplerABC(Resampler):
                     "The minimum number of walkers should be at least 1"
                 )
 
-            if max_num_walkers not in {Ellipsis, None} and  min_num_walkers > max_num_walkers:
+            if (
+                max_num_walkers not in {Ellipsis, None}
+                and min_num_walkers > max_num_walkers
+            ):
                 raise ResamplerError(
                     f"min_num_walkers ({min_num_walkers}) must be less than or equal to max_num_walkers ({max_num_walkers})"
                 )

@@ -1,20 +1,34 @@
 """Realistic mock runners useful mostly for testing."""
-import time
-import logging
-from typing import Literal
 
+# Standard Library
+import logging
+import time
+
+# Third Party Library
 import attrs
-from wepy.walker import Walker, WalkerState
-from wepy.runners.runner import Runner, RunnerStatus, RunSegmentData, RunnerStateMachine, RunnerEvent, RunnerStateError
+
+# First Party Library
+from wepy.runners.runner import (
+    Runner,
+    RunnerEvent,
+    RunnerStateError,
+    RunnerStateMachine,
+    RunnerStatus,
+    RunSegmentData,
+)
+from wepy.walker import WalkerState
 
 logger = logging.getLogger(__name__)
+
 
 @attrs.define
 class MockState(WalkerState):
     a: int
 
+
 class MockError(Exception):
     pass
+
 
 @attrs.define
 class MockRunner(Runner):
@@ -73,10 +87,11 @@ class MockRunner(Runner):
         seg_end_time = time.time()
 
         split_time = seg_end_time - seg_start_time
-        
+
         segment_data = RunSegmentData(segment_split_time=split_time)
 
         return new_state, segment_data
+
 
 @attrs.define
 class MockRunnerFactory:

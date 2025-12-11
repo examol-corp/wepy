@@ -1,13 +1,19 @@
-from typing import TypeVar, Generic
+# Standard Library
+from typing import Generic, TypeVar
+
 # Third Party Library
 import numpy as np
 
 # First Party Library
-from wepy.resampling.decisions.clone_merge import MultiCloneMergeDecision, CloneMergeDecisionRecord
-from wepy.resampling.resamplers.resampler import Resampler, ResamplerABC, ResamplerError
-from wepy.walker import WalkerState, Walker
+from wepy.resampling.decisions.clone_merge import (
+    CloneMergeDecisionRecord,
+    MultiCloneMergeDecision,
+)
+from wepy.resampling.resamplers.resampler import ResamplerABC, ResamplerError
+from wepy.walker import Walker, WalkerState
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+
 
 class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
     """Abstract base class for resamplers using the clone-merge decision
@@ -53,23 +59,16 @@ class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
         """
 
         super().__init__(
-            min_num_walkers=min_num_walkers,
-            max_num_walkers=max_num_walkers, **kwargs
+            min_num_walkers=min_num_walkers, max_num_walkers=max_num_walkers, **kwargs
         )
 
         if pmin >= 1.0:
-            raise ResamplerError(
-                f"pmin ({pmin}) must be less 1.0"
-            )
+            raise ResamplerError(f"pmin ({pmin}) must be less 1.0")
         if pmax >= 1.0:
-            raise ResamplerError(
-                f"pmax ({pmax}) must be less 1.0"
-            )
+            raise ResamplerError(f"pmax ({pmax}) must be less 1.0")
 
         if pmin > pmax:
-            raise ResamplerError(
-                f"pmin ({pmin}) must be less than pmax ({pmax})"
-            )
+            raise ResamplerError(f"pmin ({pmin}) must be less than pmax ({pmax})")
 
         self._pmin = pmin
         self._pmax = pmax
@@ -109,7 +108,9 @@ class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
 
         return walker_actions
 
-    def _check_resampled_walkers(self, resampled_walkers: list[Walker[WalkerState_]]) -> None:
+    def _check_resampled_walkers(
+        self, resampled_walkers: list[Walker[WalkerState_]]
+    ) -> None:
         """Check constraints on resampled walkers.
 
         Raises errors when constraints are violated.
@@ -145,9 +146,9 @@ class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
             )
 
     def assign_clones(
-            self,
-            merge_groups: list[list[int]],
-            walker_clone_nums: list[int],
+        self,
+        merge_groups: list[list[int]],
+        walker_clone_nums: list[int],
     ) -> list[CloneMergeDecisionRecord]:
         """Convert two convenient data structures to a list of almost
         normalized resampling records.

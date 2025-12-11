@@ -1,10 +1,11 @@
-import os
+# Standard Library
 import contextlib
 import copy
 import logging
-import logging.handlers
 import logging.config
+import logging.handlers
 import multiprocessing as mp
+import os
 from typing import Generator
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ _BASE_WORKER_LOGGING_CONFIG = {
     },
 }
 
+
 def proc_pool_worker_setup(log_queue: mp.Queue) -> None:
     """Pool(initializer=) function that handles logging properly.
 
@@ -33,7 +35,7 @@ def proc_pool_worker_setup(log_queue: mp.Queue) -> None:
 
     Works properly with 'spawn' start method.
 
-    
+
 
     """
 
@@ -44,14 +46,10 @@ def proc_pool_worker_setup(log_queue: mp.Queue) -> None:
     for name, logger in parent_loggers.items():
         if isinstance(logger, logging.Logger):
             config.setdefault("loggers", {})[name] = {
-                "level" : logging.getLevelName(logger.level),
-                "propagate" : logger.propagate,
-                "handlers" : [],
-                "filters" : [
-                    f.__class__.__name__
-                    for f
-                    in logger.filters
-                ],
+                "level": logging.getLevelName(logger.level),
+                "propagate": logger.propagate,
+                "handlers": [],
+                "filters": [f.__class__.__name__ for f in logger.filters],
             }
 
     logging.config.dictConfig(config)
@@ -72,6 +70,7 @@ def _dummy_task(foo: int) -> int:
     logger.info("Executing dummy task")
 
     return foo + 1
+
 
 class WorkerFormatter(logging.Formatter):
     def __init__(self, base_formatter: logging.Formatter):
@@ -99,13 +98,13 @@ class WorkerFormatter(logging.Formatter):
         record.msg = original_msg
         return formatted
 
+
 @contextlib.contextmanager
 def queue_listener_context(mp_ctx) -> Generator[None, None, None]:
 
     logger.info("Setting up queue logging infrastructure")
     root_logger = logging.getLogger()
     old_factory = logging.getLogRecordFactory()
-
 
     def record_factory(*args, **kwargs):
 
@@ -116,11 +115,7 @@ def queue_listener_context(mp_ctx) -> Generator[None, None, None]:
         if not hasattr(record, "process"):
             record.process = os.getpid()
 
-    old_formatters = [
-        handler.formatter
-        for handler
-        in root_logger.handlers
-    ]
+    old_formatters = [handler.formatter for handler in root_logger.handlers]
 
     listener_handlers = []
     for handler in root_logger.handlers:
@@ -144,7 +139,9 @@ def queue_listener_context(mp_ctx) -> Generator[None, None, None]:
         listener.stop()
         logger.info("Listener stopped")
 
-        for handler, formatter in zip(root_logger.handlers, old_formatters, strict=True):
+        for handler, formatter in zip(
+            root_logger.handlers, old_formatters, strict=True
+        ):
             handler.setFormatter(formatter)
 
         logging.setLogRecordFactory(old_factory)

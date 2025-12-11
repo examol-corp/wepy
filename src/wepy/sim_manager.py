@@ -43,27 +43,29 @@ to be determined adaptively (e.g. according to some time limit).
 """
 
 # Standard Library
-import logging
-from typing import Final, Any, TypedDict, Generic, TypeVar, Callable, Literal
 import copy
-import time
 import enum
+import logging
+import time
+from typing import Any, Callable, Final, Generic, Literal, TypedDict, TypeVar
 
-import psutil
+# Third Party Library
 import attrs
+import psutil
 from immutables import Map as frozenmap
 
 # First Party Library
 from wepy.boundary_conditions.boundary import BoundaryConditions
+from wepy.monitor import Monitor
 from wepy.reporter.reporter import Reporter
 from wepy.resampling.resamplers.resampler import Resampler
 from wepy.runners.runner import Runner, RunnerFactory, RunSegmentData
 from wepy.walker import Walker
 from wepy.work_mapper.base import WorkMapper
 from wepy.work_mapper.serial import SerialMapper
-from wepy.monitor import Monitor
 
 logger = logging.getLogger(__name__)
+
 
 class CycleReportDict(TypedDict):
     cycle_idx: int
@@ -85,6 +87,7 @@ class CycleReportDict(TypedDict):
     cycle_runner_time: float
     cycle_bc_time: float
     cycle_resampling_time: float
+
 
 class ManagerStatus(enum.IntEnum):
     CONSTRUCTED = enum.auto()
@@ -113,6 +116,7 @@ class ManagerStatus(enum.IntEnum):
     CLEANING = enum.auto()
     CLEANUP_FINISHED = enum.auto()
     FINISHED = enum.auto()
+
 
 class ManagerEvent(enum.IntEnum):
     START_PRE_SIM = enum.auto()
@@ -147,130 +151,179 @@ class ManagerEvent(enum.IntEnum):
 MANAGER_STATE_TRANSITION_TABLE: frozenmap[
     ManagerStatus,
     frozenmap[ManagerEvent, ManagerStatus],
-] = frozenmap({
-    ManagerStatus.CONSTRUCTED: frozenmap({
-        ManagerEvent.START_PRE_SIM : ManagerStatus.PRE_SIMULATION,
-    }),
-    ManagerStatus.PRE_SIMULATION: frozenmap({
-        ManagerEvent.START_INITIALIZATION : ManagerStatus.INITIALIZING,
-    }),
-    ManagerStatus.INITIALIZING: frozenmap({
-        ManagerEvent.FINISH_INITIALIZATION : ManagerStatus.INITIALIZED,
-    }),
-    ManagerStatus.INITIALIZED: frozenmap({
-        ManagerEvent.START_SIM : ManagerStatus.SIM_STARTED,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.SIM_STARTED: frozenmap({
-        ManagerEvent.START_CYCLE : ManagerStatus.RUNNING_CYCLE,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.RUNNING_CYCLE: frozenmap({
-        ManagerEvent.START_PRE_SEGMENT : ManagerStatus.RUNNING_PRE_SEGMENT,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.RUNNING_PRE_SEGMENT: frozenmap({
-        ManagerEvent.FINISH_PRE_SEGMENT : ManagerStatus.PRE_SEGMENT_FINISHED,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.PRE_SEGMENT_FINISHED: frozenmap({
-        ManagerEvent.START_SEGMENT : ManagerStatus.RUNNING_SEGMENT,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.RUNNING_SEGMENT: frozenmap({
-        ManagerEvent.FINISH_SEGMENT : ManagerStatus.SEGMENT_FINISHED,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.SEGMENT_FINISHED: frozenmap({
-        ManagerEvent.START_POST_SEGMENT : ManagerStatus.RUNNING_POST_SEGMENT,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
+] = frozenmap(
+    {
+        ManagerStatus.CONSTRUCTED: frozenmap(
+            {
+                ManagerEvent.START_PRE_SIM: ManagerStatus.PRE_SIMULATION,
+            }
+        ),
+        ManagerStatus.PRE_SIMULATION: frozenmap(
+            {
+                ManagerEvent.START_INITIALIZATION: ManagerStatus.INITIALIZING,
+            }
+        ),
+        ManagerStatus.INITIALIZING: frozenmap(
+            {
+                ManagerEvent.FINISH_INITIALIZATION: ManagerStatus.INITIALIZED,
+            }
+        ),
+        ManagerStatus.INITIALIZED: frozenmap(
+            {
+                ManagerEvent.START_SIM: ManagerStatus.SIM_STARTED,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.SIM_STARTED: frozenmap(
+            {
+                ManagerEvent.START_CYCLE: ManagerStatus.RUNNING_CYCLE,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.RUNNING_CYCLE: frozenmap(
+            {
+                ManagerEvent.START_PRE_SEGMENT: ManagerStatus.RUNNING_PRE_SEGMENT,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.RUNNING_PRE_SEGMENT: frozenmap(
+            {
+                ManagerEvent.FINISH_PRE_SEGMENT: ManagerStatus.PRE_SEGMENT_FINISHED,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.PRE_SEGMENT_FINISHED: frozenmap(
+            {
+                ManagerEvent.START_SEGMENT: ManagerStatus.RUNNING_SEGMENT,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.RUNNING_SEGMENT: frozenmap(
+            {
+                ManagerEvent.FINISH_SEGMENT: ManagerStatus.SEGMENT_FINISHED,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.SEGMENT_FINISHED: frozenmap(
+            {
+                ManagerEvent.START_POST_SEGMENT: ManagerStatus.RUNNING_POST_SEGMENT,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.RUNNING_POST_SEGMENT: frozenmap(
+            {
+                ManagerEvent.FINISH_POST_SEGMENT: ManagerStatus.POST_SEGMENT_FINISHED,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.POST_SEGMENT_FINISHED: frozenmap(
+            {
+                ManagerEvent.START_BC_WARPING: ManagerStatus.BC_WARPING,
+                ManagerEvent.START_RESAMPLING: ManagerStatus.RESAMPLING,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.BC_WARPING: frozenmap(
+            {
+                ManagerEvent.FINISH_BC_WARPING: ManagerStatus.POST_BC_WARPING,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.POST_BC_WARPING: frozenmap(
+            {
+                ManagerEvent.START_RESAMPLING: ManagerStatus.RESAMPLING,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.RESAMPLING: frozenmap(
+            {
+                ManagerEvent.FINISH_RESAMPLING: ManagerStatus.POST_RESAMPLING,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.POST_RESAMPLING: frozenmap(
+            {
+                ManagerEvent.GENERATE_REPORT: ManagerStatus.REPORT_GENERATION,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.REPORT_GENERATION: frozenmap(
+            {
+                ManagerEvent.START_REPORTING: ManagerStatus.REPORTING,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.REPORTING: frozenmap(
+            {
+                ManagerEvent.FINISH_REPORTING: ManagerStatus.POST_REPORTING,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.POST_REPORTING: frozenmap(
+            {
+                ManagerEvent.START_CYCLE_MONITORING: ManagerStatus.CYCLE_MONITORING,
+                ManagerEvent.FINISH_CYCLE: ManagerStatus.POST_CYCLE,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.CYCLE_MONITORING: frozenmap(
+            {
+                ManagerEvent.FINISH_CYCLE_MONITORING: ManagerStatus.POST_CYCLE_MONITORING,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.CYCLE_MONITORING: frozenmap(
+            {
+                ManagerEvent.FINISH_CYCLE_MONITORING: ManagerStatus.POST_CYCLE_MONITORING,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.POST_CYCLE_MONITORING: frozenmap(
+            {
+                ManagerEvent.FINISH_CYCLE: ManagerStatus.POST_CYCLE,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.POST_CYCLE: frozenmap(
+            {
+                ManagerEvent.START_CYCLE: ManagerStatus.RUNNING_CYCLE,
+                ManagerEvent.FINISH_SIMULATION: ManagerStatus.POST_SIMULATION,
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.POST_SIMULATION: frozenmap(
+            {
+                ManagerEvent.START_CLEANUP: ManagerStatus.CLEANING,
+            }
+        ),
+        ManagerStatus.CLEANING: frozenmap(
+            {
+                ManagerEvent.FINISH_CLEANUP: ManagerStatus.CLEANUP_FINISHED,
+            }
+        ),
+        ManagerStatus.CLEANUP_FINISHED: frozenmap(
+            {
+                ManagerEvent.SHUTDOWN: ManagerStatus.FINISHED,
+            }
+        ),
+        ManagerStatus.FINISHED: frozenmap({}),
+    }
+)
 
-    ManagerStatus.RUNNING_POST_SEGMENT: frozenmap({
-        ManagerEvent.FINISH_POST_SEGMENT : ManagerStatus.POST_SEGMENT_FINISHED,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-
-    ManagerStatus.POST_SEGMENT_FINISHED: frozenmap({
-        ManagerEvent.START_BC_WARPING : ManagerStatus.BC_WARPING,
-        ManagerEvent.START_RESAMPLING : ManagerStatus.RESAMPLING,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.BC_WARPING: frozenmap({
-        ManagerEvent.FINISH_BC_WARPING : ManagerStatus.POST_BC_WARPING,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.POST_BC_WARPING: frozenmap({
-        ManagerEvent.START_RESAMPLING : ManagerStatus.RESAMPLING,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-
-    ManagerStatus.RESAMPLING: frozenmap({
-        ManagerEvent.FINISH_RESAMPLING : ManagerStatus.POST_RESAMPLING,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.POST_RESAMPLING: frozenmap({
-        ManagerEvent.GENERATE_REPORT : ManagerStatus.REPORT_GENERATION,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-
-
-    ManagerStatus.REPORT_GENERATION: frozenmap({
-        ManagerEvent.START_REPORTING : ManagerStatus.REPORTING,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    
-    ManagerStatus.REPORTING: frozenmap({
-        ManagerEvent.FINISH_REPORTING : ManagerStatus.POST_REPORTING,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-
-    ManagerStatus.POST_REPORTING: frozenmap({
-        ManagerEvent.START_CYCLE_MONITORING : ManagerStatus.CYCLE_MONITORING,
-        ManagerEvent.FINISH_CYCLE : ManagerStatus.POST_CYCLE,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.CYCLE_MONITORING: frozenmap({
-        ManagerEvent.FINISH_CYCLE_MONITORING : ManagerStatus.POST_CYCLE_MONITORING,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-
-    ManagerStatus.CYCLE_MONITORING: frozenmap({
-        ManagerEvent.FINISH_CYCLE_MONITORING : ManagerStatus.POST_CYCLE_MONITORING,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-
-    ManagerStatus.POST_CYCLE_MONITORING: frozenmap({
-        ManagerEvent.FINISH_CYCLE : ManagerStatus.POST_CYCLE,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-
-    ManagerStatus.POST_CYCLE: frozenmap({
-        ManagerEvent.START_CYCLE : ManagerStatus.RUNNING_CYCLE,
-        ManagerEvent.FINISH_SIMULATION : ManagerStatus.POST_SIMULATION,
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.POST_SIMULATION: frozenmap({
-        ManagerEvent.START_CLEANUP : ManagerStatus.CLEANING,
-    }),
-    ManagerStatus.CLEANING: frozenmap({
-        ManagerEvent.FINISH_CLEANUP : ManagerStatus.CLEANUP_FINISHED,
-    }),
-    ManagerStatus.CLEANUP_FINISHED: frozenmap({
-        ManagerEvent.SHUTDOWN : ManagerStatus.FINISHED,
-    }),
-    ManagerStatus.FINISHED: frozenmap({}),
-})
 
 class ManagerStateMachineError(Exception):
     pass
 
+
 class ManagerStateTransitionError(ManagerStateMachineError):
     """Indicates an error with the runner state machine transition."""
+
     pass
+
 
 class ManagerStateError(ManagerStateMachineError):
     """Indicates an error relating to the current state of the runner."""
+
     pass
 
 
@@ -295,7 +348,7 @@ class ManagerStateMachine:
 
         logger.info(f"Received event: {event.name}:{event.value}")
         self.validate_event(event)
-        
+
         state_transitions = MANAGER_STATE_TRANSITION_TABLE[self.state]
         new_state = state_transitions[event]
 
@@ -307,11 +360,14 @@ class ManagerStateMachine:
 
         return self.state
 
+
 ResamplerFactory = Callable[[], Resampler]
 WorkMapperFactory = Callable[[], WorkMapper]
 
 State_ = TypeVar("State_")
 RunSegmentData_ = TypeVar("RunSegmentData_", bound=RunSegmentData, covariant=True)
+
+
 class Manager(Generic[State_]):
     """The class that coordinates wepy simulations.
 
@@ -431,7 +487,6 @@ class Manager(Generic[State_]):
         wepy.reporter.hdf5 : The standard reporter for molecular simulations in wepy.
 
         """
-
 
         self.init_walkers = copy.deepcopy(init_walkers)
         self.n_init_walkers = len(init_walkers)
@@ -656,7 +711,9 @@ class Manager(Generic[State_]):
             )
 
         except Exception as exception:
-            logger.info("Exception encountered in segment calculations. Cleaning up before raising.")
+            logger.info(
+                "Exception encountered in segment calculations. Cleaning up before raising."
+            )
             # get the errors from the work mapper error queue
             self.cleanup()
 
@@ -682,7 +739,6 @@ class Manager(Generic[State_]):
         self.state_machine.send(ManagerEvent.START_POST_SEGMENT)
         self._runner.post_cycle(segments_data)
         self.state_machine.send(ManagerEvent.FINISH_POST_SEGMENT)
-        
 
     def run_cycle(
         self,
@@ -762,7 +818,6 @@ class Manager(Generic[State_]):
 
         self.state_machine.send(ManagerEvent.START_CYCLE)
 
-        
         # run the runner pre-cycle hook
         start = time.time()
         self.pre_segment()
@@ -780,12 +835,8 @@ class Manager(Generic[State_]):
         )
 
         new_walkers = [
-            Walker(
-                state=new_state,
-                weight=walker.weight
-            )
-            for walker, new_state
-            in zip(walkers, new_states, strict=True)
+            Walker(state=new_state, weight=walker.weight)
+            for walker, new_state in zip(walkers, new_states, strict=True)
         ]
 
         end = time.time()
@@ -814,7 +865,7 @@ class Manager(Generic[State_]):
             logger.info("Boundary conditions were provided, applying.")
 
             self.state_machine.send(ManagerEvent.START_BC_WARPING)
-            
+
             # apply rules of boundary conditions and warp walkers through space
             start = time.time()
             bc_results = self.boundary_conditions.warp_walkers(new_walkers, cycle_idx)
@@ -840,7 +891,7 @@ class Manager(Generic[State_]):
         resampling_results = self._resampler.resample(warped_walkers)
 
         self.state_machine.send(ManagerEvent.FINISH_RESAMPLING)
-        
+
         end = time.time()
         resampling_time = end - start
 
@@ -860,7 +911,7 @@ class Manager(Generic[State_]):
             logger.info("Segment timings provided by work mapper, recording.")
 
             # count up the total sampling time from the segments
-            sampling_time = 0.
+            sampling_time = 0.0
             for (
                 worker_id,
                 segments_times,
@@ -871,35 +922,38 @@ class Manager(Generic[State_]):
             # calculate the overhead for logging
             sim_manager_segment_overhead_time = sim_manager_segment_time - sampling_time
 
-            logger.info(f"Simulation manager overhead time: {sim_manager_segment_overhead_time}")
-
+            logger.info(
+                f"Simulation manager overhead time: {sim_manager_segment_overhead_time}"
+            )
 
         else:
             logger.info("Worker segment times not provided")
             sim_manager_segment_overhead_time = 0.0
 
-        report = CycleReportDict({
-            "cycle_idx": cycle_idx,
-            "new_walkers": new_walkers,
-            "warp_data": warp_data,
-            "bc_data": bc_data,
-            "progress_data": progress_data,
-            "resampling_data": resampling_data,
-            "resampler_data": resampler_data,
-            "n_segment_steps": n_segment_steps,
-            "resampled_walkers": resampled_walkers,
-            # timings
-            "runner_precycle_time": presegment_time,
-            "runner_postcycle_time": post_segment_time,
-            "sim_manager_segment_overhead_time": sim_manager_segment_overhead_time,
-            # TODO: fix this
-            "runner_splits_time": segments_data,
-            "worker_segment_times": seg_times,
-            "cycle_sim_manager_segment_time": sim_manager_segment_time,
-            "cycle_runner_time": sim_manager_segment_time,
-            "cycle_bc_time": bc_time,
-            "cycle_resampling_time": resampling_time,
-        })
+        report = CycleReportDict(
+            {
+                "cycle_idx": cycle_idx,
+                "new_walkers": new_walkers,
+                "warp_data": warp_data,
+                "bc_data": bc_data,
+                "progress_data": progress_data,
+                "resampling_data": resampling_data,
+                "resampler_data": resampler_data,
+                "n_segment_steps": n_segment_steps,
+                "resampled_walkers": resampled_walkers,
+                # timings
+                "runner_precycle_time": presegment_time,
+                "runner_postcycle_time": post_segment_time,
+                "sim_manager_segment_overhead_time": sim_manager_segment_overhead_time,
+                # TODO: fix this
+                "runner_splits_time": segments_data,
+                "worker_segment_times": seg_times,
+                "cycle_sim_manager_segment_time": sim_manager_segment_time,
+                "cycle_runner_time": sim_manager_segment_time,
+                "cycle_bc_time": bc_time,
+                "cycle_resampling_time": resampling_time,
+            }
+        )
 
         self._last_report = report
 
@@ -920,7 +974,11 @@ class Manager(Generic[State_]):
 
         self.state_machine.send(ManagerEvent.FINISH_CYCLE)
 
-        return resampled_walkers, (self._runner, self.boundary_conditions, self._resampler)
+        return resampled_walkers, (
+            self._runner,
+            self.boundary_conditions,
+            self._resampler,
+        )
 
     def run_simulation(
         self,
@@ -957,9 +1015,10 @@ class Manager(Generic[State_]):
 
         self.state_machine.send(ManagerEvent.START_PRE_SIM)
 
-
         if type(segment_lengths) == int:
-            logger.info("Single number of steps provided for simulation, using this for all cycles.")
+            logger.info(
+                "Single number of steps provided for simulation, using this for all cycles."
+            )
             segment_lengths = [segment_lengths for _ in range(n_cycles)]
 
         walkers = self.init_walkers
@@ -972,7 +1031,9 @@ class Manager(Generic[State_]):
 
             logger.info(f"Running cycle: {cycle_idx}")
             walkers, filters = self.run_cycle(
-                walkers, segment_lengths[cycle_idx], cycle_idx,
+                walkers,
+                segment_lengths[cycle_idx],
+                cycle_idx,
             )
             logger.info(f"Finished running cycle: {cycle_idx}")
 

@@ -1,8 +1,12 @@
-from typing import TypedDict
+# Standard Library
 from enum import IntEnum
+
+# Third Party Library
 import attrs
-from wepy.walker import Walker
+
+# First Party Library
 from wepy.resampling.decisions.decision import Decision, DecisionRecord
+from wepy.walker import Walker
 
 
 class NothingDecisionEnum(IntEnum):

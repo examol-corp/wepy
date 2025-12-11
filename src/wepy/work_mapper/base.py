@@ -1,24 +1,26 @@
 """Base classes and definitions for all work mappers."""
 
 # Standard Library
-import traceback
-from typing import Callable, Literal, Generic, TypeVar, Protocol, Any, ParamSpec, Concatenate
 import logging
+from typing import (
+    Callable,
+    Protocol,
+    TypeVar,
+)
 
-# Standard Library
-
-from wepy.walker import WalkerState
+# First Party Library
 from wepy.runners.runner import RunSegmentData
+from wepy.walker import WalkerState
 
 logger = logging.getLogger(__name__)
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 RunSegmentData_ = TypeVar("RunSegmentData_", bound=RunSegmentData)
 
+
 class WorkMapper(Protocol[WalkerState_, RunSegmentData_]):
 
-    def init(self) -> None:
-        ...
+    def init(self) -> None: ...
 
     def map(
         self,

@@ -1,12 +1,16 @@
-import logging
-from typing import Literal, Any, Callable
+# Standard Library
 import time
-import itertools
+from typing import Callable
 
+# Third Party Library
 import attrs
 
+# First Party Library
+from wepy.runners.openmm import (
+    OpenMMPlatformName,
+    OpenMMState,
+)
 from wepy.work_mapper.base import WorkMapper
-from wepy.runners.openmm import OpenMMState, OpenMMRunner, PlatformKwargs, OpenMMPlatformName, GPU_PLATFORMS
 
 
 class OpenMMSerialWorkMapper(WorkMapper):
@@ -19,7 +23,9 @@ class OpenMMSerialWorkMapper(WorkMapper):
         self._worker_segment_times: dict[int, list[float]] = {0: []}
 
         self._platform = platform
-        self._global_platform_properties = global_platform_properties if global_platform_properties is not None else {}
+        self._global_platform_properties = (
+            global_platform_properties if global_platform_properties is not None else {}
+        )
 
     def get_worker_segment_times(self) -> dict[int, list[float]]:
         """The run timings for each segment for each walker.
@@ -39,15 +45,17 @@ class OpenMMSerialWorkMapper(WorkMapper):
         pass
 
     def map(
-            self,
-            task: Callable[[OpenMMState, int], OpenMMState],
-            walker_states: list[OpenMMState],
-            segment_lengths: list[int],
+        self,
+        task: Callable[[OpenMMState, int], OpenMMState],
+        walker_states: list[OpenMMState],
+        segment_lengths: list[int],
     ) -> list[OpenMMState]:
 
         segment_times: list[float] = []
         results: list[OpenMMState] = []
-        for task_idx, task_args in enumerate(zip(walker_states, segment_lengths, strict=True)):
+        for task_idx, task_args in enumerate(
+            zip(walker_states, segment_lengths, strict=True)
+        ):
 
             tic = time.time()
             result = task(
@@ -63,6 +71,7 @@ class OpenMMSerialWorkMapper(WorkMapper):
         self._worker_segment_times[0] = segment_times
 
         return results
+
 
 @attrs.define
 class OpenMMSerialWorkMapperFactory:

@@ -28,12 +28,11 @@ magic method for the accessor syntax, i.e. walker.state['positions'].
 
 # Standard Library
 import logging
-from typing import Protocol, Any, TypeVar, Generic
 import math
-
-# Standard Library
 import random as rand
+from typing import Any, Generic, Protocol, TypeVar
 
+# Third Party Library
 import attrs
 
 logger = logging.getLogger(__name__)

@@ -5,37 +5,46 @@ OpenMM Runner, REVO and WExplore resamplers, paralell work mappers.
 Configurable platforms.
 
 """
-import importlib.resources
+
+# Standard Library
 import copy
+
+# Third Party Library
+import mdtraj
 import openmm
 import psutil
 
-import mdtraj
+# First Party Library
+from wepy.resampling.resamplers.revo import REVOResamplerFactory
+from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState
+from wepy.runners.openmm.runner import (
+    _DEFAULT_HEARTBEAT_INTERVAL,
+    _DEFAULT_STATE_TIME_INTERVAL,
+)
+from wepy.sim_manager import Manager
+from wepy.util.mdtraj import mdtraj_to_json_topology
+
 # TODO: use the high-level API imports
 from wepy.walker import Walker
-from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState, OpenMMStateWrapper
-from wepy.runners.openmm.runner import _DEFAULT_STATE_TIME_INTERVAL, _DEFAULT_HEARTBEAT_INTERVAL
-from wepy.sim_manager import Manager
 from wepy.work_mapper.openmm import OpenMMProcPoolWorkMapperFactory
-from wepy.resampling.resamplers.revo import REVOResamplerFactory
-from wepy.util.mdtraj import mdtraj_to_json_topology
-from wepy.resampling.resamplers.noresampler import NoResampler
-from wepy.util.mdtraj import json_to_mdtraj_topology
-
+from wepy_tools.systems.alanine_dipeptide import (
+    AlanineDipeptideExplicitSystem,
+    AlanineDipeptideRamachandranDistance,
+)
 from wepy_tools.systems.lennard_jones import LennardJonesPair, PairDistance
-from wepy_tools.systems.alanine_dipeptide import AlanineDipeptideRamachandranDistance, AlanineDipeptideExplicitSystem
 
-STEP_SIZE = 2. * openmm.unit.femtosecond
-TEMPERATURE = 300. * openmm.unit.kelvin
+STEP_SIZE = 2.0 * openmm.unit.femtosecond
+TEMPERATURE = 300.0 * openmm.unit.kelvin
 
 # minimum number of steps to hit the logging reporters, useful just
 # for testing the defaults
 TIME_INTERVAL_STEPS = round(_DEFAULT_STATE_TIME_INTERVAL / STEP_SIZE)
 MIN_INTERVAL_STEPS = (
-        TIME_INTERVAL_STEPS
-        if TIME_INTERVAL_STEPS > _DEFAULT_HEARTBEAT_INTERVAL
-        else _DEFAULT_HEARTBEAT_INTERVAL
-    )
+    TIME_INTERVAL_STEPS
+    if TIME_INTERVAL_STEPS > _DEFAULT_HEARTBEAT_INTERVAL
+    else _DEFAULT_HEARTBEAT_INTERVAL
+)
+
 
 def test_lennard_jones_revo_procpool():
 
@@ -52,16 +61,12 @@ def test_lennard_jones_revo_procpool():
     num_walkers = 4
 
     init_state = OpenMMState.from_dwim(
-            positions=test_sys.positions,
-        )
+        positions=test_sys.positions,
+    )
 
     # TODO: remove the need to deepcopy and have the components make
     # their own copies if necessary
-    walker_states = [
-        copy.deepcopy(init_state)
-        for _
-        in range(num_walkers)
-    ]
+    walker_states = [copy.deepcopy(init_state) for _ in range(num_walkers)]
 
     init_walker_weight = 1 / num_walkers
     init_walkers = [
@@ -69,8 +74,7 @@ def test_lennard_jones_revo_procpool():
             state=walker_state,
             weight=init_walker_weight,
         )
-        for walker_state
-        in walker_states
+        for walker_state in walker_states
     ]
 
     # number of walkers if less then total cores, otherwise the total
@@ -81,11 +85,9 @@ def test_lennard_jones_revo_procpool():
         cores_per_worker = 1
     else:
         num_workers = num_walkers
-        cores_per_worker = (num_workers // num_walkers)
+        cores_per_worker = num_workers // num_walkers
 
-    json_top = mdtraj_to_json_topology(
-            mdtraj.Topology.from_openmm(test_sys.topology)
-        )
+    json_top = mdtraj_to_json_topology(mdtraj.Topology.from_openmm(test_sys.topology))
 
     distance_metric = PairDistance()
 
@@ -107,14 +109,15 @@ def test_lennard_jones_revo_procpool():
             platform="CPU",
             num_procs=num_workers,
             # global_platform_properties={"Threads" : "1"},
-            global_platform_properties={"Threads" : str(cores_per_worker)},
+            global_platform_properties={"Threads": str(cores_per_worker)},
         ),
     )
 
-    new_walkers, sim_components  = sim_manager.run_simulation(
+    new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=2,
         segment_lengths=MIN_INTERVAL_STEPS * 2 + 10,
     )
+
 
 def test_alanine_dipeptide_revo_procpool():
 
@@ -124,7 +127,7 @@ def test_alanine_dipeptide_revo_procpool():
 
     # add the pseudo forces like barostat
     barostat = openmm.MonteCarloBarostat(
-        1. * openmm.unit.atmosphere,
+        1.0 * openmm.unit.atmosphere,
         TEMPERATURE,
     )
     ala_sys.system.addForce(barostat)
@@ -139,11 +142,7 @@ def test_alanine_dipeptide_revo_procpool():
 
     # TODO: remove the need to deepcopy and have the components make
     # their own copies if necessary
-    walker_states = [
-        copy.deepcopy(ala_sys.state)
-        for _
-        in range(num_walkers)
-    ]
+    walker_states = [copy.deepcopy(ala_sys.state) for _ in range(num_walkers)]
 
     init_walker_weight = 1 / num_walkers
     init_walkers = [
@@ -151,8 +150,7 @@ def test_alanine_dipeptide_revo_procpool():
             state=walker_state,
             weight=init_walker_weight,
         )
-        for walker_state
-        in walker_states
+        for walker_state in walker_states
     ]
 
     # number of walkers if less then total cores, otherwise the total
@@ -163,7 +161,7 @@ def test_alanine_dipeptide_revo_procpool():
         cores_per_worker = 1
     else:
         num_workers = num_walkers
-        cores_per_worker = (num_workers // num_walkers)
+        cores_per_worker = num_workers // num_walkers
 
     distance_metric = AlanineDipeptideRamachandranDistance(ala_sys.json_top)
 
@@ -181,13 +179,11 @@ def test_alanine_dipeptide_revo_procpool():
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
             num_procs=num_workers,
-            global_platform_properties={"Threads" : str(cores_per_worker)},
+            global_platform_properties={"Threads": str(cores_per_worker)},
         ),
     )
 
-
-    new_walkers, sim_components  = sim_manager.run_simulation(
+    new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=2,
         segment_lengths=MIN_INTERVAL_STEPS * 2 + 10,
     )
-    

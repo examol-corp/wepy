@@ -1,18 +1,17 @@
 # Third Party Library
+import attrs
 import numpy as np
 import openmm
 import openmm.app
 import openmm.unit
 from scipy.spatial.distance import euclidean
 
-import attrs
-
 # First Party Library
 from wepy.resampling.distances.base import Distance
 from wepy.runners.openmm import OpenMMState
 
-class LennardJonesPair:
 
+class LennardJonesPair:
     """Create a pair of Lennard-Jones particles.
 
     Parameters
@@ -26,7 +25,6 @@ class LennardJonesPair:
 
     Examples
     --------
-
     Create Lennard-Jones pair.
 
     >>> test = LennardJonesPair()
@@ -50,7 +48,12 @@ class LennardJonesPair:
 
     """
 
-    def __init__(self, mass=39.9 * openmm.unit.amu, sigma=3.350 * openmm.unit.angstrom, epsilon=10.0 * openmm.unit.kilocalories_per_mole):
+    def __init__(
+        self,
+        mass=39.9 * openmm.unit.amu,
+        sigma=3.350 * openmm.unit.angstrom,
+        epsilon=10.0 * openmm.unit.kilocalories_per_mole,
+    ):
 
         # Store parameters
         self.mass = mass
@@ -68,9 +71,11 @@ class LennardJonesPair:
         force.setNonbondedMethod(openmm.NonbondedForce.NoCutoff)
 
         # Create positions.
-        positions = openmm.unit.Quantity(np.zeros([2, 3], np.float32), openmm.unit.angstrom)
+        positions = openmm.unit.Quantity(
+            np.zeros([2, 3], np.float32), openmm.unit.angstrom
+        )
         # Move the second particle along the x axis to be at the potential minimum.
-        positions[1, 0] = 2.0**(1.0 / 6.0) * sigma
+        positions[1, 0] = 2.0 ** (1.0 / 6.0) * sigma
 
         # Create first particle.
         system.addParticle(mass)
@@ -92,17 +97,19 @@ class LennardJonesPair:
 
         # Create topology.
         topology = openmm.app.Topology()
-        element = openmm.app.Element.getBySymbol('Ar')
+        element = openmm.app.Element.getBySymbol("Ar")
         chain = topology.addChain()
-        residue = topology.addResidue('Ar', chain)
-        topology.addAtom('Ar', element, residue)
-        residue = topology.addResidue('Ar', chain)
-        topology.addAtom('Ar', element, residue)
+        residue = topology.addResidue("Ar", chain)
+        topology.addAtom("Ar", element, residue)
+        residue = topology.addResidue("Ar", chain)
+        topology.addAtom("Ar", element, residue)
         self.topology = topology
+
 
 @attrs.define
 class PairDistanceImage:
     positions: np.typing.ArrayLike
+
 
 class PairDistance(Distance):
     def __init__(self, metric=euclidean):
@@ -111,7 +118,9 @@ class PairDistance(Distance):
     def image(self, state: OpenMMState) -> PairDistanceImage:
         return state.positions
 
-    def image_distance(self, image_a: PairDistanceImage, image_b: PairDistanceImage) -> float:
+    def image_distance(
+        self, image_a: PairDistanceImage, image_b: PairDistanceImage
+    ) -> float:
         dist_a = self.metric(image_a[0], image_a[1])
         dist_b = self.metric(image_b[0], image_b[1])
 

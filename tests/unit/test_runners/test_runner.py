@@ -1,7 +1,18 @@
-import pytest
+# Third Party Library
 import attrs
-from wepy.runners.runner import NoRunner, RunnerStateMachine, RunnerStatus, RunnerEvent, RunnerStateTransitionError, RunnerStateError
+import pytest
+
+# First Party Library
+from wepy.runners.runner import (
+    NoRunner,
+    RunnerEvent,
+    RunnerStateError,
+    RunnerStateMachine,
+    RunnerStateTransitionError,
+    RunnerStatus,
+)
 from wepy.walker import Walker, WalkerState
+
 
 class Test_RunnerStateMachine:
 
@@ -13,7 +24,7 @@ class Test_RunnerStateMachine:
         sm = RunnerStateMachine(state=RunnerStatus.PRE_INITIALIZATION)
         with pytest.raises(RunnerStateTransitionError):
             sm.validate_event(RunnerEvent.PRE_CYCLE)
-        
+
     def test_send(self):
 
         sm = RunnerStateMachine(state=RunnerStatus.PRE_INITIALIZATION)
@@ -29,21 +40,26 @@ class Test_RunnerStateMachine:
             sm.send(RunnerEvent.PRE_CYCLE)
 
         # test the rest of the transitions
-        assert RunnerStateMachine(
-            RunnerStatus.INITIALIZED
-        ).send(RunnerEvent.PRE_CYCLE) == RunnerStatus.PRE_CYCLE
+        assert (
+            RunnerStateMachine(RunnerStatus.INITIALIZED).send(RunnerEvent.PRE_CYCLE)
+            == RunnerStatus.PRE_CYCLE
+        )
 
-        assert RunnerStateMachine(
-            RunnerStatus.PRE_CYCLE
-        ).send(RunnerEvent.POST_SEGMENT) == RunnerStatus.POST_SEGMENT
+        assert (
+            RunnerStateMachine(RunnerStatus.PRE_CYCLE).send(RunnerEvent.POST_SEGMENT)
+            == RunnerStatus.POST_SEGMENT
+        )
 
-        assert RunnerStateMachine(
-            RunnerStatus.POST_SEGMENT
-        ).send(RunnerEvent.POST_CYCLE) == RunnerStatus.POST_CYCLE
+        assert (
+            RunnerStateMachine(RunnerStatus.POST_SEGMENT).send(RunnerEvent.POST_CYCLE)
+            == RunnerStatus.POST_CYCLE
+        )
 
-        assert RunnerStateMachine(
-            RunnerStatus.POST_CYCLE
-        ).send(RunnerEvent.PRE_CYCLE) == RunnerStatus.PRE_CYCLE
+        assert (
+            RunnerStateMachine(RunnerStatus.POST_CYCLE).send(RunnerEvent.PRE_CYCLE)
+            == RunnerStatus.PRE_CYCLE
+        )
+
 
 class Test_NoRunner:
 
@@ -87,7 +103,7 @@ class Test_NoRunner:
                 return self.a
 
             def dict(self) -> dict[str, int]:
-                return {"a" : self.a}
+                return {"a": self.a}
 
         runner = NoRunner()
 
@@ -101,7 +117,7 @@ class Test_NoRunner:
                 walker,
                 10,
             )
-        
+
         runner.init()
 
         with pytest.raises(RunnerStateError):
@@ -109,15 +125,12 @@ class Test_NoRunner:
                 walker,
                 10,
             )
-        
+
         runner.pre_cycle()
-        assert (
-            runner.run_segment(
-                walker,
-                10,
-            )
-            == (walker, None)
-        )
+        assert runner.run_segment(
+            walker,
+            10,
+        ) == (walker, None)
 
         runner.post_cycle(None)
         with pytest.raises(RunnerStateError):
@@ -125,4 +138,3 @@ class Test_NoRunner:
                 walker,
                 10,
             )
-        

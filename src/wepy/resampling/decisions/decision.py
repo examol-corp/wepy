@@ -46,17 +46,18 @@ perform them on the collection of walkers.
 """
 
 # Standard Library
-from typing import TypedDict, Required, Any, Union
 import logging
-
-# Standard Library
 from enum import IntEnum
+from typing import Any, Union
 
+# Third Party Library
 import attrs
 
+# First Party Library
 from wepy.walker import Walker
 
 logger = logging.getLogger(__name__)
+
 
 @attrs.define
 class DecisionRecord:
@@ -263,4 +264,3 @@ class Decision:
 
         """
         raise NotImplementedError
-

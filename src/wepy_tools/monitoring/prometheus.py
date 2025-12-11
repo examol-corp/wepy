@@ -4,9 +4,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Third Party Library
-from wepy.monitor import Monitor
 import prometheus_client as prom
 from pympler.asizeof import asizeof
+
+# First Party Library
+from wepy.monitor import Monitor
 
 
 class SimMonitor(Monitor):

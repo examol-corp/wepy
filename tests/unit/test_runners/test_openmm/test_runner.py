@@ -1,52 +1,57 @@
-import logging
+# Standard Library
 import copy
+import logging
+
+# Third Party Library
 import attrs
-from wepy_tools.systems.lennard_jones import LennardJonesPair
-from wepy.runners.openmm.state import (
-    dummy_context,
-    OpenMMState,
-)
-
-from wepy.runners.runner import (
-    RunnerStatus,
-    RunnerStateTransitionError,
-    RunnerStateError,
-    
-)
-from wepy.runners.openmm.runner import (
-    OpenMMRunner,
-    OpenMMRunnerSegmentData,
-    OpenMMRunnerFactory,
-    _DEFAULT_HEARTBEAT_INTERVAL,
-    _DEFAULT_STATE_TIME_INTERVAL,
-)
-
-from wepy.runners.openmm.logger import StepIntervalLoggingReporter
-import pytest
-
 import numpy as np
 import openmm
 import openmm.app
 import openmm.unit
+import pytest
+
+# First Party Library
+from wepy.runners.openmm.logger import StepIntervalLoggingReporter
+from wepy.runners.openmm.runner import (
+    _DEFAULT_HEARTBEAT_INTERVAL,
+    _DEFAULT_STATE_TIME_INTERVAL,
+    OpenMMRunner,
+    OpenMMRunnerFactory,
+    OpenMMRunnerSegmentData,
+)
+from wepy.runners.openmm.state import (
+    OpenMMState,
+    dummy_context,
+)
+from wepy.runners.runner import (
+    RunnerStateError,
+    RunnerStateTransitionError,
+    RunnerStatus,
+)
+from wepy_tools.systems.lennard_jones import LennardJonesPair
 
 UNIT_CUBE = np.array(
-            [
-                [1.0, 0.0, 0.0],
-                [0.0, 1.0, 0.0],
-                [0.0, 0.0, 1.0],
-            ]
-        )
+    [
+        [1.0, 0.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [0.0, 0.0, 1.0],
+    ]
+)
 
 STEP_SIZE = 2 * openmm.unit.femtoseconds
 
+
 @pytest.fixture
-def runner_components() -> tuple[openmm.System, openmm.app.Topology, openmm.LangevinIntegrator]:
+def runner_components() -> (
+    tuple[openmm.System, openmm.app.Topology, openmm.LangevinIntegrator]
+):
 
     lj_sys = LennardJonesPair()
 
-    integrator  = openmm.LangevinIntegrator(300.0, 0.1, STEP_SIZE)
+    integrator = openmm.LangevinIntegrator(300.0, 0.1, STEP_SIZE)
 
     return lj_sys.system, lj_sys.topology, integrator
+
 
 @pytest.fixture
 def omm_context() -> openmm.Context:
@@ -57,12 +62,14 @@ def omm_context() -> openmm.Context:
 
     return ctx
 
+
 @attrs.define
 class Spy:
     touched: bool = False
 
     def touch(self) -> None:
         self.touched = True
+
 
 class TouchGlobalStepIntervalLoggingReporter(StepIntervalLoggingReporter):
 
@@ -86,6 +93,7 @@ class TouchGlobalStepIntervalLoggingReporter(StepIntervalLoggingReporter):
 
     def touch(self, *args) -> None:
         self.spy.touch()
+
 
 class Test_OpenMMRunner:
 
@@ -113,8 +121,13 @@ class Test_OpenMMRunner:
         assert runner.status == RunnerStatus.PRE_INITIALIZATION
 
         SPY = Spy()
-        def _mock_factory(logger: logging.Logger, start_time: int) -> TouchGlobalStepIntervalLoggingReporter:
-            return TouchGlobalStepIntervalLoggingReporter(logger=logger, start_time=start_time, spy=SPY)
+
+        def _mock_factory(
+            logger: logging.Logger, start_time: int
+        ) -> TouchGlobalStepIntervalLoggingReporter:
+            return TouchGlobalStepIntervalLoggingReporter(
+                logger=logger, start_time=start_time, spy=SPY
+            )
 
         runner = OpenMMRunner(
             system=copy.deepcopy(system),
@@ -196,7 +209,9 @@ class Test_OpenMMRunner:
             system=copy.deepcopy(system),
             topology=copy.deepcopy(topology),
             integrator=copy.deepcopy(integrator),
-            get_state_keys={"positions",}
+            get_state_keys={
+                "positions",
+            },
         )
         runner.init()
         runner.pre_cycle()
@@ -212,8 +227,13 @@ class Test_OpenMMRunner:
 
         # test that openmm reporters are being called
         SPY = Spy()
-        def _mock_factory(logger: logging.Logger, start_time: int) -> TouchGlobalStepIntervalLoggingReporter:
-            return TouchGlobalStepIntervalLoggingReporter(logger=logger, start_time=start_time, spy=SPY)
+
+        def _mock_factory(
+            logger: logging.Logger, start_time: int
+        ) -> TouchGlobalStepIntervalLoggingReporter:
+            return TouchGlobalStepIntervalLoggingReporter(
+                logger=logger, start_time=start_time, spy=SPY
+            )
 
         runner = OpenMMRunner(
             system=copy.deepcopy(system),
@@ -286,6 +306,7 @@ class Test_OpenMMRunner:
         runner.post_cycle([segment_data])
 
         assert runner.status == RunnerStatus.POST_CYCLE
+
 
 def test_OpenMMRunnerFactory(runner_components):
 
