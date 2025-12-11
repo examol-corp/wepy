@@ -88,6 +88,9 @@ dev = [
   "pytest-check",
   "pytest-datadir @ git+https://github.com/salotz/pytest-datadir-extras.git@41e9a1e94ba27efe28ce9d0019b1e0a73be34400",
   "pytest-print",
+  "pytest-timeout",
+  "pytest-rerunfailures",
+  "pytest-flakefinder",
   # for testing openmm wrappers
   "lxml",
   "psutil",
@@ -121,7 +124,13 @@ verbose = 2
 minversion = "9.0"
 strict = true
 
-addopts = ["--import-mode=importlib"]
+addopts = [
+    "--import-mode=importlib",
+    "--timeout_method=thread",
+    # Global timeout just in case something goes wrong. You should set
+    # specific timeouts for known problematic tests
+    "--timeout=300",
+]
 
 python_classes = ["Test*", "Test_*"]
 python_functions = ["test_*"]

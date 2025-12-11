@@ -2218,6 +2218,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "pytest-flakefinder"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ec/53/69c56a93ea057895b5761c5318455804873a6cd9d796d7c55d41c2358125/pytest-flakefinder-1.1.0.tar.gz", hash = "sha256:e2412a1920bdb8e7908783b20b3d57e9dad590cc39a93e8596ffdd493b403e0e", size = 6795, upload-time = "2022-10-26T18:27:54.243Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/33/8b/06787150d0fd0cbd3a8054262b56f91631c7778c1bc91bf4637e47f909ad/pytest_flakefinder-1.1.0-py2.py3-none-any.whl", hash = "sha256:741e0e8eea427052f5b8c89c2b3c3019a50c39a59ce4df6a305a2c2d9ba2bd13", size = 4644, upload-time = "2022-10-26T18:27:52.128Z" },
+]
+
+[[package]]
 name = "pytest-print"
 version = "1.2.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2227,6 +2239,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/0c/0d/7167bc3a83d6862241b367bce92119c338929a46408b4ca9555c15cb5b40/pytest_print-1.2.0.tar.gz", hash = "sha256:62514752d788206789d04dde2e69218d04138068377e5355d389fcc186a8e51e", size = 11898, upload-time = "2025-10-09T19:19:55.919Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/4c/80/02c87f95140e3621dde9a599c0b5684464f16acc0786ab8c8c5e929330c2/pytest_print-1.2.0-py3-none-any.whl", hash = "sha256:12969d579e72d549b71a68cef8a2d10ec47afdbaf92e32c8777d5d93d5a1cd42", size = 7151, upload-time = "2025-10-09T19:19:54.924Z" },
+]
+
+[[package]]
+name = "pytest-rerunfailures"
+version = "16.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/de/04/71e9520551fc8fe2cf5c1a1842e4e600265b0815f2016b7c27ec85688682/pytest_rerunfailures-16.1.tar.gz", hash = "sha256:c38b266db8a808953ebd71ac25c381cb1981a78ff9340a14bcb9f1b9bff1899e", size = 30889, upload-time = "2025-10-10T07:06:01.238Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/54/60eabb34445e3db3d3d874dc1dfa72751bfec3265bd611cb13c8b290adea/pytest_rerunfailures-16.1-py3-none-any.whl", hash = "sha256:5d11b12c0ca9a1665b5054052fcc1084f8deadd9328962745ef6b04e26382e86", size = 14093, upload-time = "2025-10-10T07:06:00.019Z" },
 ]
 
 [[package]]
@@ -2242,6 +2267,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a0/8d/5a60eeced74608fd2304dafc9e26815988714f8a2cfa72da99c8c3c85515/pytest-shutil-1.8.1.tar.gz", hash = "sha256:7dcc02e8a372098d51a98737e7f662e6edfd75cec7070a11e904141de49d866b", size = 37554, upload-time = "2024-11-29T19:34:17.066Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b2/17/1b161657385982134b723dcd463483d498e54e286c5632d42602407e606f/pytest_shutil-1.8.1-py3-none-any.whl", hash = "sha256:0793e347e07b9296d814ce33377ed348ce376ffac76c0e57b28bf84235499f51", size = 15948, upload-time = "2024-11-29T19:33:26.349Z" },
+]
+
+[[package]]
+name = "pytest-timeout"
+version = "2.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pytest" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ac/82/4c9ecabab13363e72d880f2fb504c5f750433b2b6f16e99f4ec21ada284c/pytest_timeout-2.4.0.tar.gz", hash = "sha256:7e68e90b01f9eff71332b25001f85c75495fc4e3a836701876183c4bcfd0540a", size = 17973, upload-time = "2025-05-05T19:44:34.99Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/fa/b6/3127540ecdf1464a00e5a01ee60a1b09175f6913f0644ac748494d9c4b21/pytest_timeout-2.4.0-py3-none-any.whl", hash = "sha256:c42667e5cdadb151aeb5b26d114aff6bdf5a907f176a007a30b940d3d865b5c2", size = 14382, upload-time = "2025-05-05T19:44:33.502Z" },
 ]
 
 [[package]]
@@ -3041,8 +3078,11 @@ dev = [
     { name = "pytest-check" },
     { name = "pytest-cov" },
     { name = "pytest-datadir" },
+    { name = "pytest-flakefinder" },
     { name = "pytest-print" },
+    { name = "pytest-rerunfailures" },
     { name = "pytest-shutil" },
+    { name = "pytest-timeout" },
     { name = "ruff" },
     { name = "sphinx" },
     { name = "sphinxcontrib-bibtex" },
@@ -3094,8 +3134,11 @@ dev = [
     { name = "pytest-check" },
     { name = "pytest-cov" },
     { name = "pytest-datadir", git = "https://github.com/salotz/pytest-datadir-extras.git?rev=41e9a1e94ba27efe28ce9d0019b1e0a73be34400" },
+    { name = "pytest-flakefinder" },
     { name = "pytest-print" },
+    { name = "pytest-rerunfailures" },
     { name = "pytest-shutil" },
+    { name = "pytest-timeout" },
     { name = "ruff" },
     { name = "sphinx" },
     { name = "sphinxcontrib-bibtex" },
