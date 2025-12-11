@@ -5,7 +5,7 @@ from enum import IntEnum
 import attrs
 
 # First Party Library
-from wepy.resampling.decisions.decision import Decision, DecisionRecord
+from wepy.resampling.decisions.decision import BaseDecisionABC, DecisionRecord
 from wepy.walker import Walker
 
 
@@ -22,17 +22,17 @@ class NoDecisionRecord(DecisionRecord):
     target_idx: int
 
 
-class NoDecision(Decision):
+class NoDecision(BaseDecisionABC):
     """Decision for a resampling process that does no resampling."""
 
     ENUM = NothingDecisionEnum
     DEFAULT_DECISION = ENUM.NOTHING
 
-    FIELDS = Decision.FIELDS + ("target_idxs",)
-    SHAPES = Decision.SHAPES + (Ellipsis,)
-    DTYPES = Decision.DTYPES + (int,)
+    FIELDS = BaseDecisionABC.FIELDS + ("target_idxs",)
+    SHAPES = BaseDecisionABC.SHAPES + (Ellipsis,)
+    DTYPES = BaseDecisionABC.DTYPES + (int,)
 
-    RECORD_FIELDS = Decision.RECORD_FIELDS + ("target_idxs",)
+    RECORD_FIELDS = BaseDecisionABC.RECORD_FIELDS + ("target_idxs",)
 
     ANCESTOR_DECISION_IDS = (ENUM.NOTHING.value,)
 

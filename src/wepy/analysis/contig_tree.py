@@ -42,7 +42,7 @@ from wepy.analysis.parents import (
 )
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.hdf5 import WepyHDF5
-from wepy.resampling.decisions.decision import Decision
+from wepy.resampling.decisions.decision import BaseDecisionABC
 
 # the groups of run records
 RESAMPLING: Final = "resampling"
@@ -77,7 +77,7 @@ class BaseContigTree:
         continuations: type(Ellipsis) | list[tuple[int, int]] = Ellipsis,
         runs: type(Ellipsis) | list[int] = Ellipsis,
         boundary_condition_class: type[BoundaryConditions] | None = None,
-        decision_class: type[Decision] | None = None,
+        decision_class: type[BaseDecisionABC] | None = None,
     ):
         """The only required argument is an WepyHDF5 object from which to draw
         data.
@@ -222,7 +222,7 @@ class BaseContigTree:
         return self._graph
 
     @property
-    def decision_class(self) -> type[Decision] | None:
+    def decision_class(self) -> type[BaseDecisionABC] | None:
         """The decision class used to determine parental lineages."""
         return self._decision_class
 

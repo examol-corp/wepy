@@ -1,13 +1,16 @@
 # Standard Library
 import logging
-from typing import Any, Protocol, TypedDict
+from typing import Any, Protocol, TypedDict, Literal, Union
 
+import numpy as np
 # First Party Library
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.resampling.resamplers.resampler import Resampler
 from wepy.runners.runner import Runner
 from wepy.walker import Walker
 from wepy.work_mapper.base import WorkMapper
+
+from .types import FieldShapeSpec, FieldDtype
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +49,6 @@ class CycleReportDict(TypedDict):
     cycle_runner_time: float
     cycle_bc_time: float
     cycle_resampling_time: float
-
 
 class Reporter(Protocol):
     """Abstract base class for wepy reporters.

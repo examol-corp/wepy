@@ -1578,7 +1578,7 @@ class RegionTree(nx.DiGraph):
             ]
 
             # choose the one to keep the state of (e.g. KEEP_MERGE
-            # in the Decision) based on their weights
+            # in the BaseDecisionABC) based on their weights
 
             # normalize weights to the sum of all the chosen weights
             chosen_pdist = np.array(chosen_weights) / sum(chosen_weights)

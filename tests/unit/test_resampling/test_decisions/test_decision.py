@@ -5,7 +5,7 @@ from enum import IntEnum
 import pytest
 
 # First Party Library
-from wepy.resampling.decisions.decision import Decision, DecisionRecord
+from wepy.resampling.decisions.decision import BaseDecisionABC, DecisionRecord
 from wepy.runners.mock import MockState
 from wepy.walker import Walker
 
@@ -15,7 +15,7 @@ class MockDecisionEnum(IntEnum):
     NOTHING = 0
 
 
-class MockDecision(Decision):
+class MockDecision(BaseDecisionABC):
 
     ENUM = MockDecisionEnum
     DEFAULT_DECISION = ENUM.NOTHING

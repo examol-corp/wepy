@@ -19,7 +19,7 @@ class NoResamplerResamplerData(TypedDict):
     pass
 
 
-class NoResampler(Resampler):
+class NoResampler(ResamplerABC):
     """The resampler which does nothing."""
 
     DECISION = NoDecision

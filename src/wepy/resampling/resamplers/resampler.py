@@ -7,8 +7,9 @@ from warnings import warn
 import numpy as np
 
 # First Party Library
-from wepy.resampling.decisions.decision import Decision
+from wepy.resampling.decisions.decision import BaseDecisionABC
 from wepy.walker import Walker, WalkerState
+from wepy.reporter.types import FieldShapeSpec, FieldDtype
 
 logger = logging.getLogger(__name__)
 
@@ -25,51 +26,33 @@ class ResamplerError(Exception):
 
 class Resampler(Protocol, Generic[WalkerState_]):
 
-    DECISION: Decision
+    DECISION: BaseDecisionABC
     CYCLE_FIELDS: tuple[str, ...]
     CYCLE_SHAPES: tuple[tuple[int, ...], ...]
     CYCLE_DTYPES: tuple[int | float, ...]
     CYCLE_RECORD_FIELDS: None | tuple[str, ...]
     RESAMPLING_FIELDS: tuple[str, ...]
-    RESAMPLING_SHAPES: tuple[
-        Union[
-            tuple[int, ...],
-            Literal[Ellipsis],
-            None,
-        ],
-        ...,
-    ]
-    RESAMPLING_DTYPES: tuple[Union[np.dtype, None], ...]
+    RESAMPLING_SHAPES: tuple[FieldShapeSpec, ...]
+    RESAMPLING_DTYPES: tuple[FieldDtype, ...]
     RESAMPLING_RECORD_FIELDS: None | tuple[str, ...]
     RESAMPLER_FIELDS: tuple[str, ...]
-    RESAMPLER_SHAPES: tuple[
-        Union[
-            tuple[int, ...],
-            Literal[Ellipsis],
-            None,
-        ],
-        ...,
-    ]
+    RESAMPLER_SHAPES: tuple[FieldShapeSpec, ...]
 
-    RESAMPLER_DTYPES: tuple[Union[np.dtype, None], ...]
+    RESAMPLER_DTYPES: tuple[FieldDtype, ...]
     RESAMPLER_RECORD_FIELDS: None | tuple[str, ...]
 
-    def resampling_fields(self) -> tuple[
+    @classmethod
+    def resampling_fields(cls) -> tuple[
         tuple[str, ...],
-        tuple[
-            Union[
-                tuple[int, ...],
-                Literal[Ellipsis],
-                None,
-            ],
-            ...,
-        ],
-        tuple[Union[np.dtype, None], ...],
+        tuple[FieldShapeSpec, ...],
+        tuple[FieldDtype, ...],
     ]: ...
 
-    def resampling_record_field_names(self) -> None | tuple[str, ...]: ...
+    @classmethod
+    def resampling_record_field_names(cls) -> None | tuple[str, ...]: ...
 
-    def resampler_record_field_names(self) -> None | tuple[str, ...]: ...
+    @classmethod
+    def resampler_record_field_names(cls) -> None | tuple[str, ...]: ...
 
     def resample(self, walkers: list[Walker[WalkerState_]]) -> tuple[
         list[Walker[WalkerState_]],
@@ -100,7 +83,7 @@ class ResamplerABC(Resampler):
     - RESAMPLER_RECORD_FIELDS
 
     The DECISION constant should be a
-    wepy.resampling.decisions.decision.Decision subclass.
+    wepy.resampling.decisions.decision.BaseDecisionABC subclass.
 
     This base class provides some hidden methods that are useful for
     various purposes.
@@ -140,7 +123,7 @@ class ResamplerABC(Resampler):
 
     """
 
-    DECISION: Decision = Decision
+    DECISION: BaseDecisionABC = BaseDecisionABC
     """The decision class for this resampler."""
 
     CYCLE_FIELDS: tuple[str, ...] = (
@@ -406,24 +389,28 @@ class ResamplerABC(Resampler):
         # set them to the args given
         self.set_debug_mode(debug_mode)
 
-    @property
-    def decision(self) -> Decision:
+    @classmethod
+    def decision(cls) -> BaseDecisionABC:
         """The decision class for this resampler."""
-        return self.DECISION
+        return cls.DECISION
 
-    def resampling_field_names(self):
+    @classmethod
+    def resampling_field_names(cls):
         """Access the class level FIELDS constant for this record group."""
-        return self.RESAMPLING_FIELDS
+        return cls.RESAMPLING_FIELDS
 
-    def resampling_field_shapes(self):
+    @classmethod
+    def resampling_field_shapes(cls):
         """Access the class level SHAPES constant for this record group."""
-        return self.RESAMPLING_SHAPES
+        return cls.RESAMPLING_SHAPES
 
-    def resampling_field_dtypes(self):
+    @classmethod
+    def resampling_field_dtypes(cls):
         """Access the class level DTYPES constant for this record group."""
-        return self.RESAMPLING_DTYPES
+        return cls.RESAMPLING_DTYPES
 
-    def resampling_fields(self):
+    @classmethod
+    def resampling_fields(cls):
         """Returns a list of zipped field specs.
 
         Returns
@@ -434,29 +421,34 @@ class ResamplerABC(Resampler):
         """
         return list(
             zip(
-                self.resampling_field_names(),
-                self.resampling_field_shapes(),
-                self.resampling_field_dtypes(),
+                cls.resampling_field_names(),
+                cls.resampling_field_shapes(),
+                cls.resampling_field_dtypes(),
             )
         )
 
-    def resampling_record_field_names(self):
+    @classmethod
+    def resampling_record_field_names(cls):
         """Access the class level RECORD_FIELDS constant for this record group."""
-        return self.RESAMPLING_RECORD_FIELDS
+        return cls.RESAMPLING_RECORD_FIELDS
 
-    def resampler_field_names(self):
+    @classmethod
+    def resampler_field_names(cls):
         """Access the class level FIELDS constant for this record group."""
-        return self.RESAMPLER_FIELDS
+        return cls.RESAMPLER_FIELDS
 
-    def resampler_field_shapes(self):
+    @classmethod
+    def resampler_field_shapes(cls):
         """Access the class level SHAPES constant for this record group."""
-        return self.RESAMPLER_SHAPES
+        return cls.RESAMPLER_SHAPES
 
-    def resampler_field_dtypes(self):
+    @classmethod
+    def resampler_field_dtypes(cls):
         """Access the class level DTYPES constant for this record group."""
-        return self.RESAMPLER_DTYPES
+        return cls.RESAMPLER_DTYPES
 
-    def resampler_fields(self):
+    @classmethod
+    def resampler_fields(cls):
         """Returns a list of zipped field specs.
 
         Returns
@@ -467,15 +459,16 @@ class ResamplerABC(Resampler):
         """
         return list(
             zip(
-                self.resampler_field_names(),
-                self.resampler_field_shapes(),
-                self.resampler_field_dtypes(),
+                cls.resampler_field_names(),
+                cls.resampler_field_shapes(),
+                cls.resampler_field_dtypes(),
             )
         )
 
-    def resampler_record_field_names(self):
+    @classmethod
+    def resampler_record_field_names(cls):
         """Access the class level RECORD_FIELDS constant for this record group."""
-        return self.RESAMPLER_RECORD_FIELDS
+        return cls.RESAMPLER_RECORD_FIELDS
 
     @property
     def is_debug_on(self) -> bool:

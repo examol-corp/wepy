@@ -68,7 +68,7 @@ DecisionFieldDtype = Union[int,]
 
 
 # ABC for the Decision class
-class Decision:
+class BaseDecisionABC:
     """Represents and provides methods for a set of decision values."""
 
     ENUM: IntEnum

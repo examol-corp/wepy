@@ -7,7 +7,7 @@ from enum import IntEnum
 import attrs
 
 # First Party Library
-from wepy.resampling.decisions.decision import Decision, DecisionRecord
+from wepy.resampling.decisions.decision import BaseDecisionABC, DecisionRecord
 from wepy.walker import Walker, keep_merge, split
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class CloneMergeDecisionRecord(DecisionRecord):
     target_idxs: list[int]
 
 
-class MultiCloneMergeDecision(Decision):
+class MultiCloneMergeDecision(BaseDecisionABC):
     """Decision encoding cloning and merging decisions for weighted ensemble.
 
     The decision records have in addition to the 'decision_id' a field
@@ -73,11 +73,11 @@ class MultiCloneMergeDecision(Decision):
 
     DECISION_RECORD = CloneMergeDecisionRecord
 
-    FIELDS = Decision.FIELDS + ("target_idxs",)
-    SHAPES = Decision.SHAPES + (Ellipsis,)
-    DTYPES = Decision.DTYPES + (int,)
+    FIELDS = BaseDecisionABC.FIELDS + ("target_idxs",)
+    SHAPES = BaseDecisionABC.SHAPES + (Ellipsis,)
+    DTYPES = BaseDecisionABC.DTYPES + (int,)
 
-    RECORD_FIELDS = Decision.RECORD_FIELDS + ("target_idxs",)
+    RECORD_FIELDS = BaseDecisionABC.RECORD_FIELDS + ("target_idxs",)
 
     # the decision types that pass on their state
     ANCESTOR_DECISION_IDS = (

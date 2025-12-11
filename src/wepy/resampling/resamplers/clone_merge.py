@@ -100,8 +100,8 @@ class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
 
         # determine resampling actions
         walker_actions = [
-            self.decision.record(
-                enum_value=self.decision.default_decision().value, target_idxs=(i,)
+            self.decision().record(
+                enum_value=self.decision().default_decision().value, target_idxs=(i,)
             )
             for i in range(n_walkers)
         ]
@@ -213,13 +213,13 @@ class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
                 # for each squashed walker write a record and save it
                 # in the walker actions
                 for squash_idx in merge_group:
-                    walker_actions[squash_idx] = self.decision.record(
-                        self.decision.ENUM.SQUASH.value, target_idxs=(walker_idx,)
+                    walker_actions[squash_idx] = self.decision().record(
+                        self.decision().ENUM.SQUASH.value, target_idxs=(walker_idx,)
                     )
 
                 # make the record for the keep merge walker
-                walker_actions[walker_idx] = self.decision.record(
-                    self.decision.ENUM.KEEP_MERGE.value, target_idxs=(walker_idx,)
+                walker_actions[walker_idx] = self.decision().record(
+                    self.decision().ENUM.KEEP_MERGE.value, target_idxs=(walker_idx,)
                 )
 
         # for each walker, if it is to be cloned assign open slots for it
@@ -264,8 +264,8 @@ class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
                     clone_targets.extend(new_slots)
 
                 # make a record for this clone
-                walker_actions[walker_idx] = self.decision.record(
-                    self.decision.ENUM.CLONE.value, target_idxs=tuple(clone_targets)
+                walker_actions[walker_idx] = self.decision().record(
+                    self.decision().ENUM.CLONE.value, target_idxs=tuple(clone_targets)
                 )
 
         return walker_actions
