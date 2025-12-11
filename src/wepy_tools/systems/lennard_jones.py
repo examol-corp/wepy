@@ -10,6 +10,9 @@ from scipy.spatial.distance import euclidean
 from wepy.resampling.distances.base import Distance
 from wepy.runners.openmm import OpenMMState
 
+import mdtraj
+from wepy.util.mdtraj import mdtraj_to_json_topology
+
 
 class LennardJonesPair:
     """Create a pair of Lennard-Jones particles.
@@ -104,6 +107,9 @@ class LennardJonesPair:
         residue = topology.addResidue("Ar", chain)
         topology.addAtom("Ar", element, residue)
         self.topology = topology
+
+        self.mdj_top = mdtraj.Topology.from_openmm(self.topology)
+        self.json_top = mdtraj_to_json_topology(self.mdj_top)
 
 
 @attrs.define
