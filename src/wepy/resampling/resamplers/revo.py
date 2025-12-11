@@ -522,7 +522,10 @@ class REVOResampler(
         _count = 1
         productive = True
         while productive:
-            logger.info(f"Optimization iteration: {_count}")
+            _log = False
+            if _count == 1 or _count % 10 == 0:
+                _log = True
+                logger.info(f"Optimization iteration: {_count}")
             _count += 1
             productive = False
             # find min and max walker_variationss, alter new_amp
@@ -633,7 +636,8 @@ class REVOResampler(
                 if new_variation > variation:
                     variations.append(new_variation)
 
-                    logger.info("Variance move to {} accepted".format(new_variation))
+                    if _log:
+                        logger.info(f"Variance move to {new_variation} accepted")
 
                     productive = True
                     variation = new_variation
@@ -684,7 +688,8 @@ class REVOResampler(
                     )
                     variations.append(new_variation)
 
-                    logger.info("variance after selection: {}".format(new_variation))
+                    if _log:
+                        logger.info("variance after selection: {}".format(new_variation))
 
                 # if not productive
                 else:
