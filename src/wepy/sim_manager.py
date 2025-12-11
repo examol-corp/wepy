@@ -49,6 +49,7 @@ import copy
 import time
 import enum
 
+import psutil
 import attrs
 from immutables import Map as frozenmap
 
@@ -305,8 +306,10 @@ class ManagerStateMachine:
         self.state = new_state
 
         return self.state
-    
-    
+
+ResamplerFactory = Callable[[], Resampler]
+WorkMapperFactory = Callable[[], WorkMapper]
+
 State_ = TypeVar("State_")
 RunSegmentData_ = TypeVar("RunSegmentData_", bound=RunSegmentData, covariant=True)
 class Manager(Generic[State_]):
@@ -345,12 +348,19 @@ class Manager(Generic[State_]):
     init_walkers: list[Walker[State_]]
     n_init_walkers: int
     runner_factory: RunnerFactory
-    resampler: Resampler
+    resampler_factory: ResamplerFactory
     boundary_conditions: BoundaryConditions | None
     work_mapper_factory: type[WorkMapper]
-    work_mapper: WorkMapper
     reporters: list[Reporter]
     monitor: Monitor | None
+
+    num_cores: int
+
+    _runner: Runner | None
+    _resampler: Resampler | None
+    _work_mapper: WorkMapper | None
+
+    _last_report: CycleReportDict | None
 
     REPORT_ITEM_KEYS: Final[tuple[str, ...]] = (
         "cycle_idx",
@@ -376,11 +386,12 @@ class Manager(Generic[State_]):
         self,
         init_walkers: list[Walker[State_]],
         runner_factory: RunnerFactory,
-        resampler: Resampler,
-        work_mapper_factory: Callable[[], WorkMapper] | None = None,
+        resampler_factory: ResamplerFactory,
+        work_mapper_factory: WorkMapperFactory | None = None,
         boundary_conditions: BoundaryConditions | None = None,
         reporters: list[Reporter] | None = None,
         sim_monitor: Monitor | None = None,
+        num_cores: int | None = None,
     ) -> None:
         """Constructor for Manager.
 
@@ -396,8 +407,8 @@ class Manager(Generic[State_]):
             instantiated by simulation manager. If None will default
             to a serial mapper.
 
-        resampler : object implementing the Resampler interface
-            The resampler to be used in the simulation
+        resampler_factory : Callable that instantiates a stateful
+            Resampler used in the simulation.
 
         boundary_conditions : object implementing BoundaryCondition interface, optional
             The boundary conditions to apply to walkers
@@ -428,7 +439,7 @@ class Manager(Generic[State_]):
         # the runner is the object that runs dynamics
         self.runner_factory = runner_factory
         # the resampler
-        self.resampler = copy.deepcopy(resampler)
+        self.resampler_factory = resampler_factory
         # object for boundary conditions
         self.boundary_conditions = copy.deepcopy(boundary_conditions)
 
@@ -446,10 +457,23 @@ class Manager(Generic[State_]):
         ## Monitor
         self.monitor = sim_monitor
 
+        # figure out how many cores we have at our disposal if not
+        # already given
+        if num_cores is None:
+            self.num_cores = len(psutil.Process().cpu_affinity())
+
+        else:
+            self.num_cores = num_cores
+
         # used to have a record of the last report for the simulation
         # monitor without breaking the API. Ugly but I don't want to
         # break it and no one cares about this anyhow
-        self._last_report: CycleReportDict | None = None
+        self._last_report = None
+
+        # initialize the uncreated attributes
+        self._runner = None
+        self._resampler = None
+        self._work_mapper = None
 
         self.state_machine = ManagerStateMachine()
 
@@ -502,9 +526,12 @@ class Manager(Generic[State_]):
         logger.info("Running sim_manager.init hooks")
 
         logger.info("Generating runner from factory")
-        self.runner = self.runner_factory()
+        self._runner = self.runner_factory()
         logger.info("Running runner.init hook")
-        self.runner.init()
+        self._runner.init()
+
+        # initialize resampler
+        self._resampler = self.resampler_factory(num_cores=self.num_cores)
 
         # initialize the monitoring object
 
@@ -518,9 +545,9 @@ class Manager(Generic[State_]):
         # mapping and the number of workers, this may include things like starting processes
         # etc.
         logger.info("Instantiating work mapper")
-        self.work_mapper = self.work_mapper_factory()
+        self._work_mapper = self.work_mapper_factory()
         logger.info("Running WorkMapper.init hook")
-        self.work_mapper.init()
+        self._work_mapper.init()
         logger.info("Finished WorkMapper.init hook")
 
         # init the reporter
@@ -528,10 +555,10 @@ class Manager(Generic[State_]):
             logger.info(f"Initializing reporter: {reporter}")
             reporter.init(
                 init_walkers=self.init_walkers,
-                runner=self.runner,
-                resampler=self.resampler,
+                runner=self._runner,
+                resampler=self._resampler,
                 boundary_conditions=self.boundary_conditions,
-                work_mapper=self.work_mapper,
+                work_mapper=self._work_mapper,
                 reporters=self.reporters,
                 continue_run=continue_run,
             )
@@ -570,15 +597,15 @@ class Manager(Generic[State_]):
 
         # cleanup the mapper
         logger.info("Cleaning up work_mapper")
-        self.work_mapper.cleanup()
+        self._work_mapper.cleanup()
 
         # cleanup things associated with the reporter
         for reporter in self.reporters:
             logger.info(f"Cleaning up reporter: {reporter}")
             reporter.cleanup(
-                runner=self.runner,
-                work_mapper=self.work_mapper,
-                resampler=self.resampler,
+                runner=self._runner,
+                work_mapper=self._work_mapper,
+                resampler=self._resampler,
                 boundary_conditions=self.boundary_conditions,
                 reporters=self.reporters,
             )
@@ -621,8 +648,8 @@ class Manager(Generic[State_]):
         segment_lengths = [segment_length for i in range(len(states))]
         try:
             map_results = list(
-                self.work_mapper.map(
-                    self.runner.run_segment,
+                self._work_mapper.map(
+                    self._runner.run_segment,
                     states,
                     segment_lengths,
                 )
@@ -648,12 +675,12 @@ class Manager(Generic[State_]):
     def pre_segment(self) -> None:
 
         self.state_machine.send(ManagerEvent.START_PRE_SEGMENT)
-        self.runner.pre_cycle()
+        self._runner.pre_cycle()
         self.state_machine.send(ManagerEvent.FINISH_PRE_SEGMENT)
 
     def post_segment(self, segments_data: RunSegmentData_) -> None:
         self.state_machine.send(ManagerEvent.START_POST_SEGMENT)
-        self.runner.post_cycle(segments_data)
+        self._runner.post_cycle(segments_data)
         self.state_machine.send(ManagerEvent.FINISH_POST_SEGMENT)
         
 
@@ -810,7 +837,7 @@ class Manager(Generic[State_]):
         self.state_machine.send(ManagerEvent.START_RESAMPLING)
         start = time.time()
 
-        resampling_results = self.resampler.resample(warped_walkers)
+        resampling_results = self._resampler.resample(warped_walkers)
 
         self.state_machine.send(ManagerEvent.FINISH_RESAMPLING)
         
@@ -829,7 +856,7 @@ class Manager(Generic[State_]):
         seg_times = {}
         sampling_time = None
 
-        if (seg_times := self.work_mapper.get_worker_segment_times()) is not None:
+        if (seg_times := self._work_mapper.get_worker_segment_times()) is not None:
             logger.info("Segment timings provided by work mapper, recording.")
 
             # count up the total sampling time from the segments
@@ -893,7 +920,7 @@ class Manager(Generic[State_]):
 
         self.state_machine.send(ManagerEvent.FINISH_CYCLE)
 
-        return resampled_walkers, (self.runner, self.boundary_conditions, self.resampler)
+        return resampled_walkers, (self._runner, self.boundary_conditions, self._resampler)
 
     def run_simulation(
         self,

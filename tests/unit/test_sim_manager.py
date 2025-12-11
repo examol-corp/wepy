@@ -21,7 +21,7 @@ from wepy.sim_manager import (
 def sim_components() -> tuple[
         list[Walker],
         MockRunnerFactory,
-        NoResampler,
+        type[NoResampler],
 ]:
 
     num_walkers = 4
@@ -36,7 +36,7 @@ def sim_components() -> tuple[
         in range(num_walkers)
     ]
 
-    return init_walkers, MockRunnerFactory(fail=False), NoResampler()
+    return init_walkers, MockRunnerFactory(fail=False), NoResampler
 
 class Test_ManagerStateMachine:
 
@@ -75,7 +75,7 @@ class Test_Manager:
         assert manager.status == ManagerStatus.CONSTRUCTED
         assert len(manager.reporters) == 0
         assert manager.work_mapper_factory == SerialMapper
-        assert not hasattr(manager, "work_mapper")
+        assert manager._work_mapper is None
 
     def test_init(self, sim_components):
 
@@ -88,8 +88,8 @@ class Test_Manager:
 
         manager.init()
         assert manager.status == ManagerStatus.INITIALIZED
-        assert hasattr(manager, "work_mapper")
-        assert manager.runner.status == RunnerStatus.INITIALIZED
+        assert manager._work_mapper is not None
+        assert manager._runner.status == RunnerStatus.INITIALIZED
 
         with pytest.raises(ManagerStateTransitionError):
             manager.init()
@@ -111,7 +111,7 @@ class Test_Manager:
         manager.pre_segment()
 
         assert manager.status == ManagerStatus.PRE_SEGMENT_FINISHED
-        assert manager.runner.status == RunnerStatus.PRE_CYCLE
+        assert manager._runner.status == RunnerStatus.PRE_CYCLE
 
     def test_post_segment(self, sim_components):
 
@@ -141,7 +141,7 @@ class Test_Manager:
         ])
 
         assert manager.status == ManagerStatus.POST_SEGMENT_FINISHED
-        assert manager.runner.status == RunnerStatus.POST_CYCLE
+        assert manager._runner.status == RunnerStatus.POST_CYCLE
         
     def test_cleanup(self, sim_components):
 
@@ -154,7 +154,7 @@ class Test_Manager:
 
         manager.state_machine.send(ManagerEvent.START_PRE_SIM)
         manager.init()
-        assert manager.runner.status == RunnerStatus.INITIALIZED
+        assert manager._runner.status == RunnerStatus.INITIALIZED
         manager.cleanup()
 
         with pytest.raises(ManagerStateTransitionError):
