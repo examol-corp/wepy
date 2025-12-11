@@ -93,14 +93,8 @@ class OpenMMProcPoolWorkMapper(WorkMapper):
         # spin up a new pool for each map
         logger.info(f"Starting process Pool with {self._num_procs}")
 
-        # set up the log queue and listener for getting logs from
-        # processes
-        log_queue = self._mp_ctx.Queue()
-        # handler = logging.StreamHandler()
-
-
         with (
-                queue_listener_context(log_queue),
+                queue_listener_context(self._mp_ctx) as log_queue,
                 self._mp_ctx.Pool(
                     processes=self._num_procs,
                     # only run one thing per task, just to make sure

@@ -100,11 +100,12 @@ class WorkerFormatter(logging.Formatter):
         return formatted
 
 @contextlib.contextmanager
-def queue_listener_context(log_queue: mp.Queue) -> Generator[None, None, None]:
+def queue_listener_context(mp_ctx) -> Generator[None, None, None]:
 
+    logger.info("Setting up queue logging infrastructure")
     root_logger = logging.getLogger()
-
     old_factory = logging.getLogRecordFactory()
+
 
     def record_factory(*args, **kwargs):
 
@@ -127,15 +128,35 @@ def queue_listener_context(log_queue: mp.Queue) -> Generator[None, None, None]:
         new_handler.setFormatter(WorkerFormatter(handler.formatter))
         listener_handlers.append(new_handler)
 
+    logger.info("Starting Queue")
+    log_queue = mp_ctx.Queue()
     listener = logging.handlers.QueueListener(log_queue, *listener_handlers)
+    logger.info("Starting QueueListener")
     listener.start()
+    logger.info("Listener started")
 
     try:
-        yield
+        yield log_queue
     finally:
+        logger.info("Shutting down log listener resources")
+
+        logger.info("Stopping listener")
         listener.stop()
+        logger.info("Listener stopped")
 
         for handler, formatter in zip(root_logger.handlers, old_formatters, strict=True):
             handler.setFormatter(formatter)
 
         logging.setLogRecordFactory(old_factory)
+
+        logger.info("Closing logging Queue")
+        try:
+            log_queue.close()
+            log_queue.join_thread()
+        except Exception as exc:
+            logger.error(f"Exception in log Queue closing, continuing: {exc}")
+            pass
+        except:
+            logger.info("Logger Queue shut down cleanly")
+
+        logger.info("Finished context cleanup")

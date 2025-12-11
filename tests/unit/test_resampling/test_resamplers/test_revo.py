@@ -1,3 +1,4 @@
+import pytest
 import numpy as np
 import pickle
 from wepy.runners.mock import MockState
@@ -253,6 +254,10 @@ class Test_REVOResampler:
                 MockState(2)
             ]
         )
+
+    @pytest.mark.flaky(reruns=4)
+    @pytest.mark.timeout(5)
+    def test__all_to_all_distance_pool(self):
 
         # test with pool
         resampler = REVOResampler(

@@ -750,17 +750,11 @@ class REVOResampler(
             # NOTE: Must use spawn here, otherwise there are problems
             # with deadlocking in the sub-processes
             mp_ctx = mp.get_context(method="spawn")
-            log_queue = mp_ctx.Queue()
-            handlers = list(logging.getLogger().handlers)
-            listener = logging.handlers.QueueListener(log_queue, *handlers)
-            logger.info("Starting log listener")
-            listener.start()
 
             # TODO: This should be part of some setup phase
-
             logger.info("Starting multiprocessing.Pool")
             with (
-                    queue_listener_context(log_queue),
+                    queue_listener_context(mp_ctx) as log_queue,
                     mp_ctx.Pool(
                         self.num_proc,
                         initializer=proc_pool_worker_setup,
