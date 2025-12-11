@@ -390,12 +390,13 @@ it is a fairly straightforward task from a developers perspective.
 """
 
 # Standard Library
+from pathlib import Path
 import gc
 import itertools as it
 import json
 import logging
+from typing import Any
 
-logger = logging.getLogger(__name__)
 # Standard Library
 import os.path as osp
 from collections import Counter, defaultdict, namedtuple
@@ -413,6 +414,12 @@ from wepy.util.mdtraj import (
     traj_fields_to_mdtraj,
 )
 from wepy.util.util import traj_box_vectors_to_lengths_angles
+from wepy.reporter.file import FileMode
+from wepy.reporter.types import(
+    FieldShapeSpec,
+    FieldDtype,
+)
+from wepy.typing import Shape, Idxs, IdxArray
 
 # optional dependencies
 try:
@@ -427,6 +434,8 @@ try:
 except ModuleNotFoundError:
     warn("pandas is not installed and that functionality will not work", RuntimeWarning)
 
+logger = logging.getLogger(__name__)
+    
 ## h5py settings
 
 # we set the libver to always be the latest (which should be 1.10) so
@@ -610,7 +619,7 @@ WEIGHT_DTYPE = float
 """Weights feature vector data type."""
 
 # Default Trajectory Field Constants
-FIELD_FEATURE_SHAPES = (
+FIELD_FEATURE_SHAPES: tuple[tuple[str, tuple[int, ...]]] = (
     (TIME, (1,)),
     (BOX_VECTORS, (3, 3)),
     (BOX_VOLUME, (1,)),
@@ -649,7 +658,7 @@ SPARSE_IDXS = "_sparse_idxs"
 
 
 # utility for paths
-def _iter_field_paths(grp):
+def _iter_field_paths(grp: h5py.Group):
     """Return all subgroup field name paths from a group.
 
     Useful for compound fields. For example if you have the group
@@ -705,264 +714,103 @@ class WepyHDF5:
 
     WRITE_MODES = ("r+", "w", "w-", "x", "a")
 
-    #### dunder methods
+    ## Object attribute type declarations
+    _filename: Path
+    _swmr_mode: bool
+    _h5: h5py.File | None
+    _wepy_mode: FileMode | None
+    h5py_mode: FileMode | None
+    closed: bool
 
-    def __init__(
-        self,
-        filename,
-        mode="x",
-        topology=None,
-        units=None,
-        sparse_fields=None,
-        feature_shapes=None,
-        feature_dtypes=None,
-        n_dims=None,
-        alt_reps=None,
-        main_rep_idxs=None,
-        swmr_mode=False,
-        expert_mode=False,
-    ):
-        """Constructor for the WepyHDF5 class.
+    # TODO: These are all temporary fields that should just be removed
+    # from object state and passed directly to static methods
+    _topology: str | None
+    _units: dict[str, str] | None
+    _n_dims: int | None
+    _n_coords: int | None
+    _field_feature_shapes_kwarg: Any
+    _field_feature_dtypes_kwarg: Any
+    _field_feature_dtypes: Any | None
+    _field_feature_shapes: Any | None
 
-        Initialize a new Wepy HDF5 file. This will create an h5py.File
-        object.
+    _sparse_fields: tuple[str, Any]
+    _main_rep_idxs: Idxs
+    _alt_reps: dict[str, IdxArray]
+    
 
-        The File will be closed after construction by default.
+    ## Partial constructors/initializers
 
-        mode:
-        r        Readonly, file must exist
-        r+       Read/write, file must exist
-        w        Create file, truncate if exists
-        x or w-  Create file, fail if exists
-        a        Read/write if exists, create otherwise
+    # TODO: make these static and accept the arguments it needs to
+    # avoid keeping temporary state
+    def _set_default_init_field_attributes(self, n_dims=None):
+        """Sets the feature_shapes and feature_dtypes to be the default for
+        this module. These will be used to initialize field datasets when no
+        given during construction (i.e. for sparse values)
 
         Parameters
         ----------
-        filename : str
-            File path
-
-        mode : str
-            Mode specification for opening the HDF5 file.
-
-        topology : str
-            JSON string representing topology of system being simulated.
-
-        units : dict of str : str, optional
-            Mapping of trajectory field names to string specs
-            for units.
-
-        sparse_fields : list of str, optional
-            List of trajectory fields that should be initialized as sparse.
-
-        feature_shapes : dict of str : shape_spec, optional
-            Mapping of trajectory fields to their shape spec for initialization.
-
-        feature_dtypes : dict of str : dtype_spec, optional
-            Mapping of trajectory fields to their shape spec for initialization.
-
-        n_dims : int, default: 3
-            Set the number of spatial dimensions for the default
-            positions trajectory field.
-
-        alt_reps : dict of str : list of int, optional
-            Specifies that there will be 'alt_reps' of positions each
-            named by the keys of this mapping and containing the
-            indices in each value list.
-
-        main_rep_idxs : list of int, optional
-            The indices of atom positions to save as the main 'positions'
-            trajectory field. Defaults to all atoms.
-
-        expert_mode : bool
-            If True no initialization is performed other than the
-            setting of the filename. Useful mainly for debugging.
-
-        Raises
-        ------
-        AssertionError
-            If the mode is not one of the supported mode specs.
-
-        AssertionError
-            If a topology is not given for a creation mode.
-
-        Warns
-        -----
-        If initialization data was given but the file was opened in a read mode.
+        n_dims : int
 
         """
 
-        self._filename = filename
-        self._swmr_mode = swmr_mode
+        # we use the module defaults for the datasets to initialize them
+        field_feature_shapes = dict(FIELD_FEATURE_SHAPES)
+        field_feature_dtypes = dict(FIELD_FEATURE_DTYPES)
 
-        if expert_mode is True:
-            self._h5 = None
-            self._wepy_mode = None
-            self._h5py_mode = None
-            self.closed = None
-
-            # terminate the constructor here
-            return None
-
-        assert mode in self.MODES, "mode must be either one of: {}".format(
-            ", ".join(self.MODES)
-        )
-
-        # the top level mode enforced by wepy.hdf5
-        self._wepy_mode = mode
-
-        # the lower level h5py mode. THis was originally different to
-        # accomodate different modes at teh wepy level for
-        # concatenation. I will leave these separate because this is
-        # used elsewhere and could be a feature in the future.
-        self._h5py_mode = mode
-
-        # Temporary metadata: used to initialize the object but not
-        # used after that
-
-        self._topology = topology
-        self._units = units
-        self._n_dims = n_dims
-        self._n_coords = None
-
-        # set hidden feature shapes and dtype, which are only
-        # referenced if needed when trajectories are created. These
-        # will be saved in the settings section in the actual HDF5
-        # file
-        self._field_feature_shapes_kwarg = feature_shapes
-        self._field_feature_dtypes_kwarg = feature_dtypes
-        self._field_feature_dtypes = None
-        self._field_feature_shapes = None
-
-        # save the sparse fields as a private variable for use in the
-        # create constructor
-        if sparse_fields is None:
-            self._sparse_fields = []
+        # get the number of coordinates of positions. If there is a
+        # main_reps then we have to set the number of atoms to that,
+        # if not we count the number of atoms in the topology
+        if self._main_rep_idxs is None:
+            self._n_coords = json_top_atom_count(self.topology)
+            self._main_rep_idxs = list(range(self._n_coords))
         else:
-            self._sparse_fields = sparse_fields
+            self._n_coords = len(self._main_rep_idxs)
 
-        # if we specify an atom subset of the main POSITIONS field
-        # we must save them
-        self._main_rep_idxs = main_rep_idxs
+        # get the number of dimensions as a default
+        if n_dims is None:
+            self._n_dims = N_DIMS
 
-        # a dictionary specifying other alt_reps to be saved
-        if alt_reps is not None:
-            self._alt_reps = alt_reps
-            # all alt_reps are sparse
-            alt_rep_keys = [
-                "{}/{}".format(ALT_REPS, key) for key in self._alt_reps.keys()
-            ]
-            self._sparse_fields.extend(alt_rep_keys)
+        # feature shapes for positions and positions-like fields are
+        # not known at the module level due to different number of
+        # coordinates (number of atoms) and number of dimensions
+        # (default 3 spatial). We set them now that we know this
+        # information.
+        # add the postitions shape
+        field_feature_shapes[POSITIONS] = (self._n_coords, self._n_dims)
+        # add the positions-like field shapes (velocities and forces) as the same
+        for poslike_field in POSITIONS_LIKE_FIELDS:
+            field_feature_shapes[poslike_field] = (self._n_coords, self._n_dims)
+
+        # set the attributes
+        self._field_feature_shapes = field_feature_shapes
+        self._field_feature_dtypes = field_feature_dtypes
+    
+
+    def _init_continuations(self):
+        """This will either create a dataset in the settings for the
+        continuations or if continuations already exist it will reinitialize
+        them and delete the data that exists there.
+
+        Returns
+        -------
+        continuation_dset : h5py.Dataset
+
+        """
+
+        # if the continuations dset already exists we reinitialize the
+        # data
+        if CONTINUATIONS in self.settings_grp:
+            cont_dset = self.settings_grp[CONTINUATIONS]
+            cont_dset.resize((0, 2))
+
+        # otherwise we just create the data
         else:
-            self._alt_reps = {}
+            cont_dset = self.settings_grp.create_dataset(
+                CONTINUATIONS, shape=(0, 2), dtype=int, maxshape=(None, 2)
+            )
 
-        # open the file and then run the different constructors based
-        # on the mode
-        with h5py.File(
-            filename, mode=self._h5py_mode, libver=H5PY_LIBVER, swmr=self._swmr_mode
-        ) as h5:
-            self._h5 = h5
-
-            # set SWMR mode if asked for if we are in write mode also
-            if self._swmr_mode is True and mode in self.WRITE_MODES:
-                self._h5.swmr_mode = swmr_mode
-
-            # create file mode: 'w' will create a new file or overwrite,
-            # 'w-' and 'x' will not overwrite but will create a new file
-            if self._wepy_mode in ["w", "w-", "x"]:
-                self._create_init()
-
-            # read/write mode: in this mode we do not completely overwrite
-            # the old file and start again but rather write over top of
-            # values if requested
-            elif self._wepy_mode in ["r+"]:
-                self._read_write_init()
-
-            # add mode: read/write create if doesn't exist
-            elif self._wepy_mode in ["a"]:
-                if osp.exists(self._filename):
-                    self._read_write_init()
-                else:
-                    self._create_init()
-
-            # read only mode
-            elif self._wepy_mode == "r":
-                # if any data was given, warn the user
-                if any(
-                    [
-                        kwarg is not None
-                        for kwarg in [
-                            topology,
-                            units,
-                            sparse_fields,
-                            feature_shapes,
-                            feature_dtypes,
-                            n_dims,
-                            alt_reps,
-                            main_rep_idxs,
-                        ]
-                    ]
-                ):
-                    warn("Data was given but opening in read-only mode", RuntimeWarning)
-
-                # then run the initialization process
-                self._read_init()
-
-            # flush the buffers
-            self._h5.flush()
-
-            # set the h5py mode to the value in the actual h5py.File
-            # object after creation
-            self._h5py_mode = self._h5.mode
-
-        # get rid of the temporary variables
-        del self._topology
-        del self._units
-        del self._n_dims
-        del self._n_coords
-        del self._field_feature_shapes_kwarg
-        del self._field_feature_dtypes_kwarg
-        del self._field_feature_shapes
-        del self._field_feature_dtypes
-        del self._sparse_fields
-        del self._main_rep_idxs
-        del self._alt_reps
-
-        # variable to reflect if it is closed or not, should be closed
-        # after initialization
-        self.closed = True
-
-        # end of the constructor
-        return None
-
-    # TODO is this right? shouldn't we actually delete the data then close
-    def __del__(self):
-        self.close()
-
-    # context manager methods
-
-    def __enter__(self):
-        self.open()
-        # self._h5 = h5py.File(self._filename,
-        #                      libver=H5PY_LIBVER, swmr=self._swmr_mode)
-        # self.closed = False
-        return self
-
-    def __exit__(self, exc_type, exc_value, exc_tb):
-        self.close()
-
-    @property
-    def swmr_mode(self):
-        return self._swmr_mode
-
-    @swmr_mode.setter
-    def swmr_mode(self, val):
-        self._swmr_mode = val
-
-    # TODO custom deepcopy to avoid copying the actual HDF5 object
-
-    #### hidden methods (_method_name)
-
-    ### constructors
+        return cont_dset
+    
     def _create_init(self):
         """Creation mode constructor.
 
@@ -1088,71 +936,363 @@ class WepyHDF5:
         # position
         self._init_continuations()
 
-    def _read_write_init(self):
-        """Read-write mode constructor."""
+    def __init__(
+        self,
+        filename: Path,
+        mode: FileMode = "x",
+        topology: str | None = None,
+        units: dict[str, str] | None = None,
+        sparse_fields: tuple[str, ...] = None,
+        feature_shapes: dict[str, FieldShapeSpec] | None = None,
+        feature_dtypes: dict[str, FieldDtype] | None = None,
+        n_dims: int | None = None,
+        alt_reps: dict[str, IdxArray] | None = None,
+        main_rep_idxs: IdxArray | None = None,
+        swmr_mode: bool = False,
+        expert_mode: bool = False,
+    ):
+        """Constructor for the WepyHDF5 class.
 
-        self._read_init()
+        Initialize a new Wepy HDF5 file. This will create an h5py.File
+        object.
 
-    def _add_init(self):
-        """The addition mode constructor.
+        The File will be closed after construction by default.
 
-        Create the dataset if it doesn't exist and put it in r+ mode,
-        otherwise, just open in r+ mode.
-
-        """
-
-        if not any(self._exist_flags):
-            self._create_init()
-        else:
-            self._read_write_init()
-
-    def _read_init(self):
-        """Read mode constructor."""
-
-        pass
-
-    def _set_default_init_field_attributes(self, n_dims=None):
-        """Sets the feature_shapes and feature_dtypes to be the default for
-        this module. These will be used to initialize field datasets when no
-        given during construction (i.e. for sparse values)
+        mode:
+        r        Readonly, file must exist
+        r+       Read/write, file must exist
+        w        Create file, truncate if exists
+        x or w-  Create file, fail if exists
+        a        Read/write if exists, create otherwise
 
         Parameters
         ----------
-        n_dims : int
+        filename : str
+            File path
+
+        mode : str
+            Mode specification for opening the HDF5 file.
+
+        topology : str
+            JSON string representing topology of system being simulated.
+
+        units : dict of str : str, optional
+            Mapping of trajectory field names to string specs
+            for units.
+
+        sparse_fields : list of str, optional
+            List of trajectory fields that should be initialized as sparse.
+
+        feature_shapes : dict of str : shape_spec, optional
+            Mapping of trajectory fields to their shape spec for initialization.
+
+        feature_dtypes : dict of str : dtype_spec, optional
+            Mapping of trajectory fields to their shape spec for initialization.
+
+        n_dims : int, default: 3
+            Set the number of spatial dimensions for the default
+            positions trajectory field.
+
+        alt_reps : dict of str : list of int, optional
+            Specifies that there will be 'alt_reps' of positions each
+            named by the keys of this mapping and containing the
+            indices in each value list.
+
+        main_rep_idxs : list of int, optional
+            The indices of atom positions to save as the main 'positions'
+            trajectory field. Defaults to all atoms.
+
+        expert_mode : bool
+            If True no initialization is performed other than the
+            setting of the filename. Useful mainly for debugging.
+
+        Raises
+        ------
+        AssertionError
+            If the mode is not one of the supported mode specs.
+
+        AssertionError
+            If a topology is not given for a creation mode.
+
+        Warns
+        -----
+        If initialization data was given but the file was opened in a read mode.
 
         """
 
-        # we use the module defaults for the datasets to initialize them
-        field_feature_shapes = dict(FIELD_FEATURE_SHAPES)
-        field_feature_dtypes = dict(FIELD_FEATURE_DTYPES)
+        self.closed = None
 
-        # get the number of coordinates of positions. If there is a
-        # main_reps then we have to set the number of atoms to that,
-        # if not we count the number of atoms in the topology
-        if self._main_rep_idxs is None:
-            self._n_coords = json_top_atom_count(self.topology)
-            self._main_rep_idxs = list(range(self._n_coords))
+        if expert_mode is True:
+            self._h5 = None
+            self._wepy_mode = None
+            self._h5py_mode = None
+            self.closed = None
+
+            # terminate the constructor here
+            return None
+
+        if mode not in self.MODES:
+            raise ValueError(
+                f"mode must be either one of: {self.MODES}"
+            )
+
+        _constructor_data = {
+            "topology" : topology,
+            "units" : units,
+            "sparse_fields" : sparse_fields,
+            "feature_shapes" : feature_shapes,
+            "feature_dtypes" : feature_dtypes,
+            "n_dims" : n_dims,
+            "alt_reps" : alt_reps,
+            "main_rep_idxs" : main_rep_idxs,
+        }
+
+        # create file mode: 'w' will create a new file or overwrite,
+        # 'w-' and 'x' will not overwrite but will create a new file
+        if mode in {"w-", "x"} and filename.exists():
+            raise FileExistsError(
+                f"WepyHDF5 file already exists and will not be overwritten in mode: {mode}"
+            )
+
+        elif mode in {"w", "w-", "x"}:
+            # check for required args
+            if topology is None:
+                raise ValueError(
+                    f"In creation mode ({mode}) you must provide topology."
+                )
+
+
+        elif mode in {"r", "r+"}:
+
+            # if any data was given, warn the user
+            if any(
+                _given_data := {
+                    key
+                    for key, value
+                    in _constructor_data.items()
+                    if value is not None
+                }
+            ):
+                raise ValueError(
+                    f"Data was given but opening in read mode: {_given_data}",
+                )
+
+
+        
+        self._filename = filename
+        self._swmr_mode = swmr_mode
+
+        # the top level mode enforced by wepy.hdf5
+        self._wepy_mode = mode
+
+        # the lower level h5py mode. THis was originally different to
+        # accomodate different modes at teh wepy level for
+        # concatenation. I will leave these separate because this is
+        # used elsewhere and could be a feature in the future.
+        self._h5py_mode = mode
+
+        # TODO: cleanup some of these resources so they are not in
+        # memory if they are large, like the topology
+        
+        # Temporary metadata: used to initialize the object but not
+        # used after that
+
+        self._topology = topology
+        self._units = units
+        self._n_dims = n_dims
+        self._n_coords = None
+
+        # set hidden feature shapes and dtype, which are only
+        # referenced if needed when trajectories are created. These
+        # will be saved in the settings section in the actual HDF5
+        # file
+        self._field_feature_shapes_kwarg = feature_shapes
+        self._field_feature_dtypes_kwarg = feature_dtypes
+        self._field_feature_dtypes = None
+        self._field_feature_shapes = None
+
+        # save the sparse fields as a private variable for use in the
+        # create constructor
+        if sparse_fields is None:
+            self._sparse_fields = ()
         else:
-            self._n_coords = len(self._main_rep_idxs)
+            self._sparse_fields = sparse_fields
 
-        # get the number of dimensions as a default
-        if n_dims is None:
-            self._n_dims = N_DIMS
+        # if we specify an atom subset of the main POSITIONS field
+        # we must save them
+        self._main_rep_idxs = main_rep_idxs
 
-        # feature shapes for positions and positions-like fields are
-        # not known at the module level due to different number of
-        # coordinates (number of atoms) and number of dimensions
-        # (default 3 spatial). We set them now that we know this
-        # information.
-        # add the postitions shape
-        field_feature_shapes[POSITIONS] = (self._n_coords, self._n_dims)
-        # add the positions-like field shapes (velocities and forces) as the same
-        for poslike_field in POSITIONS_LIKE_FIELDS:
-            field_feature_shapes[poslike_field] = (self._n_coords, self._n_dims)
+        # a dictionary specifying other alt_reps to be saved
+        if alt_reps is not None:
+            self._alt_reps = alt_reps
+            # all alt_reps are sparse
+            alt_rep_keys = [
+                "{}/{}".format(ALT_REPS, key) for key in self._alt_reps.keys()
+            ]
+            self._sparse_fields.extend(alt_rep_keys)
+        else:
+            self._alt_reps = {}
 
-        # set the attributes
-        self._field_feature_shapes = field_feature_shapes
-        self._field_feature_dtypes = field_feature_dtypes
+        # open the file and then run the different constructors based
+        # on the mode
+        self._h5 = h5py.File(
+            filename,
+            mode=self._h5py_mode,
+            libver=H5PY_LIBVER,
+            swmr=self._swmr_mode,
+        )
+        self.closed = False
+
+        # TOREV: do we need to set this again?
+        #
+        # set SWMR mode if asked for if we are in write mode also
+        if self._swmr_mode is True and mode in self.WRITE_MODES:
+            self._h5.swmr_mode = swmr_mode
+        
+
+        if self._wepy_mode in {"w", "x", "w-"}:
+            self._create_init()
+
+        # flush the buffers
+        self._h5.flush()
+
+        # set the h5py mode to the value in the actual h5py.File
+        # object after creation
+        self._h5py_mode = self._h5.mode
+        
+        self._h5.close()
+
+
+        # get rid of the temporary variables
+        del self._topology
+        del self._units
+        del self._n_dims
+        del self._n_coords
+        del self._field_feature_shapes_kwarg
+        del self._field_feature_dtypes_kwarg
+        del self._field_feature_shapes
+        del self._field_feature_dtypes
+        del self._sparse_fields
+        del self._main_rep_idxs
+        del self._alt_reps
+
+        # variable to reflect if it is closed or not, should be closed
+        # after initialization
+        self.closed = True
+
+    @property
+    def filename(self) -> Path:
+        """The path to the underlying HDF5 file."""
+        return self._filename
+
+
+    @property
+    def mode(self) -> FileMode:
+        """The WepyHDF5 mode this object was created with."""
+        return self._wepy_mode
+
+    @mode.setter
+    def mode(self, mode: FileMode) -> None:
+        """Set the mode for opening the file with."""
+        self.set_mode(mode)
+
+    def set_mode(self, mode: FileMode) -> None:
+        """Set the mode for opening the file with."""
+
+        if not self.closed:
+            raise RuntimeError("Cannot set the mode while the file is open.")
+
+        self._set_h5_mode(mode)
+
+        self._wepy_mode = mode
+
+    @property
+    def h5_mode(self) -> FileMode:
+        """The h5py.File mode the HDF5 file currently has."""
+        return self._h5.mode
+
+    def _set_h5_mode(self, h5_mode: FileMode) -> None:
+        """Set the mode to open the HDF5 file with.
+
+        This really shouldn't be set without using the main wepy mode
+        as they need to be aligned.
+
+        """
+
+        if not self.closed:
+            raise AttributeError("Cannot set the mode while the file is open.")
+
+        self._h5py_mode = h5_mode
+
+    def open(self, mode: FileMode | None = None) -> None:
+        """Open the underlying HDF5 file for access.
+
+        Parameters
+        ----------
+        mode : str
+           Valid mode spec. Opens the HDF5 file in this mode if given
+           otherwise uses the existing mode.
+
+        """
+
+        if mode is None:
+            mode = self.mode
+
+        if self.closed:
+            self.set_mode(mode)
+
+            self._h5 = h5py.File(
+                self._filename, mode, libver=H5PY_LIBVER, swmr=self.swmr_mode
+            )
+            self.closed = False
+        else:
+            raise IOError("This file is already open")
+
+    def close(self) -> None:
+        """Close the underlying HDF5 file."""
+
+        # check if the HDF5 is fully initialized yet
+
+        # not fully initialized yet
+        if not hasattr(self, "_h5") or self._h5 is None:
+            self.closed = True
+
+        elif not self.closed:
+            self._h5.flush()
+            self._h5.close()
+            self.closed = True
+
+    @property
+    def h5(self) -> h5py.File:
+        """The underlying h5py.File object."""
+        return self._h5
+
+    def __del__(self):
+        self.close()
+
+    # context manager methods
+
+    def __enter__(self):
+        self.open()
+        # self._h5 = h5py.File(self._filename,
+        #                      libver=H5PY_LIBVER, swmr=self._swmr_mode)
+        # self.closed = False
+        return self
+
+    def __exit__(self, exc_type, exc_value, exc_tb):
+        self.close()
+
+    @property
+    def swmr_mode(self):
+        return self._swmr_mode
+
+    @swmr_mode.setter
+    def swmr_mode(self, val):
+        self._swmr_mode = val
+
+    #### hidden methods (_method_name)
+
+    ### constructors
 
     def _get_field_path_grp(self, run_idx, traj_idx, field_path):
         """Given a field path for the trajectory returns the group the field's
@@ -1193,30 +1333,6 @@ class WepyHDF5:
 
         return grp, field_name
 
-    def _init_continuations(self):
-        """This will either create a dataset in the settings for the
-        continuations or if continuations already exist it will reinitialize
-        them and delete the data that exists there.
-
-        Returns
-        -------
-        continuation_dset : h5py.Dataset
-
-        """
-
-        # if the continuations dset already exists we reinitialize the
-        # data
-        if CONTINUATIONS in self.settings_grp:
-            cont_dset = self.settings_grp[CONTINUATIONS]
-            cont_dset.resize((0, 2))
-
-        # otherwise we just create the data
-        else:
-            cont_dset = self.settings_grp.create_dataset(
-                CONTINUATIONS, shape=(0, 2), dtype=int, maxshape=(None, 2)
-            )
-
-        return cont_dset
 
     def _add_run_init(self, run_idx, continue_run=None):
         """Routines for creating a run includes updating and setting object
@@ -2476,84 +2592,6 @@ class WepyHDF5:
 
     ### File Utilities
 
-    @property
-    def filename(self):
-        """The path to the underlying HDF5 file."""
-        return self._filename
-
-    def open(self, mode=None):
-        """Open the underlying HDF5 file for access.
-
-        Parameters
-        ----------
-        mode : str
-           Valid mode spec. Opens the HDF5 file in this mode if given
-           otherwise uses the existing mode.
-
-        """
-
-        if mode is None:
-            mode = self.mode
-
-        if self.closed:
-            self.set_mode(mode)
-
-            self._h5 = h5py.File(
-                self._filename, mode, libver=H5PY_LIBVER, swmr=self.swmr_mode
-            )
-            self.closed = False
-        else:
-            raise IOError("This file is already open")
-
-    def close(self):
-        """Close the underlying HDF5 file."""
-        if not self.closed:
-            self._h5.flush()
-            self._h5.close()
-            self.closed = True
-
-    @property
-    def mode(self):
-        """The WepyHDF5 mode this object was created with."""
-        return self._wepy_mode
-
-    @mode.setter
-    def mode(self, mode):
-        """Set the mode for opening the file with."""
-        self.set_mode(mode)
-
-    def set_mode(self, mode):
-        """Set the mode for opening the file with."""
-
-        if not self.closed:
-            raise AttributeError("Cannot set the mode while the file is open.")
-
-        self._set_h5_mode(mode)
-
-        self._wepy_mode = mode
-
-    @property
-    def h5_mode(self):
-        """The h5py.File mode the HDF5 file currently has."""
-        return self._h5.mode
-
-    def _set_h5_mode(self, h5_mode):
-        """Set the mode to open the HDF5 file with.
-
-        This really shouldn't be set without using the main wepy mode
-        as they need to be aligned.
-
-        """
-
-        if not self.closed:
-            raise AttributeError("Cannot set the mode while the file is open.")
-
-        self._h5py_mode = h5_mode
-
-    @property
-    def h5(self):
-        """The underlying h5py.File object."""
-        return self._h5
 
     ### h5py object access
 
