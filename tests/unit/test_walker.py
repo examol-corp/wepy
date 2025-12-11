@@ -9,6 +9,7 @@ from wepy.missing import MISSING
 from wepy.walker import (
     Walker,
     WalkerState,
+    AttrsWalkerStateMixin,
     clone,
     keep_merge,
     merge,
@@ -21,7 +22,7 @@ from wepy.walker import (
 MockKeys = Literal["a", "b"]
 MockDataValue = int | str
 
-
+# Example of writing a state from scratch
 class MockData(TypedDict):
     a: int
     b: str
@@ -41,8 +42,14 @@ class MockWalkerState(WalkerState):
     def dict(self) -> MockData:
         return attrs.asdict(self)
 
+# example of using the Attrs mixin to write those methods for you
+@attrs.define
+class MockWalkerStateMixin(AttrsWalkerStateMixin, WalkerState):
+    a: int
+    b: str
 
-class TestWalkerState:
+
+class Test_WalkerState:
 
     def test___init__(self):
 
@@ -64,6 +71,28 @@ class TestWalkerState:
             "b": "hello",
         }
 
+class Test_AttrsWalkerStateMixin:
+
+    def test___init__(self):
+
+        MockWalkerStateMixin(a=1, b="hello")
+
+    def test___getitem__(self):
+
+        assert MockWalkerStateMixin(a=1, b="hello")["a"] == 1
+        assert MockWalkerStateMixin(a=1, b="hello")["b"] == "hello"
+
+    def test___eq__(self):
+
+        assert MockWalkerStateMixin(a=1, b="hello") == MockWalkerStateMixin(a=1, b="hello")
+        assert MockWalkerStateMixin(a=1, b="hello") != MockWalkerStateMixin(a=100, b="hello")
+
+    def test_dict(self):
+        assert MockWalkerStateMixin(a=1, b="hello").dict() == {
+            "a": 1,
+            "b": "hello",
+        }
+    
 
 class TestWalker:
 

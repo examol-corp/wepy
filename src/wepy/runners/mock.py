@@ -16,13 +16,13 @@ from wepy.runners.runner import (
     RunnerStatus,
     RunSegmentData,
 )
-from wepy.walker import WalkerState
+from wepy.walker import WalkerState, AttrsWalkerStateMixin
 
 logger = logging.getLogger(__name__)
 
 
 @attrs.define
-class MockState(WalkerState):
+class MockState(AttrsWalkerStateMixin, WalkerState):
     a: int
 
 
