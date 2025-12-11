@@ -17,7 +17,6 @@ from wepy_tools.systems.lennard_jones import LennardJonesPair
 
 STEP_SIZE = 2 * openmm.unit.femtosecond
 
-
 def test_serial_mapper():
 
     lj_sys = LennardJonesPair()
@@ -61,7 +60,7 @@ def test_serial_mapper():
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
-        resampler=NoResampler(),
+        resampler_factory=NoResampler,
         work_mapper_factory=OpenMMSerialWorkMapperFactory(
             platform="Reference",
         )
@@ -75,7 +74,7 @@ def test_serial_mapper():
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
-        resampler=NoResampler(),
+        resampler_factory=NoResampler,
         work_mapper_factory=OpenMMSerialWorkMapperFactory(
             platform="CPU",
             global_platform_properties={"Threads" : "1"},
@@ -90,7 +89,7 @@ def test_serial_mapper():
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
-        resampler=NoResampler(),
+        resampler_factory=NoResampler,
         work_mapper_factory=OpenMMSerialWorkMapperFactory(
             platform="CPU",
             global_platform_properties={"Threads" : "4"},
@@ -147,7 +146,7 @@ def test_proc_pool_mapper():
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
-        resampler=NoResampler(),
+        resampler_factory=NoResampler,
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="Reference",
             num_procs=4,
@@ -169,7 +168,7 @@ def test_proc_pool_mapper():
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
-        resampler=NoResampler(),
+        resampler_factory=NoResampler,
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
             num_procs=len(walker_states),
@@ -189,7 +188,7 @@ def test_proc_pool_mapper():
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
-        resampler=NoResampler(),
+        resampler_factory=NoResampler,
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
             num_procs=len(walker_states),
@@ -241,7 +240,7 @@ def test_proc_pool_mapper():
 #     sim_manager = Manager(
 #         init_walkers=init_walkers,
 #         runner_factory=runner_factory,
-#         resampler=NoResampler(),
+#         resampler_factory=NoResampler,
 #         work_mapper_factory=OpenMMRayWorkMapperFactory(
 #             platform="Reference",
 #             num_procs=1,

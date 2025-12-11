@@ -13,33 +13,40 @@ import psutil
 import mdtraj
 # TODO: use the high-level API imports
 from wepy.walker import Walker
-from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState, HeartBeatLoggingReporterFactory, OpenMMStateWrapper
+from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState, OpenMMStateWrapper
+from wepy.runners.openmm.runner import _DEFAULT_STATE_TIME_INTERVAL, _DEFAULT_HEARTBEAT_INTERVAL
 from wepy.sim_manager import Manager
 from wepy.work_mapper.openmm import OpenMMProcPoolWorkMapperFactory
-from wepy.resampling.resamplers.revo import REVOResampler
+from wepy.resampling.resamplers.revo import REVOResamplerFactory
 from wepy.util.mdtraj import mdtraj_to_json_topology
-from wepy.runners.openmm.logger import HeartBeatLoggingReporter
 from wepy.resampling.resamplers.noresampler import NoResampler
 from wepy.util.mdtraj import json_to_mdtraj_topology
 
 from wepy_tools.systems.lennard_jones import LennardJonesPair, PairDistance
 from wepy_tools.systems.alanine_dipeptide import AlanineDipeptideRamachandranDistance, AlanineDipeptideExplicitSystem
 
+STEP_SIZE = 2. * openmm.unit.femtosecond
+TEMPERATURE = 300. * openmm.unit.kelvin
+
+# minimum number of steps to hit the logging reporters, useful just
+# for testing the defaults
+TIME_INTERVAL_STEPS = round(_DEFAULT_STATE_TIME_INTERVAL / STEP_SIZE)
+MIN_INTERVAL_STEPS = (
+        TIME_INTERVAL_STEPS
+        if TIME_INTERVAL_STEPS > _DEFAULT_HEARTBEAT_INTERVAL
+        else _DEFAULT_HEARTBEAT_INTERVAL
+    )
+
 def test_lennard_jones_revo_procpool():
 
     test_sys = LennardJonesPair()
 
-    integrator = openmm.LangevinIntegrator(300.0, 0.1, 0.002)
+    integrator = openmm.LangevinIntegrator(TEMPERATURE, 0.1, STEP_SIZE)
 
     runner_factory = OpenMMRunnerFactory(
         system=test_sys.system,
         topology=test_sys.topology,
         integrator=integrator,
-        # For this test we do want heart beat at shorter interval
-        openmm_reporter_factories=[
-            # heart beat every step
-            HeartBeatLoggingReporterFactory(step_interval=2)
-        ]
     )
 
     num_walkers = 4
@@ -82,43 +89,38 @@ def test_lennard_jones_revo_procpool():
 
     distance_metric = PairDistance()
 
-    resampler = REVOResampler(
+    resampler_factory = REVOResamplerFactory(
         merge_dist=4,
         char_dist=0.1,
-        distance=distance_metric,
-        num_proc=num_workers,
-        # num_proc=1,
+        distance_metric=distance_metric,
     )
 
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
-        # DEBUG
-        # resampler=resampler,
-        resampler=NoResampler(),
+        resampler_factory=resampler_factory,
+        # resampler_factory=NoResampler,
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             # DEBUG
-            platform="Reference",
-            num_procs=1,
-            # platform="CPU",
-            # num_procs=num_workers,
+            # platform="Reference",
+            # num_procs=1,
+            platform="CPU",
+            num_procs=num_workers,
             # global_platform_properties={"Threads" : "1"},
-            # # global_platform_properties={"Threads" : str(cores_per_worker)},
+            global_platform_properties={"Threads" : str(cores_per_worker)},
         ),
     )
 
     new_walkers, sim_components  = sim_manager.run_simulation(
-        n_cycles=1,
-        segment_lengths=10,
+        n_cycles=2,
+        segment_lengths=MIN_INTERVAL_STEPS * 2 + 10,
     )
 
 def test_alanine_dipeptide_revo_procpool():
 
-    TEMPERATURE = 300. * openmm.unit.kelvin
-
     ala_sys = AlanineDipeptideExplicitSystem()
 
-    integrator = openmm.LangevinIntegrator(TEMPERATURE, 0.1, 0.002)
+    integrator = openmm.LangevinIntegrator(TEMPERATURE, 0.1, STEP_SIZE)
 
     # add the pseudo forces like barostat
     barostat = openmm.MonteCarloBarostat(
@@ -131,11 +133,6 @@ def test_alanine_dipeptide_revo_procpool():
         system=ala_sys.system,
         topology=ala_sys.topology,
         integrator=integrator,
-        # For this test we do want heart beat at shorter interval
-        openmm_reporter_factories=[
-            # heart beat every step
-            HeartBeatLoggingReporterFactory(step_interval=2)
-        ]
     )
 
     num_walkers = 4
@@ -170,29 +167,27 @@ def test_alanine_dipeptide_revo_procpool():
 
     distance_metric = AlanineDipeptideRamachandranDistance(ala_sys.json_top)
 
-    resampler = REVOResampler(
+    resampler_factory = REVOResamplerFactory(
         merge_dist=4,
         char_dist=0.1,
-        distance=distance_metric,
-        num_proc=num_workers,
+        distance_metric=distance_metric,
     )
 
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
         # resampler=NoResampler(),
-        resampler=resampler,
+        resampler_factory=resampler_factory,
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
-            # num_procs=2,
-            # platform="Reference",
             platform="CPU",
             num_procs=num_workers,
             global_platform_properties={"Threads" : str(cores_per_worker)},
         ),
     )
 
+
     new_walkers, sim_components  = sim_manager.run_simulation(
         n_cycles=2,
-        segment_lengths=100,
+        segment_lengths=MIN_INTERVAL_STEPS * 2 + 10,
     )
     
