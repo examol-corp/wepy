@@ -1,8 +1,6 @@
 # Standard Library
 from typing import TypedDict
 
-# Third Party Library
-
 # First Party Library
 from wepy.resampling.decisions.no_decision import (
     NoDecision,
@@ -65,3 +63,12 @@ class NoResampler(Resampler):
 
         # the resampled walkers are just the walkers
         return walkers, resampling_data, resampler_data
+
+
+class NoResamplerFactory:
+
+    def __init__(self) -> None:
+        pass
+
+    def __call__(self, num_cores: int) -> NoResampler:
+        return NoResampler()

@@ -5,8 +5,6 @@ import logging
 import attrs
 import numpy as np
 
-# First Party Library
-
 # Local Modules
 from .base import DistanceABC
 

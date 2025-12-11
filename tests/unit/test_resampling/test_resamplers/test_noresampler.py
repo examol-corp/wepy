@@ -1,11 +1,11 @@
 # First Party Library
 from wepy.resampling.decisions.no_decision import NothingDecisionEnum
-from wepy.resampling.resamplers.noresampler import NoResampler
+from wepy.resampling.resamplers.noresampler import NoResampler, NoResamplerFactory
 from wepy.runners.mock import MockState
 from wepy.walker import Walker
 
 
-class TestNoResampler:
+class Test_NoResampler:
 
     def test_resample(self):
 
@@ -47,3 +47,9 @@ class TestNoResampler:
             ],
             [{}],
         )
+
+
+def test_NoResamplerFactory():
+
+    factory = NoResamplerFactory()
+    factory(num_cores=1)

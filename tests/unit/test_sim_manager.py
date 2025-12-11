@@ -5,7 +5,7 @@ import copy
 import pytest
 
 # First Party Library
-from wepy.resampling.resamplers.noresampler import NoResampler
+from wepy.resampling.resamplers.noresampler import NoResamplerFactory
 from wepy.runners.mock import MockError, MockRunnerFactory, MockState
 from wepy.runners.runner import RunnerStatus, RunSegmentData
 from wepy.sim_manager import (
@@ -23,7 +23,7 @@ from wepy.work_mapper.serial import SerialMapper
 def sim_components() -> tuple[
     list[Walker],
     MockRunnerFactory,
-    type[NoResampler],
+    NoResamplerFactory,
 ]:
 
     num_walkers = 4
@@ -37,7 +37,7 @@ def sim_components() -> tuple[
         for walker_state in range(num_walkers)
     ]
 
-    return init_walkers, MockRunnerFactory(fail=False), NoResampler
+    return init_walkers, MockRunnerFactory(fail=False), NoResamplerFactory()
 
 
 class Test_ManagerStateMachine:
