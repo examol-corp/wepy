@@ -10,6 +10,7 @@ Configurable platforms.
 import copy
 
 # Third Party Library
+import pytest
 import mdtraj
 import openmm
 import psutil
@@ -45,6 +46,8 @@ MIN_INTERVAL_STEPS = (
     else _DEFAULT_HEARTBEAT_INTERVAL
 )
 
+DEFAULT_CYCLE_TIME = 10. * openmm.unit.picosecond
+DEFAULT_CYCLE_STEPS = round(DEFAULT_CYCLE_TIME / STEP_SIZE)
 
 def test_lennard_jones_revo_procpool():
 
@@ -58,7 +61,7 @@ def test_lennard_jones_revo_procpool():
         integrator=integrator,
     )
 
-    num_walkers = 4
+    num_walkers = 48
 
     init_state = OpenMMState.from_dwim(
         positions=test_sys.positions,
@@ -114,11 +117,12 @@ def test_lennard_jones_revo_procpool():
     )
 
     new_walkers, sim_components = sim_manager.run_simulation(
-        n_cycles=2,
-        segment_lengths=MIN_INTERVAL_STEPS * 2 + 10,
+        n_cycles=10,
+        segment_lengths=DEFAULT_CYCLE_STEPS,
     )
 
-
+# disable timeout for this one
+@pytest.mark.timeout(timeout=0)
 def test_alanine_dipeptide_revo_procpool():
 
     ala_sys = AlanineDipeptideExplicitSystem()
@@ -138,7 +142,7 @@ def test_alanine_dipeptide_revo_procpool():
         integrator=integrator,
     )
 
-    num_walkers = 4
+    num_walkers = 10
 
     # TODO: remove the need to deepcopy and have the components make
     # their own copies if necessary
@@ -179,11 +183,25 @@ def test_alanine_dipeptide_revo_procpool():
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
             num_procs=num_workers,
+            # NOTE,TOREV: in practice not limiting this is just faster
+            # and gets better utilization. But for tests we don't want
+            # it to eat up all the CPU so we limit it and take
+            # longer. In CI we probably want it to use everything
+            # though so review this later. This is only true when
+            # there are very few walkers though and with more CPU
+            # utilization goes way up
             global_platform_properties={"Threads": str(cores_per_worker)},
         ),
     )
 
+    # new_walkers, sim_components = sim_manager.run_simulation(
+    #     n_cycles=2,
+    #     segment_lengths=MIN_INTERVAL_STEPS * 2 + 10,
+    # )
+
+    # short number of steps but many cycles to exercise the pools
     new_walkers, sim_components = sim_manager.run_simulation(
-        n_cycles=2,
-        segment_lengths=MIN_INTERVAL_STEPS * 2 + 10,
+        n_cycles=100,
+        segment_lengths=10,
     )
+    

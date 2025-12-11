@@ -19,7 +19,10 @@ check:
     uv run mypy src
 
 test:
-    uv run pytest --import-mode=importlib tests/unit
+    uv run pytest tests/unit
+
+test-integration:
+    uv run pytest --durations=0 -s -o log_cli=true --log-cli-level=INFO tests/integration
 
 clean:
     find . -type d -name "__pycache__" -prune -exec rm -rf {} +
