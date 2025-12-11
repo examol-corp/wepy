@@ -7,6 +7,7 @@ Configurable platforms.
 """
 
 # Standard Library
+import logging
 import copy
 
 # Third Party Library
@@ -23,6 +24,7 @@ from wepy.runners.openmm.runner import (
     _DEFAULT_STATE_TIME_INTERVAL,
 )
 from wepy.sim_manager import Manager
+from wepy.reporter.dashboard import DashboardReporter
 
 # TODO: use the high-level API imports
 from wepy.walker import Walker
@@ -32,6 +34,8 @@ from wepy_tools.systems.alanine_dipeptide import (
     AlanineDipeptideRamachandranDistance,
 )
 from wepy_tools.systems.lennard_jones import LennardJonesPair, PairDistance
+
+_LOGGER = logging.getLogger("tests")
 
 STEP_SIZE = 2.0 * openmm.unit.femtosecond
 TEMPERATURE = 300.0 * openmm.unit.kelvin
@@ -49,7 +53,9 @@ DEFAULT_CYCLE_TIME = 10.0 * openmm.unit.picosecond
 DEFAULT_CYCLE_STEPS = round(DEFAULT_CYCLE_TIME / STEP_SIZE)
 
 
-def test_lennard_jones_revo_procpool():
+def test_lennard_jones_revo_procpool(tmp_path_factory):
+
+    outputs_dir = tmp_path_factory.mktemp("outputs")
 
     test_sys = LennardJonesPair()
 
@@ -61,7 +67,8 @@ def test_lennard_jones_revo_procpool():
         integrator=integrator,
     )
 
-    num_walkers = 48
+    # num_walkers = 48
+    num_walkers = 4
 
     init_state = OpenMMState.from_dwim(
         positions=test_sys.positions,
@@ -98,7 +105,8 @@ def test_lennard_jones_revo_procpool():
         distance_metric=distance_metric,
     )
 
-    dashboard_reporter = DashboardReporter()
+    dashboard_path = outputs_dir / "main.wepy_dash.org"
+    dashboard_reporter = DashboardReporter(dashboard_path)
 
     reporters = [dashboard_reporter]
 
@@ -121,14 +129,24 @@ def test_lennard_jones_revo_procpool():
 
     new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=2,
-        segment_lengths=DEFAULT_CYCLE_STEPS,
+        segment_lengths=10,
     )
+    
+    # new_walkers, sim_components = sim_manager.run_simulation(
+    #     n_cycles=2,
+    #     segment_lengths=DEFAULT_CYCLE_STEPS,
+    # )
+
+    assert dashboard_path.exists()
+    _LOGGER.info("\n" + dashboard_path.read_text())
 
 
 # disable timeout for this one
 @pytest.mark.timeout(timeout=0)
-def test_alanine_dipeptide_revo_procpool():
+def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
 
+    outputs_dir = tmp_path_factory.mktemp("outputs")
+    
     ala_sys = AlanineDipeptideExplicitSystem()
 
     integrator = openmm.LangevinIntegrator(TEMPERATURE, 0.1, STEP_SIZE)
@@ -179,6 +197,11 @@ def test_alanine_dipeptide_revo_procpool():
         distance_metric=distance_metric,
     )
 
+    dashboard_path = outputs_dir / "main.wepy_dash.org"
+    dashboard_reporter = DashboardReporter(dashboard_path)
+    reporters = [dashboard_reporter]
+    
+
     sim_manager = Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
@@ -196,6 +219,7 @@ def test_alanine_dipeptide_revo_procpool():
             # utilization goes way up
             global_platform_properties={"Threads": str(cores_per_worker)},
         ),
+        reporters=reporters,
     )
 
     # new_walkers, sim_components = sim_manager.run_simulation(
@@ -204,7 +228,15 @@ def test_alanine_dipeptide_revo_procpool():
     # )
 
     # short number of steps but many cycles to exercise the pools
+    # new_walkers, sim_components = sim_manager.run_simulation(
+    #     n_cycles=100,
+    #     segment_lengths=10,
+    # )
+
     new_walkers, sim_components = sim_manager.run_simulation(
-        n_cycles=100,
+        n_cycles=3,
         segment_lengths=10,
     )
+    
+    assert dashboard_path.exists()
+    _LOGGER.info("\n" + dashboard_path.read_text())

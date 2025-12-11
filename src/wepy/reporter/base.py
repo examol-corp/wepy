@@ -32,9 +32,9 @@ class CycleReportDict(TypedDict):
     # TODO: types for all the Anys
     warp_data: list[Any]
     bc_data: list[Any]
-    progress_data: dict[Any]
-    resampling_data: Any
-    resampler_data: Any
+    progress_data: dict[str, Any]
+    resampling_data: list[list[dict[str, Any]]]
+    resampler_data: list[dict[str, Any]]
     n_segment_steps: int
     resampled_walkers: list[Walker]
     runner_precycle_time: float

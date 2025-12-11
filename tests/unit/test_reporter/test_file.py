@@ -11,7 +11,8 @@ from wepy.reporter.file import (
     ProgressiveFileReporterABC,
 )
 from wepy.resampling.resamplers.noresampler import NoResampler
-from wepy.runners.mock import MockRunner
+from wepy.runners.mock import MockRunner, MockState
+from wepy.walker import Walker
 from wepy.work_mapper.serial import SerialMapper
 
 
@@ -59,7 +60,16 @@ class Test_ProgressiveFileReporterABC:
     def test_init(self, tmp_path_factory):
 
         sim_components = {
-            "init_walkers": [],
+            "init_walkers": [
+                Walker(
+                    MockState(1),
+                    weight=0.1,
+                ),
+                Walker(
+                    MockState(1),
+                    weight=0.1,
+                ),
+            ],
             "runner": MockRunner(),
             "resampler": NoResampler(),
             "boundary_conditions": None,

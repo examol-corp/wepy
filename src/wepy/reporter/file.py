@@ -235,6 +235,7 @@ class ProgressiveFileReporterABC(FileReporterABC, ABC):
         # the file already exists (say from another run), and warn the
         # user. However, once the file has been created for this run
         # we need to overwrite it many times forcefully.
+        logger.info("Initializing ProgressiveFileReporter")
 
         # go thourgh each file managed by this reporter
         for file_idx, mode in enumerate(self.modes):
@@ -248,3 +249,7 @@ class ProgressiveFileReporterABC(FileReporterABC, ABC):
             # now that we have checked if the file exists we set it into
             # overwrite mode
             self.set_mode(file_idx, "w")
+
+    def cleanup(self, **kwargs: SimComponentArgs) -> None:
+        logger.info("Nothing to do.")
+        pass
