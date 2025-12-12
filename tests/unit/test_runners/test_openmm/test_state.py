@@ -337,7 +337,7 @@ class Test_OpenMMStateWrapper:
 
         assert state_wrapper1 == state_wrapper2
 
-    def test_to_dict(self, omm_context):
+    def test_dict(self, omm_context):
 
         state = omm_context.getState()
 
@@ -890,7 +890,7 @@ class Test_OpenMMState:
             positions=positions,
         )
 
-    def test_to_dict(self):
+    def test_dict(self):
 
         time = 0.0 * openmm.unit.picosecond
         bvs = UNIT_CUBE * openmm.unit.nanometer
@@ -933,7 +933,7 @@ class Test_OpenMMState:
             forces=forces,
         )
 
-        osd = os.to_dict()
+        osd = os.dict()
         assert set(osd.keys()) == {
             "time",
             "box_vectors",

@@ -817,7 +817,7 @@ class OpenMMState(WalkerState):
     def from_state(cls, state: openmm.State) -> Self:
         return cls.from_state_wrapper(OpenMMStateWrapper(state))
 
-    def to_dict(self) -> StateFieldData:
+    def dict(self) -> StateFieldData:
         return StateFieldData(
             {
                 k: v
@@ -841,7 +841,7 @@ class OpenMMState(WalkerState):
         """
 
         if system is not None:
-            wrapper = OpenMMStateWrapper.from_dict(system, self.to_dict())
+            wrapper = OpenMMStateWrapper.from_dict(system, self.dict())
 
         else:
 

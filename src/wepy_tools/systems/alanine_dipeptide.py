@@ -62,7 +62,7 @@ class AlanineDipeptideRamachandranDistance(Distance):
         state_dict = {
             # traj shape to match interface requirements
             key: np.array([quantity.value_in_unit(_unit)])
-            for key, quantity in state.to_dict().items()
+            for key, quantity in state.dict().items()
             if key in {"positions", "box_vectors"}
         }
         traj = traj_fields_to_mdtraj(
