@@ -1,7 +1,10 @@
 from pathlib import Path
 import json
+from typing import Callable
 import pytest
 import numpy as np
+from unittest.mock import patch, PropertyMock
+
 
 import h5py
 from wepy.hdf5 import (
@@ -10,12 +13,45 @@ from wepy.hdf5 import (
     WepyHDF5,
     _iter_field_paths,
 )
+from wepy.walker import Walker, WalkerStateBox
 
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 
+@pytest.fixture(scope="session")
+def wepy_h5_factory() -> Callable[[Path], WepyHDF5]:
 
-# def gen_wepy_h5(path: Path, mode: str) -> WepyHDF5:
-#     pass
+    test_sys = LennardJonesPair()
+
+    def _factory(path: Path) -> Path:
+
+        # create the file
+        WepyHDF5(
+            path,
+            mode="x",
+            topology=test_sys.json_top,
+        )
+
+        return path
+
+    return _factory
+
+_INIT_WALKERS = [
+                    Walker(
+                        WalkerStateBox(
+                            positions=np.array([
+                                [1., 1., 1.],
+                                [2., 2., 2.],
+                            ]),
+                            box_vectors=np.array([
+                                [1., 0., 0.],
+                                [0., 1., 0.],
+                                [0., 0., 1.],
+                            ]),
+                            kinetic_energy=3.455,
+                        ),
+                        0.1,
+                    ),
+                ]
 
 # @pytest.fixture(scope="session")
 # def wepy_h5_file_ro(tmpdir) -> WepyHDF5:
@@ -377,7 +413,7 @@ class Test_WepyHDF5:
     def test__create_init(self, tmp_path_factory):
 
         test_sys = LennardJonesPair()
-        
+
         d0 = tmp_path_factory.mktemp("0")
 
         h5_path = d0 / "test1.h5"
@@ -562,17 +598,140 @@ class Test_WepyHDF5:
         assert len(h5["units"]) == 1
         assert h5["units/positions"][()].decode() == "nanometer"
 
-    # def test_new_run(self):
+    def test_num_runs(self, wepy_h5_factory, tmpdir):
+
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            assert wepy_h5.num_runs == 0
+
+            wepy_h5.h5["runs"].create_group("0")
+            assert wepy_h5.num_runs == 1
+
+
+    def test_next_run_idx(self, wepy_h5_factory, tmpdir):
+
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            assert wepy_h5.next_run_idx() == 0
+            wepy_h5.h5["runs"].create_group("0")
+            assert wepy_h5.next_run_idx() == 1
+
+    # TODO: see new_run test for the same effect
+    # def test__add_init_walkers(self, wepy_h5_factory, tmpdir):
     #     pass
 
-    # def test_init_run_fields_resampling(self):
+    # def test__add_run_init(self, wepy_h5_factory, tmpdir):
+    #     pass
+
+    def test_new_run(self, wepy_h5_factory, tmpdir):
+
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=[
+                    Walker(
+                        WalkerStateBox(
+                            positions=np.array([
+                                [1., 1., 1.],
+                                [2., 2., 2.],
+                            ]),
+                            box_vectors=np.array([
+                                [1., 0., 0.],
+                                [0., 1., 0.],
+                                [0., 0., 1.],
+                            ]),
+                            kinetic_energy=3.455,
+                        ),
+                        0.1,
+                    ),
+                ],
+            )
+
+            assert "0" in wepy_h5.h5["runs"]
+            assert "init_walkers" in run_grp
+
+            assert len(run_grp["init_walkers"]) == 1
+            assert "0" in run_grp["init_walkers"]
+            assert set(run_grp["init_walkers/0"].keys()) == {
+                "weights",
+                "box_vectors",
+                "kinetic_energy",
+                "positions",
+            }
+
+            assert run_grp["init_walkers/0/weights"].shape == (1,1)
+            assert run_grp["init_walkers/0/box_vectors"].shape == (1,3,3)
+            assert run_grp["init_walkers/0/positions"].shape == (1,2,3)
+
+            # TOREV: this should probably be (1,1) shape, but waiting
+            # to see how things shake out later
+            assert run_grp["init_walkers/0/kinetic_energy"].shape == (1,)
+            
+            assert "trajectories" in run_grp
+
+            assert "run_idx" in run_grp.attrs
+            assert run_grp.attrs["run_idx"] == 0
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=[
+                    Walker(
+                        WalkerStateBox(),
+                        0.1,
+                    ),
+                ],
+                continue_run=0,
+                # extra attrs
+                foo="hello",
+            )
+
+            assert len(wepy_h5.h5["runs"]) == 2
+            assert "1" in wepy_h5.h5["runs"]
+
+            assert np.array_equal(
+                wepy_h5.h5["_settings/continuations"][:],
+                np.array([
+                    [1, 0]
+                ])
+            )
+
+            assert len(run_grp["init_walkers/0"].keys()) == 1
+            assert "weights" in run_grp["init_walkers/0"]
+
+            assert run_grp.attrs["run_idx"] == 1
+            assert "foo" in run_grp.attrs
+            assert run_grp.attrs["foo"] == "hello"
+
+            with pytest.raises(ValueError):
+                wepy_h5.new_run(
+                    init_walkers=[
+                        Walker(
+                            WalkerStateBox(),
+                            0.1,
+                        ),
+                    ],
+                    run_idx=1,
+                )
+
+            with pytest.raises(ValueError):
+                wepy_h5.new_run(
+                    init_walkers=[],
+                )
+
+
+    # TODO: I know these are working from the WepyHDF5Reporter tests,
+    # but these should be tested individually as time permits
+    
+    # def test_init_run_fields_resampling(self, wepy_h5_factory, tmpdir):
     #     pass
 
     # def test_init_run_fields_resampling_decision(self):
     #     pass
 
-    def test_init_run_fields_resampler(self):
-        pass
+    # def test_init_run_fields_resampler(self):
+    #     pass
 
     # def test_init_record_fields(self):
     #     pass
@@ -586,5 +745,189 @@ class Test_WepyHDF5:
     # def test_init_run_fields_bc(self):
     #     pass
 
+    def test_add_traj(self, wepy_h5_factory, tmpdir, monkeypatch):
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=_INIT_WALKERS
+            )
+
+            traj_grp = wepy_h5.add_traj(
+                0,
+                data={
+                    "positions" : np.array([[
+                        [2., 2., 2.,],
+                        [1., 1., 1.,],
+                    ]]),
+                    "box_vectors" : np.array([[
+                                [1., 0., 0.],
+                                [0., 1., 0.],
+                                [0., 0., 1.],
+                            ]]),
+                    "kinetic_energy" : np.array([
+                        [4.87],
+                    ]),
+                },
+                weights=np.array([[0.2]]),
+                metadata={"foo" : "hello"},
+            )
+
+            assert "0" in wepy_h5.h5["runs/0/trajectories"]
+            assert set(traj_grp.attrs.keys()) == {"run_idx", "traj_idx", "foo"}
+            assert traj_grp.attrs["run_idx"] == 0
+            assert traj_grp.attrs["traj_idx"] == 0
+            assert traj_grp.attrs["foo"] == "hello"
+
+            assert set(traj_grp.keys()) == {
+                "weights",
+                "positions",
+                "box_vectors",
+                "kinetic_energy",
+            }
+
+            assert traj_grp["weights"].shape == (1,1)
+            assert np.array_equal(
+                traj_grp["weights"][:],
+                np.array([[0.2]]),
+            )
+            assert traj_grp["positions"].shape == (1,2,3)
+            assert traj_grp["box_vectors"].shape == (1,3,3)
+            assert traj_grp["kinetic_energy"].shape == (1,1)
+
+            # TOREV: this is an old requirement and should be
+            # reviewed. Should use fields defined earlier in
+            # initialization. But currently just testing existing
+            # behavior
+
+            # must have positions
+            with pytest.raises(ValueError):
+
+                wepy_h5.add_traj(
+                    0,
+                    data={
+                        "box_vectors" : np.array([[
+                                    [1., 0., 0.],
+                                    [0., 1., 0.],
+                                    [0., 0., 1.],
+                                ]]),
+                        "kinetic_energy" : np.array([
+                            [4.87],
+                        ]),
+                    },
+                )
+
+            # default weights
+            traj_grp = wepy_h5.add_traj(
+                0,
+                data={
+                    "positions" : np.array([[
+                        [2., 2., 2.,],
+                        [1., 1., 1.,],
+                    ]]),
+                    "box_vectors" : np.array([[
+                                [1., 0., 0.],
+                                [0., 1., 0.],
+                                [0., 0., 1.],
+                            ]]),
+                    "kinetic_energy" : np.array([
+                        [4.87],
+                    ]),
+                },
+                weights=None,
+            )
+
+            assert "1" in wepy_h5.h5["runs/0/trajectories"]
+            assert traj_grp.attrs["run_idx"] == 0
+            assert traj_grp.attrs["traj_idx"] == 1
+
+            assert "weights" in traj_grp
+            assert traj_grp["weights"].shape == (1,1)
+            assert np.array_equal(
+                traj_grp["weights"][:],
+                np.array([[1.]]),
+            )
+
+            # TOREV: this can lead to data inconsistency
+
+            # local sparse_idxs
+            traj_grp = wepy_h5.add_traj(
+                0,
+                data={
+                    "positions" : np.array([
+                        [
+                            [2., 2., 2.,],
+                            [1., 1., 1.,],
+                        ],
+                        [
+                            [2., 2., 2.,],
+                            [1., 1., 1.,],
+                        ],
+                    ]),
+                    "kinetic_energy" : np.array([
+                        [4.87],
+                    ]),
+                },
+                sparse_idxs={"kinetic_energy" : [1,]},
+            )
+            assert "2" in wepy_h5.h5["runs/0/trajectories"]
+            assert traj_grp.attrs["run_idx"] == 0
+            assert traj_grp.attrs["traj_idx"] == 2
+
+            # NOTE: no box_vectors
+            assert set(traj_grp.keys()) == {
+                "weights",
+                "positions",
+                "kinetic_energy",
+            }
+
+            assert traj_grp["positions"].shape == (2, 2, 3)
+
+            assert set(traj_grp["kinetic_energy"].keys()) == {"_sparse_idxs", "data"}
+            assert traj_grp["kinetic_energy/_sparse_idxs"].shape == (1,)
+            assert np.array_equal(
+                traj_grp["kinetic_energy/_sparse_idxs"][:],
+                np.array([1]),
+            )
+
+            assert np.array_equal(
+                traj_grp["kinetic_energy/data"][:],
+                np.array([[4.87]]),
+            )
+
+            # unitialized sparse fields declared in initialization of
+            # file
+
+            # HACK: patch in the sparse_fields instead of doing it from scratch
+            with patch("wepy.hdf5.WepyHDF5.sparse_fields", new_callable=PropertyMock) as sparse_fields_mock:
+                sparse_fields_mock.return_value = np.array(["box_vectors"])
+
+                traj_grp = wepy_h5.add_traj(
+                    0,
+                    data={
+                        "positions" : np.array([
+                            [
+                                [2., 2., 2.,],
+                                [1., 1., 1.,],
+                            ],
+                            [
+                                [2., 2., 2.,],
+                                [1., 1., 1.,],
+                            ],
+                        ]),
+                    },
+                )
+            assert "3" in wepy_h5.h5["runs/0/trajectories"]
+            assert traj_grp.attrs["run_idx"] == 0
+            assert traj_grp.attrs["traj_idx"] == 3
+
+            assert "box_vectors" in traj_grp
+            assert set(traj_grp["box_vectors"].keys()) == {"_sparse_idxs", "data"}
+            assert traj_grp["box_vectors/_sparse_idxs"].shape == (0,)
+            assert traj_grp["box_vectors/data"].shape == (0,0,0)
+
+
+    def test_extend_traj(self, wepy_h5_factory, tmpdir):
+        pass
 # class Test_WepyHDF5_DataConformance:
 #     pass
