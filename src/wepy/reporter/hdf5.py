@@ -1,7 +1,8 @@
 # Standard Library
+from pathlib import Path
 import logging
+from typing import Self, TypedDict, Literal, Generic, TypeVar
 
-logger = logging.getLogger(__name__)
 # Standard Library
 
 # Third Party Library
@@ -9,12 +10,26 @@ import numpy as np
 
 # First Party Library
 from wepy.hdf5 import WepyHDF5
-from wepy.reporter.reporter import FileReporterABC
+from wepy.reporter.base import (
+    SimComponentArgs,
+    CycleReportDict,
+)
+from wepy.reporter.types import (
+    FieldShapeSpec,
+    FieldDtype,
+)
+from wepy.reporter.file import FileReporterABC, FileMode
 from wepy.util.json_top import json_top_atom_count
 from wepy.walker import Walker, WalkerState
+from wepy.resampling.resamplers.resampler import Resampler
+from wepy.boundary_conditions.boundary import BoundaryConditions
+from wepy.typing import Shape, Idxs, IdxArray
 
+logger = logging.getLogger(__name__)
 
-class WepyHDF5Reporter(FileReporterABC):
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+
+class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
     """Reporter for generating an HDF5 format (WepyHDF5) data file from
     simulations.
 
@@ -41,48 +56,82 @@ class WepyHDF5Reporter(FileReporterABC):
     # by this reporter, e.g. results.wepy.h5
     SUGGESTED_EXTENSIONS = ("wepy.h5",)
 
+    # static attributes
+    swmr_mode: bool
+    save_fields: tuple[str, ...] | None
+    _sparse_fields: dict[str, int]
+    _feature_shapes: dict[str, FieldShapeSpec] | None
+    _feature_dtypes: dict[str, FieldDtype] | None
+    _n_dims: int
+    resampling_fields: tuple[str, ...]
+    decision_enum_dict: dict[str, int]
+    resampler_fields: tuple[str, ...] | None
+    warping_fields: tuple[str, ...] | None
+    progress_fields: tuple[str, ...] | None
+    bc_fields: tuple[str, ...] | None
+    resampling_records: tuple[str, ...] | None
+    resampler_records: tuple[str, ...] | None
+    bc_records: tuple[str, ...] | None
+    warping_records: tuple[str, ...] | None
+    progress_records: tuple[str, ...] | None
+    main_rep_idxs: IdxArray | None
+    alt_reps_to_save: list[str]
+    alt_reps_idxs: dict[str, IdxArray]
+    _n_atoms: int
+    _all_atom_idxs: IdxArray
+    _sparse_fields: dict[str, int]
+    units: dict[str, str]
+
+    # stateful attributes
+    wepy_h5: WepyHDF5 | None
+    wepy_run_idx: int | None
+    
+    _tmp_topology: str | None
+
     def __init__(
         self,
-        save_fields=None,
-        topology=None,
-        units=None,
-        sparse_fields=None,
-        feature_shapes=None,
-        feature_dtypes=None,
-        n_dims=None,
-        main_rep_idxs=None,
-        all_atoms_rep_freq=None,
-        # dictionary of alt_rep keys and a tuple of (idxs, freq)
-        alt_reps=None,
-        # pass in the resampler and boundary
-        # conditions classes to automatically extract the
-        # needed data, the objects themselves are not saves
-        resampler=None,
-        boundary_conditions=None,
-        # or pass the things we need from them in manually
-        resampling_fields=None,
-        decision_enum_dict=None,
-        resampler_fields=None,
-        warping_fields=None,
-        progress_fields=None,
-        bc_fields=None,
-        resampling_records=None,
-        resampler_records=None,
-        warping_records=None,
-        bc_records=None,
-        progress_records=None,
-        # other settings
-        swmr_mode=False,
-        **kwargs,
+        file_path: Path,
+        topology: str,
+        # Resampling features
+        decision_enum_dict: dict[str, int],
+        resampling_fields: tuple[str, ...],
+        swmr_mode: bool = False,
+        save_fields: tuple[str, ...] | None = None,
+        units: dict[str, str] | None = None,
+        sparse_fields: dict[str, int | Literal[Ellipsis]] | None = None,
+        n_dims: int = 3,
+        main_rep_idxs: Idxs | None = None,
+        all_atoms_rep_freq: int | None = None,
+        alt_reps: dict[str, tuple[Idxs, int]] | None = None,
+        # TOREV: are these feature fields actually needed for the main
+        # trajectories? I never used them. If they are useful they
+        # should be derived from runner metadata in the common case. I
+        # think in most cases they are determined dynamically, so this
+        # needs to be amended.
+        feature_shapes: dict[str, FieldShapeSpec] | None = None,
+        feature_dtypes: dict[str, FieldDtype] | None = None,
+        # Resampling optionals
+        resampling_records: tuple[str, ...] | None = None,
+        # Resampler fields are optional
+        resampler_fields: tuple[str, ...] | None = None,
+        resampler_records: tuple[str, ...] | None = None,
+        # BC features, optional
+        warping_fields: tuple[str, ...] | None = None,
+        progress_fields: tuple[str, ...] | None = None,
+        bc_fields: tuple[str, ...] | None = None,
+        warping_records: tuple[str, ...] | None = None,
+        bc_records: tuple[str, ...] | None = None,
+        progress_records: tuple[str, ...] | None = None,
     ):
         """Constructor for the WepyHDF5Reporter.
 
         Parameters
         ----------
-        save_fields : tuple of str, default: None
-           A selection of fields from the walker states to be
-           stored. Allows for the ignoring of some states. If None all
-           fields from states will attempted to be saved.
+        
+        save_fields : A selection of fields from the walker states to
+           be stored. Allows for the ignoring of some states. If None
+           all fields from states will attempted to be saved. To not
+           save anything provide an empty tuple ().
 
         topology : str
             JSON string representing topology of system being simulated.
@@ -94,11 +143,13 @@ class WepyHDF5Reporter(FileReporterABC):
         sparse_fields : dict of str: int, optional
             List of trajectory fields that should be initialized as sparse.
 
-        feature_shapes : dict of str: shape_spec, optional
-            Mapping of trajectory fields to their shape spec for initialization.
+        feature_shapes : Mapping of trajectory fields to their shape
+            spec for initialization. Note that these are extras and the
+            defaults for OpenMM MD will automatically be configured.
 
-        feature_dtypes : dict of str: dtype_spec, optional
-            Mapping of trajectory fields to their shape spec for initialization.
+        feature_dtypes : Mapping of trajectory fields to their shape
+            spec for initialization. Note that these are extras and the
+            defaults for OpenMM MD will automatically be configured.
 
         n_dims : int, default: 3
             Set the number of spatial dimensions for the default
@@ -121,23 +172,6 @@ class WepyHDF5Reporter(FileReporterABC):
             The frequency at which to set an 'alt_rep' for all of the
             atoms in a simulation. Will be set as the field
             'alt_rep/all_atoms'.
-
-        resampler : Resampler object, optional but recommended
-            The resampler being used for the simulation. Is used as a
-            convenient container for a variety of constants needed for
-            specifying data for the resampling records. If this is not
-            given then these of the Other Parameters below must be
-            specified manually: resampling_fields, decision_enum_dict,
-            resampler_fields, resampling_records, resampler_records.
-
-        boundary_conditions : BoundaryConditions object, optional but recommended
-            The boundary conditions being used for the simulation. Is
-            used as a convenient container for a variety of constants
-            needed for specifying data for the warping and progress
-            records. If this is not given then these of the Other
-            Parameters below must be specified manually:
-            warping_fields, progress_fields, bc_fields,
-            warping_records, bc_records, progress_records
 
         swmr_mode : bool
            Whether to write to open the HDF5 in single-writer
@@ -188,113 +222,76 @@ class WepyHDF5Reporter(FileReporterABC):
         """
 
         # initialize inherited attributes
-        super().__init__(**kwargs)
+        super().__init__(
+            file_paths=[file_path],
+            # hardcode creation mode
+            modes=["x"],
+        )
 
         # set the preference for swmr mode, True or False, if this is
         # True then SWMR mode will be turned on when the file is
         # written to during reporting
         self.swmr_mode = swmr_mode
 
-        # do all the WepyHDF5 specific stuff
-
         self.wepy_run_idx = None
         self._tmp_topology = topology
+
         # which fields from the walker to save, if None then save all of them
         self.save_fields = save_fields
-        # dictionary of sparse_field_name -> int : frequency of cycles
-        # to save the field
 
-        # TODO: refine requirements of sparse fields. Do they need to
-        # be in the 'save_fields'?
+        # check sparse fields
+        if sparse_fields is not None:
 
-        self._sparse_fields = (
-            {field_name: freq for field_name, freq in sparse_fields.items()}
-            if sparse_fields is not None
-            else {}
-        )
+            if self.save_fields is None:
+                raise ValueError(
+                    f"The sparse fields were requested ({set(sparse_fields.keys())}) but no save fields requested."
+                )
+                
+            _missing_save_fields = set(
+                sparse_key
+                for sparse_key
+                in sparse_fields.keys()
+                if sparse_key not in self.save_fields
+            )
+
+            if len(_missing_save_fields) > 0:
+                raise ValueError(
+                    f"The sparse fields were requested ({_missing_save_fields}) but are not in"
+                    f" requested save fields ({self.save_fields})"
+                )
+
+            self._sparse_fields = sparse_fields
+
+        else:
+            self._sparse_fields = {}
+
         self._feature_shapes = feature_shapes
         self._feature_dtypes = feature_dtypes
         self._n_dims = n_dims
 
-        # get and set the record fields (naems, shapes, dtypes) for
-        # the resampler and the boundary conditions
-        if (resampling_fields is not None) and (decision_enum_dict is not None):
-            self.resampling_fields = resampling_fields
-            self.decision_enum = decision_enum_dict
-        elif resampler is not None:
-            self.resampling_fields = resampler.resampling_fields()
-            self.decision_enum = resampler.DECISION.enum_dict_by_name()
-        else:
-            self.resampling_fields = None
-            self.decision_enum = None
 
-        if resampler_fields is not None:
-            self.resampler_fields = resampler_fields()
-        elif resampler is not None:
-            self.resampler_fields = resampler.resampler_fields()
-        else:
-            self.resampler_fields = None
+        # required resampling fields
+        self.resampling_fields = resampling_fields
+        self.decision_enum_dict = decision_enum_dict
 
-        if warping_fields is not None:
-            self.warping_fields = warping_fields()
-        elif boundary_conditions is not None:
-            self.warping_fields = boundary_conditions.warping_fields()
-        else:
-            self.warping_fields = None
+        # optional resampler fields
+        self.resampler_fields = resampler_fields
+        self.resampling_records = resampling_records
+        self.resampler_records = resampler_records
 
-        if progress_fields is not None:
-            self.progress_fields = progress_fields()
-        elif boundary_conditions is not None:
-            self.progress_fields = boundary_conditions.progress_fields()
-        else:
-            self.progress_fields = None
-
-        if bc_fields is not None:
-            self.bc_fields = bc_fields()
-        elif boundary_conditions is not None:
-            self.bc_fields = boundary_conditions.bc_fields()
-        else:
-            self.bc_fields = None
+        # BC fields, optional
+        self.warping_fields = warping_fields
+        self.progress_fields = progress_fields
+        self.bc_fields = bc_fields
 
         # the fields which are records for table like reports
-        if resampling_records is not None:
-            self.resampling_records = resampling_records
-        elif resampler is not None:
-            self.resampling_records = resampler.resampling_record_field_names()
-        else:
-            self.resampling_records = None
-
-        if resampler_records is not None:
-            self.resampler_records = resampler_records
-        elif resampler is not None:
-            self.resampler_records = resampler.resampler_record_field_names()
-        else:
-            self.resampler_records = None
-
-        if bc_records is not None:
-            self.bc_records = bc_records
-        elif boundary_conditions is not None:
-            self.bc_records = boundary_conditions.bc_record_field_names()
-        else:
-            self.bc_records = None
-
-        if warping_records is not None:
-            self.warping_records = warping_records
-        elif boundary_conditions is not None:
-            self.warping_records = boundary_conditions.warping_record_field_names()
-        else:
-            self.warping_records = None
-
-        if progress_records is not None:
-            self.progress_records = progress_records
-        elif boundary_conditions is not None:
-            self.progress_records = boundary_conditions.progress_record_field_names()
-        else:
-            self.progress_records = None
+        self.bc_records = bc_records
+        self.warping_records = warping_records
+        self.progress_records = progress_records
 
         # the atom indices of the whole system that will be saved as
         # the main positions representation
-        self.main_rep_idxs = main_rep_idxs
+        self.main_rep_idxs = np.array(main_rep_idxs) if main_rep_idxs is not None else None
 
         # the idxs for alternate representations of the system
         # positions
@@ -302,13 +299,21 @@ class WepyHDF5Reporter(FileReporterABC):
         # this is a record of which alt_reps to actually save in the simulation
         self.alt_reps_to_save = []
         if alt_reps is not None:
-            self.alt_reps_idxs = {key: list(tup[0]) for key, tup in alt_reps.items()}
+            self.alt_reps_idxs = {
+                key: np.array(idxs)
+                for key, (idxs, frequence)
+                in alt_reps.items()
+            }
 
             # add the frequencies for these alt_reps to the
             # sparse_fields frequency dictionary
             for key, (idxs, freq) in alt_reps.items():
 
-                self.alt_reps_to_save.append(key)
+                if len(idxs) == 0:
+                    raise ValueError(
+                        f"No indices given for sparse field: {key}"
+                    )
+
 
                 alt_rep_key = "alt_reps/{}".format(key)
 
@@ -317,10 +322,16 @@ class WepyHDF5Reporter(FileReporterABC):
                 # very innefficient in comparison
                 if freq is Ellipsis or freq == 1 or freq == 0:
                     pass
-                else:
+                elif freq > 0:
                     self._sparse_fields[alt_rep_key] = freq
 
-                self.alt_reps_idxs[key] = list(idxs)
+                else:
+                    raise ValueError(
+                        f"Invalid frequency specifier ({freq}) for sparse field '{key}'"
+                    )
+
+                self.alt_reps_to_save.append(key)
+                self.alt_reps_idxs[key] = np.array(idxs)
 
         else:
             self.alt_reps_idxs = {}
@@ -363,29 +374,206 @@ class WepyHDF5Reporter(FileReporterABC):
         else:
             self.units = units
 
-    def init(self, continue_run=None, init_walkers=None, **kwargs):
-        # do the inherited stuff
-        super().init(**kwargs)
+    @classmethod
+    def from_components(
+        self,
+        file_path: Path,
+        topology: str,
+        resampler_class: type[Resampler],
+        feature_shapes: dict[str, FieldShapeSpec] | None = None,
+        feature_dtypes: dict[str, FieldDtype] | None = None,
+        boundary_conditions_class: type[BoundaryConditions] | None = None,
+        swmr_mode: bool = False,
+        save_fields: tuple[str, ...] | None = None,
+        units: dict[str, str] | None = None,
+        sparse_fields: dict[str, int] | None = None,
+        n_dims: int = 3,
+        main_rep_idxs: Idxs | None = None,
+        all_atoms_rep_freq: int | None = None,
+        alt_reps: dict[str, tuple[Idxs, int]]=None,
+    ) -> Self:
+        """Construct reporter from simulation components.
 
-        # open and initialize the HDF5 file
-        logger.info("Initializing HDF5 file at {}".format(self.file_path))
+        Does introspection on components to get information. Does not
+        save these objects as state.
 
-        self.wepy_h5 = WepyHDF5(
-            self.file_path,
-            mode=self.mode,
-            topology=self._tmp_topology,
-            units=self.units,
-            sparse_fields=list(self._sparse_fields.keys()),
-            feature_shapes=self._feature_shapes,
-            feature_dtypes=self._feature_dtypes,
-            n_dims=self._n_dims,
-            main_rep_idxs=self.main_rep_idxs,
-            alt_reps=self.alt_reps_idxs,
+        Parameters
+        ----------
+
+        resampler : Resampler object, optional but recommended
+            The resampler being used for the simulation. Is used as a
+            convenient container for a variety of constants needed for
+            specifying data for the resampling records. If this is not
+            given then these of the Other Parameters below must be
+            specified manually: resampling_fields, decision_enum_dict,
+            resampler_fields, resampling_records, resampler_records.
+
+        boundary_conditions : BoundaryConditions object, optional but recommended
+            The boundary conditions being used for the simulation. Is
+            used as a convenient container for a variety of constants
+            needed for specifying data for the warping and progress
+            records. If this is not given then these of the Other
+            Parameters below must be specified manually:
+            warping_fields, progress_fields, bc_fields,
+            warping_records, bc_records, progress_records
+
+        """
+
+        if boundary_conditions_class is not None:
+            warping_fields = boundary_conditions_class.warping_fields()
+            progress_fields = boundary_conditions_class.progress_fields()
+            bc_fields = boundary_conditions_class.bc_fields()
+            bc_records = boundary_conditions_class.bc_record_field_names()
+            warping_records = boundary_conditions_class.warping_record_field_names()
+            progress_records = boundary_conditions_class.progress_record_field_names()
+
+        else:
+            warping_fields = None
+            progress_fields = None
+            bc_fields = None
+            bc_records = None
+            warping_records = None
+            progress_records = None
+        
+
+        return WepyHDF5Reporter(
+            file_path=file_path,
+            topology=topology,
+            feature_shapes=feature_shapes,
+            feature_dtypes=feature_dtypes,
+            swmr_mode=swmr_mode,
+            save_fields=save_fields,
+            units=units,
+            sparse_fields=sparse_fields,
+            n_dims=n_dims,
+            main_rep_idxs=main_rep_idxs,
+            all_atoms_rep_freq=all_atoms_rep_freq,
+            alt_reps=alt_reps,
+            # components
+            resampling_fields=resampler_class.resampling_fields(),
+            decision_enum_dict=resampler_class.DECISION.enum_dict_by_name(),
+            resampler_fields = resampler_class.resampler_fields(),
+            resampling_records = resampler_class.resampling_record_field_names(),
+            resampler_records = resampler_class.resampler_record_field_names(),
+            warping_fields=warping_fields,
+            progress_fields=progress_fields,
+            bc_fields=bc_fields,
+            bc_records=bc_records,
+            warping_records=warping_records,
+            progress_records=progress_records,
         )
+
+    @property
+    def file_path(self) -> Path:
+        return self.file_paths[0]
+
+    @property
+    def mode(self) -> FileMode:
+        return self.modes[0]
+
+    @staticmethod
+    def _initialize_h5_run(
+        wepy_h5: WepyHDF5,
+        init_walkers: list[Walker[WalkerState_]],
+        resampling_fields: tuple[str, ...],
+        decision_enum_dict: dict[str, int],
+        continue_run: int | None = None,
+        resampler_fields: tuple[str, ...] | None = None,
+        warping_fields: tuple[str, ...] | None = None,
+        progress_fields: tuple[str, ...] | None = None,
+        bc_fields: tuple[str, ...] | None = None,
+        resampling_records: tuple[str, ...] | None = None,
+        resampler_records: tuple[str, ...] | None = None,
+        bc_records: tuple[str, ...] | None = None,
+        warping_records: tuple[str, ...] | None = None,
+        progress_records: tuple[str, ...] | None = None,
+    ) -> int:
+        """Initialize the WepyHDF5 data structures."""
+
+        if wepy_h5.mode != "r+":
+            raise IOError(f"wepy_h5 must be in non-creation read-write mode (r+), in '{wepy_h5.mode}'")
+
+        if not wepy_h5.closed:
+            raise IOError("WepyHDF5 is already open, must be closed.")
+
+        with wepy_h5:
+            # if this is a continuation run of another run we want to
+            # initialize it as such
+
+            # initialize a new run, we don't know which run it will be
+            # until it is created.
+            run_grp = wepy_h5.new_run(
+                init_walkers,
+                continue_run=continue_run,
+            )
+            wepy_run_idx = run_grp.attrs["run_idx"]
+
+            # initialize the run record groups using their fields
+            wepy_h5.init_run_fields_resampling(
+                wepy_run_idx,
+                resampling_fields,
+            )
+            # the enumeration for the values of resampling
+            wepy_h5.init_run_fields_resampling_decision(
+                wepy_run_idx,
+                decision_enum_dict,
+            )
+
+            if resampler_fields is not None:
+                wepy_h5.init_run_fields_resampler(
+                    wepy_run_idx,
+                    resampler_fields,
+                )
+            # set the fields that are records for tables etc. unless
+            # they are already set
+            if resampling_records is not None and  "resampling" not in wepy_h5.record_fields:
+                wepy_h5.init_record_fields(
+                    "resampling",
+                    resampling_records,
+                )
+            if resampler_records is not None and "resampler" not in wepy_h5.record_fields:
+                wepy_h5.init_record_fields(
+                    "resampler",
+                    resampler_records,
+                )
+
+            # if there were no warping fields set there is no boundary
+            # conditions and we don't initialize them
+            if warping_fields is not None:
+                wepy_h5.init_run_fields_warping(
+                    wepy_run_idx,
+                    warping_fields,
+                )
+                wepy_h5.init_run_fields_progress(
+                    wepy_run_idx,
+                    progress_fields,
+                )
+                wepy_h5.init_run_fields_bc(
+                    wepy_run_idx,
+                    bc_fields,
+                )
+                # table records
+                if "warping" not in wepy_h5.record_fields:
+                    wepy_h5.init_record_fields("warping", warping_records)
+                if "boundary_conditions" not in wepy_h5.record_fields:
+                    wepy_h5.init_record_fields(
+                        "boundary_conditions", bc_records
+                    )
+                if "progress" not in wepy_h5.record_fields:
+                    wepy_h5.init_record_fields("progress", progress_records)
+
+        return wepy_run_idx
+    
+    def init(self, **kwargs: SimComponentArgs) -> None:
+
+        # TODO: remove dynamic configuration. Instead replace with
+        # static configuration from the Runner for good defaults.
+        
+        ## Do checks on the inputs and figure out runtime field metadata
 
         # if we specify save fields only save these for the initial walkers
         if self.save_fields is not None:
-            state_fields = list(init_walkers[0].state.dict().keys())
+            state_fields = list(kwargs["init_walkers"][0].state.dict().keys())
 
             # make sure all the save_fields are present in the state
             assert all(
@@ -396,7 +584,7 @@ class WepyHDF5Reporter(FileReporterABC):
             ), "Not all specified save_fields present in walker states"
 
             filtered_init_walkers = []
-            for walker in init_walkers:
+            for walker in kwargs["init_walkers"]:
                 # make a new state by filtering the attributes of the old ones
                 state_d = {
                     k: v
@@ -432,77 +620,53 @@ class WepyHDF5Reporter(FileReporterABC):
                 filtered_init_walkers.append(Walker(new_state, walker.weight))
         # otherwise save the full state
         else:
-            filtered_init_walkers = init_walkers
+            filtered_init_walkers = kwargs["init_walkers"]
 
-        self.wepy_h5.set_mode(mode="r+")
-        with self.wepy_h5:
-            # if this is a continuation run of another run we want to
-            # initialize it as such
+        # Run the constructor intialization
+        logger.info(f"Initializing HDF5 file at {self.file_path}")
 
-            # initialize a new run
-            run_grp = self.wepy_h5.new_run(
-                filtered_init_walkers,
-                continue_run=continue_run,
-            )
-            self.wepy_run_idx = run_grp.attrs["run_idx"]
+        init_wepy_h5 = WepyHDF5(
+            self.file_path,
+            mode="x",
+            topology=self._tmp_topology,
+            units=self.units,
+            sparse_fields=list(self._sparse_fields.keys()),
+            feature_shapes_overrides=self._feature_shapes,
+            feature_dtypes_overrides=self._feature_dtypes,
+            n_dims=self._n_dims,
+            main_rep_idxs=self.main_rep_idxs,
+            alt_reps=self.alt_reps_idxs,
+        )
 
-            # initialize the run record groups using their fields
-            self.wepy_h5.init_run_fields_resampling(
-                self.wepy_run_idx,
-                self.resampling_fields,
-            )
-            # the enumeration for the values of resampling
-            self.wepy_h5.init_run_fields_resampling_decision(
-                self.wepy_run_idx,
-                self.decision_enum,
-            )
-            self.wepy_h5.init_run_fields_resampler(
-                self.wepy_run_idx,
-                self.resampler_fields,
-            )
-            # set the fields that are records for tables etc. unless
-            # they are already set
-            if "resampling" not in self.wepy_h5.record_fields:
-                self.wepy_h5.init_record_fields(
-                    "resampling",
-                    self.resampling_records,
-                )
-            if "resampler" not in self.wepy_h5.record_fields:
-                self.wepy_h5.init_record_fields(
-                    "resampler",
-                    self.resampler_records,
-                )
+        # delete the topology as it isn't needed anymore and we can
+        # get it from the HDF5. This will alleviate some memory
+        # pressure for large topologies
+        del self._tmp_topology
+        self._tmp_topology = None
 
-            # if there were no warping fields set there is no boundary
-            # conditions and we don't initialize them
-            if self.warping_fields is not None:
-                self.wepy_h5.init_run_fields_warping(
-                    self.wepy_run_idx,
-                    self.warping_fields,
-                )
-                self.wepy_h5.init_run_fields_progress(
-                    self.wepy_run_idx,
-                    self.progress_fields,
-                )
-                self.wepy_h5.init_run_fields_bc(
-                    self.wepy_run_idx,
-                    self.bc_fields,
-                )
-                # table records
-                if "warping" not in self.wepy_h5.record_fields:
-                    self.wepy_h5.init_record_fields("warping", self.warping_records)
-                if "boundary_conditions" not in self.wepy_h5.record_fields:
-                    self.wepy_h5.init_record_fields(
-                        "boundary_conditions", self.bc_records
-                    )
-                if "progress" not in self.wepy_h5.record_fields:
-                    self.wepy_h5.init_record_fields("progress", self.progress_records)
+        # then the file that is the actual attribute is opened in
+        # read-write non-create mode
+        self.wepy_h5 = WepyHDF5(
+            self.file_path,
+            mode='r+',
+        )
 
-        # if this was opened in a truncation mode, we don't want to
-        # overwrite old runs with future calls to init(). so we
-        # change the mode to read/write 'r+'
-        if self.mode == "w":
-            self.set_mode(0, "r+")
+        self._initialize_h5_run(
+            self.wepy_h5,
+            init_walkers=filtered_init_walkers,
+            continue_run=kwargs["continue_run"],
+            resampling_fields=self.resampling_fields,
+            decision_enum_dict=self.decision_enum_dict,
+            resampler_fields=self.resampler_fields,
+            warping_fields=self.warping_fields,
+            progress_fields=self.progress_fields,
+            bc_fields=self.bc_fields,
+            resampling_records=self.resampling_records,
+            resampler_records=self.resampler_records,
+            bc_records=self.bc_records,
+            warping_records=self.warping_records,
+            progress_records=self.progress_records,
+        )
 
     def cleanup(self, **kwargs):
         # it should be already closed at this point but just in case

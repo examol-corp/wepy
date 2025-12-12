@@ -561,7 +561,6 @@ class Test_WepyHDF5:
         assert "positions" in h5["units"]
         assert len(h5["units"]) == 1
         assert h5["units/positions"][()].decode() == "nanometer"
-        
 
     # def test_new_run(self):
     #     pass
@@ -572,8 +571,8 @@ class Test_WepyHDF5:
     # def test_init_run_fields_resampling_decision(self):
     #     pass
 
-    # def test_init_run_fields_resampler(self):
-    #     pass
+    def test_init_run_fields_resampler(self):
+        pass
 
     # def test_init_record_fields(self):
     #     pass

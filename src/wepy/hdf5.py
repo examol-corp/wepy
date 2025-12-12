@@ -4301,7 +4301,11 @@ class WepyHDF5:
         for name, value in decision_enum_dict.items():
             decision_grp.create_dataset(name, data=value)
 
-    def init_run_fields_resampler(self, run_idx, fields):
+    def init_run_fields_resampler(
+            self,
+            run_idx: int,
+            fields: list[str],
+    ) -> h5py.Group:
         """Initialize this record group fields datasets.
 
         Parameters
@@ -4377,7 +4381,12 @@ class WepyHDF5:
 
         return grp
 
-    def init_run_record_grp(self, run_idx, run_record_key, fields):
+    def init_run_record_grp(
+            self,
+            run_idx: int,
+            run_record_key: str,
+            fields: list[str],
+    ) -> h5py.Group:
         """Initialize a record group for a run.
 
         Parameters
@@ -4395,6 +4404,8 @@ class WepyHDF5:
             grp = self._init_run_sporadic_record_grp(run_idx, run_record_key, fields)
         else:
             grp = self._init_run_continual_record_grp(run_idx, run_record_key, fields)
+
+        return grp
 
     # TODO: should've been removed already just double checking things are good without it
     # def traj_n_frames(self, run_idx, traj_idx):
