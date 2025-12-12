@@ -391,11 +391,12 @@ it is a fairly straightforward task from a developers perspective.
 
 # Standard Library
 from pathlib import Path
+import copy
 import gc
 import itertools as it
 import json
 import logging
-from typing import Any
+from typing import Any, TypedDict, NotRequired, Literal
 
 # Standard Library
 import os.path as osp
@@ -405,6 +406,7 @@ from warnings import warn
 # Third Party Library
 import h5py
 import numpy as np
+from numpy.typing import NDArray
 
 # First Party Library
 from wepy.analysis.parents import resampling_panel
@@ -443,6 +445,8 @@ logger = logging.getLogger(__name__)
 # don't care about backwards compatibility with HDF5 1.8. Just update
 # in a new virtualenv if this is a problem for you
 H5PY_LIBVER = "latest"
+
+STRING_ENCODING = "utf-8"
 
 ## Header and settings keywords
 
@@ -628,7 +632,8 @@ FIELD_FEATURE_SHAPES: tuple[tuple[str, tuple[int, ...]]] = (
 )
 """Default shapes for the default fields."""
 
-FIELD_FEATURE_DTYPES = (
+FieldFeatureDtype = float | int
+FIELD_FEATURE_DTYPES: tuple[tuple[str, FieldFeatureDtype]] = (
     (POSITIONS, float),
     (VELOCITIES, float),
     (FORCES, float),
@@ -698,7 +703,38 @@ def _iter_field_paths(grp: h5py.Group):
             field_paths.append(field_name)
     return field_paths
 
+class Dtype(TypedDict):
+    kind: Literal["simple", "structured"]
+    str: NotRequired[str]
+    descr: NotRequired[list[tuple[str, str]]]
 
+def numpy_dtype_to_json(dtype: np.dtype) -> str:
+
+    payload: Dtype
+    if dtype.fields is None:
+        payload = {
+            "kind" : "simple",
+            "str" : dtype.str,
+        }
+
+    else:
+        payload = {
+            "kind" : "structured",
+            "descr" : dtype.descr,
+        }
+
+    # Warning only supports simple data types
+    return json.dumps(payload)
+
+def dtype_json_to_numpy(s: str) -> np.dtype:
+
+    payload = json.loads(s)
+
+    if payload["kind"] == "simple":
+        return np.dtype(payload["str"])
+    else:
+        return np.dtype(payload["descr"])
+    
 class WepyHDF5:
     """Wrapper for h5py interface to an HDF5 file object for creation and
     access of WepyHDF5 data.
@@ -728,10 +764,13 @@ class WepyHDF5:
     _units: dict[str, str] | None
     _n_dims: int | None
     _n_coords: int | None
-    _field_feature_shapes_kwarg: Any
-    _field_feature_dtypes_kwarg: Any
-    _field_feature_dtypes: Any | None
-    _field_feature_shapes: Any | None
+    # These are the extra fields that can be declared
+    _field_feature_shapes_kwarg: dict[str, tuple[int, ...]]
+    _field_feature_dtypes_kwarg: dict[str, FieldFeatureDtype]
+    # This is the consolidated field features from the defaults and
+    # the extra ones.
+    _field_feature_shapes: dict[str, tuple[int, ...]] | None
+    _field_feature_dtypes: dict[str, FieldFeatureDtype] | None
 
     _sparse_fields: tuple[str, Any]
     _main_rep_idxs: Idxs
@@ -740,9 +779,18 @@ class WepyHDF5:
 
     ## Partial constructors/initializers
 
-    # TODO: make these static and accept the arguments it needs to
-    # avoid keeping temporary state
-    def _set_default_init_field_attributes(self, n_dims=None):
+    @staticmethod
+    def _gen_default_init_field_attributes(
+            topology: str,
+            main_rep_idxs: Idxs | None,
+            n_dims: int | None = None,
+    ) -> tuple[
+        dict[str, tuple[int, ...]],
+        dict[str, FieldFeatureDtype],
+        int, # n_dims
+        int, # n_coords
+        NDArray[np.integer],
+    ]:
         """Sets the feature_shapes and feature_dtypes to be the default for
         this module. These will be used to initialize field datasets when no
         given during construction (i.e. for sparse values)
@@ -760,15 +808,16 @@ class WepyHDF5:
         # get the number of coordinates of positions. If there is a
         # main_reps then we have to set the number of atoms to that,
         # if not we count the number of atoms in the topology
-        if self._main_rep_idxs is None:
-            self._n_coords = json_top_atom_count(self.topology)
-            self._main_rep_idxs = list(range(self._n_coords))
+        if main_rep_idxs is None:
+            n_coords = json_top_atom_count(topology)
+            _main_rep_idxs = np.array(range(n_coords))
         else:
-            self._n_coords = len(self._main_rep_idxs)
+            n_coords = len(main_rep_idxs)
+            _main_rep_idxs = np.array(main_rep_idxs)
 
         # get the number of dimensions as a default
         if n_dims is None:
-            self._n_dims = N_DIMS
+            n_dims = N_DIMS
 
         # feature shapes for positions and positions-like fields are
         # not known at the module level due to different number of
@@ -776,17 +825,27 @@ class WepyHDF5:
         # (default 3 spatial). We set them now that we know this
         # information.
         # add the postitions shape
-        field_feature_shapes[POSITIONS] = (self._n_coords, self._n_dims)
+        field_feature_shapes[POSITIONS] = (n_coords, n_dims)
         # add the positions-like field shapes (velocities and forces) as the same
         for poslike_field in POSITIONS_LIKE_FIELDS:
-            field_feature_shapes[poslike_field] = (self._n_coords, self._n_dims)
+            field_feature_shapes[poslike_field] = (n_coords, n_dims)
 
-        # set the attributes
-        self._field_feature_shapes = field_feature_shapes
-        self._field_feature_dtypes = field_feature_dtypes
-    
+        return (
+            field_feature_shapes,
+            field_feature_dtypes,
+            n_dims,
+            n_coords,
+            _main_rep_idxs,
+        )
 
-    def _init_continuations(self):
+    # TODO: make these static and accept the arguments it needs to
+    # avoid keeping temporary state
+
+    @classmethod
+    def _init_continuations(
+            cls,
+            h5: h5py.File,
+    ) -> h5py.Dataset:
         """This will either create a dataset in the settings for the
         continuations or if continuations already exist it will reinitialize
         them and delete the data that exists there.
@@ -799,97 +858,137 @@ class WepyHDF5:
 
         # if the continuations dset already exists we reinitialize the
         # data
-        if CONTINUATIONS in self.settings_grp:
-            cont_dset = self.settings_grp[CONTINUATIONS]
+        if CONTINUATIONS in h5[SETTINGS]:
+            cont_dset = h5[SETTINGS][CONTINUATIONS]
             cont_dset.resize((0, 2))
 
         # otherwise we just create the data
         else:
-            cont_dset = self.settings_grp.create_dataset(
+            cont_dset = h5[SETTINGS].create_dataset(
                 CONTINUATIONS, shape=(0, 2), dtype=int, maxshape=(None, 2)
             )
 
         return cont_dset
-    
-    def _create_init(self):
+
+    @classmethod
+    def _create_init(
+            cls,
+            h5: h5py.File,
+            topology: str,
+            alt_reps: dict[str, IdxArray] | None = None,
+            sparse_fields: tuple[str, ...] | None = None,
+            units: dict[str, str] | None = None,
+            n_dims: int | None = None,
+            main_rep_idxs: Idxs | None = None,
+            field_feature_shapes_overrides: dict[str, tuple[int, ...]] | None = None,
+            field_feature_dtypes_overrides: dict[str, FieldFeatureDtype] | None = None,
+    ) -> None:
         """Creation mode constructor.
 
         Completely overwrite the data in the file. Reinitialize the values
         and set with the new ones if given.
         """
 
-        assert (
-            self._topology is not None
-        ), "Topology must be given for a creation constructor"
+        if sparse_fields is None:
+            _sparse_fields = ()
+        else:
+            _sparse_fields = sparse_fields
+
+        if alt_reps is None:
+            _alt_reps = {}
+        else:
+            _alt_reps = alt_reps
 
         # initialize the runs group
-        runs_grp = self._h5.create_group(RUNS)
+        runs_grp = h5.create_group(RUNS)
 
         # initialize the settings group
-        settings_grp = self._h5.create_group(SETTINGS)
+        settings_grp = h5.create_group(SETTINGS)
 
         # create the topology dataset
-        self._h5.create_dataset(TOPOLOGY, data=self._topology)
+        h5.create_dataset(TOPOLOGY, data=topology)
 
         # sparse fields
-        if self._sparse_fields is not None:
-            # make a dataset for the sparse fields allowed.  this requires
-            # a 'special' datatype for variable length strings. This is
-            # supported by HDF5 but not numpy.
-            vlen_str_dt = h5py.special_dtype(vlen=str)
+        
+        # make a dataset for the sparse fields allowed.  this requires
+        # a 'special' datatype for variable length strings. This is
+        # supported by HDF5 but not numpy.
+        vlen_str_dt = h5py.string_dtype(encoding=STRING_ENCODING)
 
-            # create the dataset with empty values for the length of the
-            # sparse fields given
-            sparse_fields_ds = settings_grp.create_dataset(
-                SPARSE_FIELDS,
-                (len(self._sparse_fields),),
-                dtype=vlen_str_dt,
-                maxshape=(None,),
-            )
+        # create the dataset with empty values for the length of the
+        # sparse fields given
+        sparse_fields_dset = settings_grp.create_dataset(
+            SPARSE_FIELDS,
+            (len(_sparse_fields),),
+            dtype=vlen_str_dt,
+            maxshape=(None,),
+        )
 
-            # set the flags
-            for i, sparse_field in enumerate(self._sparse_fields):
-                sparse_fields_ds[i] = sparse_field
+        # set the flags
+        for i, sparse_field in enumerate(_sparse_fields):
+            sparse_fields_dset[i] = sparse_field
 
         # field feature shapes and dtypes
 
         # initialize to the defaults, this gives values to
-        # self._n_coords, and self.field_feature_dtypes, and
-        # self.field_feature_shapes
-        self._set_default_init_field_attributes(n_dims=self._n_dims)
+        # n_coords, n_dims, and field_feature_dtypes, and
+        # field_feature_shapes
+        (
+            _field_feature_shapes,
+            _field_feature_dtypes,
+            _n_dims,
+            _n_coords,
+            _main_rep_idxs,
+        ) = cls._gen_default_init_field_attributes(
+            topology=topology,
+            main_rep_idxs=main_rep_idxs,
+            n_dims=n_dims,
+        )
 
         # save the number of dimensions and number of atoms in settings
-        settings_grp.create_dataset(N_DIMS_STR, data=np.array(self._n_dims))
-        settings_grp.create_dataset(N_ATOMS, data=np.array(self._n_coords))
+        settings_grp.create_dataset(N_DIMS_STR, data=np.array(_n_dims))
+        settings_grp.create_dataset(N_ATOMS, data=np.array(_n_coords))
 
         # the main rep atom idxs
-        settings_grp.create_dataset(MAIN_REP_IDXS, data=self._main_rep_idxs, dtype=int)
+        settings_grp.create_dataset(MAIN_REP_IDXS, data=_main_rep_idxs, dtype=int)
 
         # alt_reps settings
         alt_reps_idxs_grp = settings_grp.create_group(ALT_REPS_IDXS)
-        for alt_rep_name, idxs in self._alt_reps.items():
+        for alt_rep_name, idxs in _alt_reps.items():
             alt_reps_idxs_grp.create_dataset(alt_rep_name, data=idxs, dtype=int)
 
         # if both feature shapes and dtypes were specified overwrite
         # (or initialize if not set by defaults) the defaults
-        if (self._field_feature_shapes_kwarg is not None) and (
-            self._field_feature_dtypes_kwarg is not None
+        if (field_feature_shapes_overrides is not None) and (
+            field_feature_dtypes_overrides is not None
         ):
-            self._field_feature_shapes.update(self._field_feature_shapes_kwarg)
-            self._field_feature_dtypes.update(self._field_feature_dtypes_kwarg)
+            # check that they have the same keys
+            if len(
+                    mismatch_keys := (
+                        set(field_feature_shapes_overrides.keys()).symmetric_difference(
+                            set(field_feature_dtypes_overrides.keys())
+                        )
+                    )
+            ) > 0:
+                raise ValueError(
+                    f"Mismatch in the keys for field feature overrides: {mismatch_keys}"
+                )
+            
+            _field_feature_shapes.update(field_feature_shapes_overrides)
+            _field_feature_dtypes.update(field_feature_dtypes_overrides)
 
         # any sparse field with unspecified shape and dtype must be
         # set to None so that it will be set at runtime
-        for sparse_field in self.sparse_fields:
-            if (sparse_field not in self._field_feature_shapes) or (
-                sparse_field not in self._field_feature_dtypes
+        for sparse_field in _sparse_fields:
+            if (sparse_field not in _field_feature_shapes) or (
+                sparse_field not in _field_feature_dtypes
             ):
-                self._field_feature_shapes[sparse_field] = None
-                self._field_feature_dtypes[sparse_field] = None
+                _field_feature_shapes[sparse_field] = None
+                _field_feature_dtypes[sparse_field] = None
 
         # save the field feature shapes and dtypes in the settings group
         shapes_grp = settings_grp.create_group(FIELD_FEATURE_SHAPES_STR)
-        for field_path, field_shape in self._field_feature_shapes.items():
+        for field_path, field_shape in _field_feature_shapes.items():
             if field_shape is None:
                 # set it as a dimensionless array of NaN
                 field_shape = np.array(np.nan)
@@ -897,35 +996,30 @@ class WepyHDF5:
             shapes_grp.create_dataset(field_path, data=field_shape)
 
         dtypes_grp = settings_grp.create_group(FIELD_FEATURE_DTYPES_STR)
-        for field_path, field_dtype in self._field_feature_dtypes.items():
+        for field_path, field_dtype in _field_feature_dtypes.items():
             if field_dtype is None:
                 dt_str = NONE_STR
             else:
-                # make a json string of the datatype that can be read
-                # in again, we call np.dtype again because there is no
-                # np.float.descr attribute
-                dt_str = json.dumps(np.dtype(field_dtype).descr)
+                dt_str = numpy_dtype_to_json(np.dtype(field_dtype))
 
             dtypes_grp.create_dataset(field_path, data=dt_str)
 
         # initialize the units group
-        unit_grp = self._h5.create_group(UNITS)
+        unit_grp = h5.create_group(UNITS)
 
         # if units were not given set them all to None
-        if self._units is None:
-            self._units = {}
-            for field_path in self._field_feature_shapes.keys():
-                self._units[field_path] = None
+        if units is None:
+            units = {}
+            for field_path in _field_feature_shapes.keys():
+                units[field_path] = None
 
         # set the units
-        for field_path, unit_value in self._units.items():
+        for field_path, unit_value in units.items():
             # ignore the field if not given
             if unit_value is None:
                 continue
 
-            unit_path = "{}/{}".format(UNITS, field_path)
-
-            unit_grp.create_dataset(unit_path, data=unit_value)
+            unit_grp.create_dataset(field_path, data=unit_value)
 
         # create the group for the run data records
         records_grp = settings_grp.create_group(RECORD_FIELDS)
@@ -934,22 +1028,23 @@ class WepyHDF5:
         # (continuation_run, base_run), where the first element
         # of the new run that is continuing the run in the second
         # position
-        self._init_continuations()
+        cls._init_continuations(h5)
+
 
     def __init__(
         self,
         filename: Path,
         mode: FileMode = "x",
+        swmr_mode: bool = False,
+        expert_mode: bool = False,
         topology: str | None = None,
         units: dict[str, str] | None = None,
         sparse_fields: tuple[str, ...] = None,
-        feature_shapes: dict[str, FieldShapeSpec] | None = None,
-        feature_dtypes: dict[str, FieldDtype] | None = None,
         n_dims: int | None = None,
         alt_reps: dict[str, IdxArray] | None = None,
         main_rep_idxs: IdxArray | None = None,
-        swmr_mode: bool = False,
-        expert_mode: bool = False,
+        feature_shapes_overrides: dict[str, FieldShapeSpec] | None = None,
+        feature_dtypes_overrides: dict[str, FieldDtype] | None = None,
     ):
         """Constructor for the WepyHDF5 class.
 
@@ -983,11 +1078,13 @@ class WepyHDF5:
         sparse_fields : list of str, optional
             List of trajectory fields that should be initialized as sparse.
 
-        feature_shapes : dict of str : shape_spec, optional
-            Mapping of trajectory fields to their shape spec for initialization.
+        feature_shapes : Mapping of trajectory fields to their shape
+            spec for initialization. Note that the default OpenMM MD
+            fields will be generated automatically
 
-        feature_dtypes : dict of str : dtype_spec, optional
-            Mapping of trajectory fields to their shape spec for initialization.
+        feature_dtypes : Mapping of extra trajectory fields to their
+            shape spec for initialization. Note that the default
+            OpenMM MD fields will be generated automatically
 
         n_dims : int, default: 3
             Set the number of spatial dimensions for the default
@@ -1006,18 +1103,6 @@ class WepyHDF5:
             If True no initialization is performed other than the
             setting of the filename. Useful mainly for debugging.
 
-        Raises
-        ------
-        AssertionError
-            If the mode is not one of the supported mode specs.
-
-        AssertionError
-            If a topology is not given for a creation mode.
-
-        Warns
-        -----
-        If initialization data was given but the file was opened in a read mode.
-
         """
 
         self.closed = None
@@ -1031,6 +1116,8 @@ class WepyHDF5:
             # terminate the constructor here
             return None
 
+        # Validate inputs
+
         if mode not in self.MODES:
             raise ValueError(
                 f"mode must be either one of: {self.MODES}"
@@ -1040,8 +1127,8 @@ class WepyHDF5:
             "topology" : topology,
             "units" : units,
             "sparse_fields" : sparse_fields,
-            "feature_shapes" : feature_shapes,
-            "feature_dtypes" : feature_dtypes,
+            "feature_shapes" : feature_shapes_overrides,
+            "feature_dtypes" : feature_dtypes_overrides,
             "n_dims" : n_dims,
             "alt_reps" : alt_reps,
             "main_rep_idxs" : main_rep_idxs,
@@ -1078,7 +1165,7 @@ class WepyHDF5:
                 )
 
 
-        
+        # Object attributes
         self._filename = filename
         self._swmr_mode = swmr_mode
 
@@ -1091,47 +1178,8 @@ class WepyHDF5:
         # used elsewhere and could be a feature in the future.
         self._h5py_mode = mode
 
-        # TODO: cleanup some of these resources so they are not in
-        # memory if they are large, like the topology
-        
-        # Temporary metadata: used to initialize the object but not
-        # used after that
 
-        self._topology = topology
-        self._units = units
-        self._n_dims = n_dims
-        self._n_coords = None
-
-        # set hidden feature shapes and dtype, which are only
-        # referenced if needed when trajectories are created. These
-        # will be saved in the settings section in the actual HDF5
-        # file
-        self._field_feature_shapes_kwarg = feature_shapes
-        self._field_feature_dtypes_kwarg = feature_dtypes
-        self._field_feature_dtypes = None
-        self._field_feature_shapes = None
-
-        # save the sparse fields as a private variable for use in the
-        # create constructor
-        if sparse_fields is None:
-            self._sparse_fields = ()
-        else:
-            self._sparse_fields = sparse_fields
-
-        # if we specify an atom subset of the main POSITIONS field
-        # we must save them
-        self._main_rep_idxs = main_rep_idxs
-
-        # a dictionary specifying other alt_reps to be saved
-        if alt_reps is not None:
-            self._alt_reps = alt_reps
-            # all alt_reps are sparse
-            alt_rep_keys = [
-                "{}/{}".format(ALT_REPS, key) for key in self._alt_reps.keys()
-            ]
-            self._sparse_fields.extend(alt_rep_keys)
-        else:
-            self._alt_reps = {}
+        ## Initialize the file
 
         # open the file and then run the different constructors based
         # on the mode
@@ -1151,7 +1199,37 @@ class WepyHDF5:
         
 
         if self._wepy_mode in {"w", "x", "w-"}:
-            self._create_init()
+
+            # Expand some of the inputs
+
+            # save the sparse fields as a private variable for use in the
+            # create constructor
+            if sparse_fields is None:
+                _sparse_fields = ()
+            else:
+                _sparse_fields = sparse_fields
+
+            # a dictionary specifying other alt_reps to be saved
+            if alt_reps is not None:
+                _alt_reps = alt_reps
+                # all alt_reps are sparse
+                alt_rep_keys = [
+                    "{}/{}".format(ALT_REPS, key) for key in _alt_reps.keys()
+                ]
+                _sparse_fields.extend(alt_rep_keys)
+            else:
+                _alt_reps = {}
+            
+            self._create_init(
+                h5=self._h5,
+                topology=topology,
+                sparse_fields=sparse_fields,
+                units=units,
+                n_dims=n_dims,
+                main_rep_idxs=main_rep_idxs,
+                field_feature_shapes_overrides=feature_dtypes_overrides,
+                field_feature_dtypes_overrides=feature_dtypes_overrides,
+            )
 
         # flush the buffers
         self._h5.flush()
@@ -1161,20 +1239,6 @@ class WepyHDF5:
         self._h5py_mode = self._h5.mode
         
         self._h5.close()
-
-
-        # get rid of the temporary variables
-        del self._topology
-        del self._units
-        del self._n_dims
-        del self._n_coords
-        del self._field_feature_shapes_kwarg
-        del self._field_feature_dtypes_kwarg
-        del self._field_feature_shapes
-        del self._field_feature_dtypes
-        del self._sparse_fields
-        del self._main_rep_idxs
-        del self._alt_reps
 
         # variable to reflect if it is closed or not, should be closed
         # after initialization
@@ -3040,9 +3104,11 @@ class WepyHDF5:
             if dtype_str == _NONE_STR:
                 dtypes[field_path] = None
             else:
-                dtype_obj = json.loads(dtype_str.decode())
-                dtype_obj = [tuple(d) for d in dtype_obj]
-                dtype = np.dtype(dtype_obj)
+                dtype_json_to_numpy(dtype_str.decode())
+                # TODO: remove
+                # dtype_obj = json.loads(dtype_str.decode())
+                # dtype_obj = [tuple(d) for d in dtype_obj]
+                # dtype = np.dtype(dtype_obj)
                 dtypes[field_path] = dtype
 
         return dtypes
@@ -3988,7 +4054,12 @@ class WepyHDF5:
             ]
         )
 
-    def new_run(self, init_walkers, continue_run=None, **kwargs):
+    def new_run(
+            self,
+            init_walkers,
+            continue_run=None,
+            **kwargs,
+    ):
         """Initialize a new run.
 
         Parameters
