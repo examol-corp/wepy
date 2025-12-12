@@ -1,10 +1,12 @@
 import pytest
 import numpy as np
+import openmm.unit
 from wepy.reporter.hdf5 import WepyHDF5Reporter
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 from wepy.resampling.resamplers.noresampler import NoResampler
-from wepy.walker import Walker
+from wepy.walker import Walker, WalkerStateBox
 from wepy.runners.mock import MockState, MockRunner
+from wepy.runners.openmm import OpenMMState
 from wepy.work_mapper.serial import SerialMapper
 from wepy.hdf5 import WepyHDF5
 from wepy.resampling.decisions.no_decision import (
@@ -12,17 +14,27 @@ from wepy.resampling.decisions.no_decision import (
     NothingDecisionEnum,
 )
 
-SIM_COMPONENTS = {
+LJ_OPENMM_SIM_COMPONENTS = {
     "init_walkers": [
-        Walker(
-            MockState(1),
-            weight=0.2,
-        ),
-        Walker(
-            MockState(1),
-            weight=0.1,
-        ),
-    ],
+                Walker(
+                    OpenMMState.from_dwim(
+                        positions=np.array([
+                            [0., 0., 0.,],
+                            [0., 0., 0.,],
+                        ]) * openmm.unit.nanometer,
+                    ),
+                    0.5,
+                ),
+                Walker(
+                    OpenMMState.from_dwim(
+                        positions=np.array([
+                            [0., 0., 0.,],
+                            [0., 0., 0.,],
+                        ]) * openmm.unit.nanometer,
+                    ),
+                    0.5,
+                ),
+            ],
     "runner": MockRunner(),
     "resampler": NoResampler(),
     "boundary_conditions": None,
@@ -34,6 +46,25 @@ SIM_COMPONENTS = {
 RESAMPLER_REPORTER_ARGS = {
     "resampling_fields" : NoResampler.resampling_fields(),
     "decision_enum_dict" : NoDecision.enum_dict_by_name(),
+}
+
+CYCLE_REPORT_DICT_COMMON = {
+            "runner_precycle_time" : 1.,
+            "runner_postcycle_time" : 1.,
+            "sim_manager_segment_overhead_time" : 1.,
+            "cycle_sim_manager_segment_time" : 1.,
+            "cycle_runner_time" : 1.,
+            "cycle_bc_time" : 1.,
+            "cycle_resampling_time" : 1.,
+}
+
+CYCLE_REPORT_DICT_EMPTY_OPTIONALS = {
+            "warp_data" : [],
+            "bc_data" : [],
+            "progress_data" : [],
+            "resampler_data" : [],
+            "runner_splits_time" : None,
+            "worker_segment_times" : None,
 }
 
 class Test_WepyHDF5Reporter:
@@ -391,12 +422,58 @@ class Test_WepyHDF5Reporter:
             ])
         )
 
+    def test__resolve_state_units(self):
 
+        state_nm = WalkerStateBox(
+            positions=np.array([
+                [1., 1., 1.,],
+                [1., 1., 1.,],
+            ]) * openmm.unit.nanometer
+        )
+
+        state_nm_mags, units_used = WepyHDF5Reporter._resolve_state_units(
+            units={
+                "positions" : openmm.unit.nanometer,
+            },
+            state=state_nm,
+        )
+        assert units_used == {"positions" : openmm.unit.nanometer}
+        assert isinstance(state_nm_mags["positions"], np.ndarray)
+        assert np.array_equal(
+            state_nm_mags["positions"],
+            np.array([
+                [1., 1., 1.,],
+                [1., 1., 1.,],
+            ]),
+        )
+
+        state_nm_mags, units_used = WepyHDF5Reporter._resolve_state_units(
+            units={
+                "positions" : openmm.unit.angstrom,
+            },
+            state=state_nm,
+        )
+        assert units_used == {"positions" : openmm.unit.angstrom}
+        assert isinstance(state_nm_mags["positions"], np.ndarray)
+        assert np.array_equal(
+            state_nm_mags["positions"],
+            np.array([
+                [10., 10., 10.,],
+                [10., 10., 10.,],
+            ]),
+        )
+
+        # if no units specified the ones from the state
+        state_nm_mags, units_used = WepyHDF5Reporter._resolve_state_units(
+            units={},
+            state=state_nm,
+        )
+        assert units_used == {"positions" : openmm.unit.nanometer}
+        
 
     def test_init(self, tmp_path_factory):
 
         test_sys = LennardJonesPair()
-        n_atoms = test_sys.mdj_top.n_atoms
 
         d0 = tmp_path_factory.mktemp("0")
         h5_path = d0 / "main.wepy.h5"
@@ -404,7 +481,48 @@ class Test_WepyHDF5Reporter:
         reporter = WepyHDF5Reporter(
             file_path=h5_path,
             topology=test_sys.json_top,
+            units={"positions" : openmm.unit.angstrom},
             **RESAMPLER_REPORTER_ARGS,
         )
 
-        reporter.init(**SIM_COMPONENTS)
+        reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
+
+        assert reporter.units == {
+            "positions" : openmm.unit.angstrom,
+            "time" : openmm.unit.picosecond,
+            "box_vectors" : openmm.unit.nanometer,
+            "box_volume" : (openmm.unit.nanometer ** 3),
+        }
+        assert reporter.wepy_run_idx == 0
+        assert reporter._tmp_topology is None
+        assert reporter.file_path == h5_path
+        assert h5_path.exists()
+        assert reporter.wepy_h5.mode == "r+"
+
+        # minimal tests, see _initialize_h5_run for more in depth tests
+        with reporter.wepy_h5 as wepy_h5:
+            assert "0" in wepy_h5.h5["runs"]
+            assert "init_walkers" in wepy_h5.h5["runs/0"]
+            assert len(wepy_h5.h5["runs/0/init_walkers"]) == 2
+
+        # if no units are given, derive them dynamically from
+        # quantities
+        d0 = tmp_path_factory.mktemp("0")
+        h5_path = d0 / "main.wepy.h5"
+
+        reporter = WepyHDF5Reporter(
+            file_path=h5_path,
+            topology=test_sys.json_top,
+            units=None,
+            **RESAMPLER_REPORTER_ARGS,
+        )
+
+        reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
+
+        assert reporter.units == {
+            "positions" : openmm.unit.nanometer,
+            "time" : openmm.unit.picosecond,
+            "box_vectors" : openmm.unit.nanometer,
+            "box_volume" : (openmm.unit.nanometer ** 3),
+        }
+

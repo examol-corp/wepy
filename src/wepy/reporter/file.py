@@ -251,5 +251,4 @@ class ProgressiveFileReporterABC(FileReporterABC, ABC):
             self.set_mode(file_idx, "w")
 
     def cleanup(self, **kwargs: SimComponentArgs) -> None:
-        logger.info("Nothing to do.")
-        pass
+        logger.info("Nothing to do for ProgressiveFileReporterABC.cleanup.")

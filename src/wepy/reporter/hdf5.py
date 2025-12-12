@@ -7,6 +7,7 @@ from typing import Self, TypedDict, Literal, Generic, TypeVar
 
 # Third Party Library
 import numpy as np
+import openmm.unit
 
 # First Party Library
 from wepy.hdf5 import WepyHDF5
@@ -20,7 +21,7 @@ from wepy.reporter.types import (
 )
 from wepy.reporter.file import FileReporterABC, FileMode
 from wepy.util.json_top import json_top_atom_count
-from wepy.walker import Walker, WalkerState
+from wepy.walker import Walker, WalkerState, WalkerStateBox
 from wepy.resampling.resamplers.resampler import Resampler
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.typing import Shape, Idxs, IdxArray
@@ -28,6 +29,12 @@ from wepy.typing import Shape, Idxs, IdxArray
 logger = logging.getLogger(__name__)
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+
+class UnitError(Exception):
+    pass
+
+# TODO: support for pint
+Quantity = openmm.unit.Quantity
 
 class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
     """Reporter for generating an HDF5 format (WepyHDF5) data file from
@@ -80,7 +87,7 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
     _n_atoms: int
     _all_atom_idxs: IdxArray
     _sparse_fields: dict[str, int]
-    units: dict[str, str]
+    units: dict[str, openmm.unit.Unit]
 
     # stateful attributes
     wepy_h5: WepyHDF5 | None
@@ -97,7 +104,7 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
         resampling_fields: tuple[str, ...],
         swmr_mode: bool = False,
         save_fields: tuple[str, ...] | None = None,
-        units: dict[str, str] | None = None,
+        units: dict[str, openmm.unit.Unit] | None = None,
         sparse_fields: dict[str, int | Literal[Ellipsis]] | None = None,
         n_dims: int = 3,
         main_rep_idxs: Idxs | None = None,
@@ -136,9 +143,7 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
         topology : str
             JSON string representing topology of system being simulated.
 
-        units : dict of str: str, optional
-            Mapping of trajectory field names to string specs
-            for units.
+        units : Mapping of trajectory field names to Unit objects.
 
         sparse_fields : dict of str: int, optional
             List of trajectory fields that should be initialized as sparse.
@@ -385,7 +390,7 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
         boundary_conditions_class: type[BoundaryConditions] | None = None,
         swmr_mode: bool = False,
         save_fields: tuple[str, ...] | None = None,
-        units: dict[str, str] | None = None,
+        units: dict[str, openmm.unit.Unit] | None = None,
         sparse_fields: dict[str, int] | None = None,
         n_dims: int = 3,
         main_rep_idxs: Idxs | None = None,
@@ -563,6 +568,46 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
                     wepy_h5.init_record_fields("progress", progress_records)
 
         return wepy_run_idx
+
+    @staticmethod
+    def _resolve_state_units(
+            units: dict[str, openmm.unit.Unit],
+            state: WalkerStateBox,
+    ) -> tuple[WalkerStateBox, dict[str, openmm.unit.Unit]]:
+        """For walker states convert all quantity field values to plain values.
+
+        Currently only supports openmm.unit.
+
+        Returns the units used. If these were dynamically discovered
+        from the quantity it will be that, otherwise it will be the
+        unit that was passed in.
+
+        """
+
+        units_used = {}
+        new_walker_fields = {}
+        for field_key, field_value in state.dict().items():
+            if not isinstance(field_value, Quantity):
+                new_walker_fields[field_key] = field_value
+            elif isinstance(field_value, openmm.unit.Quantity):
+
+                # if there is a configured unit, convert to that
+                if field_key in units:
+
+                    unit = units[field_key]
+
+                    units_used[field_key] = unit
+
+                    new_walker_fields[field_key] = field_value.value_in_unit(unit)
+                # If there is no unit for it, just get the
+                # magnitude in the current units
+                else:
+                    new_walker_fields[field_key] = field_value.value_in_unit(field_value.unit)
+
+                    units_used[field_key] = field_value.unit
+
+        return WalkerStateBox(**new_walker_fields), units_used
+        
     
     def init(self, **kwargs: SimComponentArgs) -> None:
 
@@ -614,22 +659,50 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
                 if self.main_rep_idxs is not None:
                     state_d["positions"] = state_d["positions"][self.main_rep_idxs]
 
+                # TODO: reusing the state infrastructure here is not
+                # the right thing. Currently just using a Box type to
+                # get around this but it really should just be it's
+                # own standalone type.
+
                 # then making the new state
-                new_state = WalkerState(**state_d)
+                new_state = WalkerStateBox(**state_d)
 
                 filtered_init_walkers.append(Walker(new_state, walker.weight))
         # otherwise save the full state
         else:
             filtered_init_walkers = kwargs["init_walkers"]
 
+        # If the state field values are quantities convert them to
+        # plain values. 
+        converted_filtered_init_walkers = []
+        for walker_idx, init_walker in enumerate(filtered_init_walkers):
+            _state, units_used = self._resolve_state_units(self.units, init_walker.state)
+
+            # If no self.units were given, use the first
+            # init walker to determine the units for a field overall, set
+            # this and use for the rest of the walkers
+            if walker_idx == 0:
+                self.units.update(units_used)
+
+            converted_filtered_init_walkers.append(
+                Walker(state=_state, weight=init_walker.weight)
+            )
+
         # Run the constructor intialization
         logger.info(f"Initializing HDF5 file at {self.file_path}")
+
+        # convert units to strings
+        _str_units = {
+            key : str(unit)
+            for key, unit
+            in self.units.items()
+        }
 
         init_wepy_h5 = WepyHDF5(
             self.file_path,
             mode="x",
             topology=self._tmp_topology,
-            units=self.units,
+            units=_str_units,
             sparse_fields=list(self._sparse_fields.keys()),
             feature_shapes_overrides=self._feature_shapes,
             feature_dtypes_overrides=self._feature_dtypes,
@@ -651,9 +724,9 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
             mode='r+',
         )
 
-        self._initialize_h5_run(
+        self.wepy_run_idx = self._initialize_h5_run(
             self.wepy_h5,
-            init_walkers=filtered_init_walkers,
+            init_walkers=converted_filtered_init_walkers,
             continue_run=kwargs["continue_run"],
             resampling_fields=self.resampling_fields,
             decision_enum_dict=self.decision_enum_dict,
