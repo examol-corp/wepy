@@ -48,7 +48,7 @@ perform them on the collection of walkers.
 # Standard Library
 import logging
 from enum import IntEnum
-from typing import Any, Union
+from typing import Any, Union, Generic, TypeVar
 
 # Third Party Library
 import attrs
@@ -60,24 +60,28 @@ logger = logging.getLogger(__name__)
 
 
 @attrs.define
-class DecisionRecord:
+class BaseDecisionRecord:
     decision_id: int
 
 
 DecisionFieldDtype = Union[int,]
+DecisionFieldShapeSpec = tuple[int | type(Ellipsis), ...]
+
+DecisionEnum_ = TypeVar("DecisionEnum_")
+DecisionRecord_ = TypeVar("DecisionRecord", bound=BaseDecisionRecord)
 
 
 # ABC for the Decision class
-class BaseDecisionABC:
+class BaseDecisionABC(Generic[DecisionEnum_, DecisionRecord_]):
     """Represents and provides methods for a set of decision values."""
 
-    ENUM: IntEnum
+    ENUM: type[DecisionEnum_]
     """The enumeration of the decision types. Maps them to integers."""
 
     DEFAULT_DECISION: int
     """The default decision to choose."""
 
-    DECISION_RECORD: DecisionRecord = DecisionRecord
+    DECISION_RECORD: DecisionRecord_ = BaseDecisionRecord
 
     FIELDS: tuple[str, ...] = ("decision_id",)
     """The names of the fields that go into the decision record."""
@@ -88,13 +92,13 @@ class BaseDecisionABC:
 
     #  An Ellipsis instead of fields indicate there is a variable
     # number of fields.
-    SHAPES: tuple[tuple[int | type(Ellipsis), ...], ...] = ((1,),)
+    SHAPES: tuple[DecisionFieldShapeSpec, ...] = ((1,),)
     """Field data shapes."""
 
     DTYPES: tuple[DecisionFieldDtype, ...] = (int,)
     """Field data types."""
 
-    RECORD_FIELDS: tuple[str] = ("decision_id",)
+    RECORD_FIELDS: tuple[str, ...] = ("decision_id",)
     """The fields that could be used in a reduced table-like representation."""
 
     ANCESTOR_DECISION_IDS: tuple[int, ...]
@@ -102,26 +106,32 @@ class BaseDecisionABC:
     passed on in the next generation, i.e. after performing the action."""
 
     @classmethod
-    def default_decision(cls):
+    def default_decision(cls) -> int:
         return cls.DEFAULT_DECISION
 
     @classmethod
-    def field_names(cls):
+    def field_names(cls) -> tuple[str, ...]:
         """Names of the decision record fields."""
         return cls.FIELDS
 
     @classmethod
-    def field_shapes(cls):
+    def field_shapes(cls) -> tuple[DecisionFieldShapeSpec, ...]:
         """Field data shapes."""
         return cls.SHAPES
 
     @classmethod
-    def field_dtypes(cls):
+    def field_dtypes(cls) -> tuple[DecisionFieldDtype, ...]:
         """Field data types."""
         return cls.DTYPES
 
     @classmethod
-    def fields(cls):
+    def fields(cls) -> list[
+            tuple[
+                str,
+                DecisionFieldShapeSpec,
+                DecisionFieldDtype,
+            ]
+    ]:
         """Specs for each field.
 
         Returns
@@ -133,12 +143,12 @@ class BaseDecisionABC:
         return list(zip(cls.field_names(), cls.field_shapes(), cls.field_dtypes()))
 
     @classmethod
-    def record_field_names(cls):
+    def record_field_names(cls) -> tuple[str, ...]:
         """The fields that could be used in a reduced table-like representation."""
         return cls.RECORD_FIELDS
 
     @classmethod
-    def enum_dict_by_name(cls):
+    def enum_dict_by_name(cls) -> dict[str, int]:
         """Get the decision enumeration as a dict mapping name to integer."""
         if cls.ENUM is None:
             raise NotImplementedError
@@ -149,7 +159,7 @@ class BaseDecisionABC:
         return d
 
     @classmethod
-    def enum_dict_by_value(cls):
+    def enum_dict_by_value(cls) -> dict[int, DecisionEnum_]:
         """Get the decision enumeration as a dict mapping integer to name."""
 
         if cls.ENUM is None:
@@ -161,7 +171,7 @@ class BaseDecisionABC:
         return d
 
     @classmethod
-    def enum_by_value(cls, enum_value):
+    def enum_by_value(cls, enum_value: int) -> DecisionEnum_:
         """Get the enum name for an enum_value.
 
         Parameters
@@ -177,7 +187,7 @@ class BaseDecisionABC:
         return d[enum_value]
 
     @classmethod
-    def enum_by_name(cls, enum_name):
+    def enum_by_name(cls, enum_name: str) -> DecisionEnum_:
         """Get the enum name for an enum_value.
 
         Parameters
@@ -194,7 +204,7 @@ class BaseDecisionABC:
         return d[enum_name]
 
     @classmethod
-    def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord:
+    def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord_:
         """Generate a record for the enum_value and the other fields.
 
         Parameters
@@ -228,7 +238,7 @@ class BaseDecisionABC:
     def action(
         cls,
         walkers: list[Walker],
-        decisions: list[list[DecisionRecord]],
+        decisions: list[list[DecisionRecord_]],
     ) -> list[Walker]:
         """Perform the instructions for a set of resampling records on
         walkers.

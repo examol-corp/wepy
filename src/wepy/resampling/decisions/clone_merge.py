@@ -7,7 +7,7 @@ from enum import IntEnum
 import attrs
 
 # First Party Library
-from wepy.resampling.decisions.decision import BaseDecisionABC, DecisionRecord
+from wepy.resampling.decisions.decision import BaseDecisionABC, BaseDecisionRecord
 from wepy.walker import Walker, keep_merge, split
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class CloneMergeDecisionEnum(IntEnum):
 
 
 @attrs.define
-class CloneMergeDecisionRecord(DecisionRecord):
+class CloneMergeDecisionRecord(BaseDecisionRecord):
     decision_id: int
     target_idxs: list[int]
 

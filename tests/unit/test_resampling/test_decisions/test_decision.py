@@ -5,7 +5,7 @@ from enum import IntEnum
 import pytest
 
 # First Party Library
-from wepy.resampling.decisions.decision import BaseDecisionABC, DecisionRecord
+from wepy.resampling.decisions.decision import BaseDecisionABC, BaseDecisionRecord
 from wepy.runners.mock import MockState
 from wepy.walker import Walker
 
@@ -66,12 +66,12 @@ class Test_Decision:
 
     def test_record(self):
 
-        assert MockDecision.record(0) == DecisionRecord(decision_id=0)
+        assert MockDecision.record(0) == BaseDecisionRecord(decision_id=0)
 
     def test_action(self):
 
         with pytest.raises(NotImplementedError):
             MockDecision.action(
                 [Walker(MockState(1), 0.1) for _ in range(4)],
-                [DecisionRecord(decision_id=0) for _ in range(4)],
+                [BaseDecisionRecord(decision_id=0) for _ in range(4)],
             )
