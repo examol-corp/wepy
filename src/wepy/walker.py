@@ -31,6 +31,7 @@ import logging
 import math
 import random as rand
 from typing import Any, Generic, Protocol, TypeVar
+import copy
 
 # Third Party Library
 import attrs
@@ -62,7 +63,33 @@ class AttrsWalkerStateMixin:
 
     def dict(self) -> dict[str, Any]:
         return attrs.asdict(self)
-    
+
+class WalkerStateBox:
+    """A type black box walker state, useful in reporting when you
+    need polymorphism in communicating walker data."""
+
+    def __init__(self, **kwargs: dict[str, Any]) -> None:
+        """Constructor for WalkerState.
+
+        All key-word arguments passed in will be set as the key-value
+        pairs for the state.
+
+        """
+        self._data = copy.deepcopy(kwargs)
+
+    def __getitem__(self, key: str) -> Any:
+        return self._data[key]
+
+    def dict(self) -> dict[str, Any]:
+        """Return all key-value pairs as a dictionary."""
+        return self._data
+
+    def __eq__(self, other: Any) -> bool:
+
+        if not isinstance(other, WalkerStateBox):
+            return False
+        else:
+            return self.dict() == other.dict()
 
 WalkerState_ = TypeVar("WalkerState_")
 

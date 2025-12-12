@@ -9,6 +9,7 @@ from wepy.missing import MISSING
 from wepy.walker import (
     Walker,
     WalkerState,
+    WalkerStateBox,
     AttrsWalkerStateMixin,
     clone,
     keep_merge,
@@ -92,8 +93,28 @@ class Test_AttrsWalkerStateMixin:
             "a": 1,
             "b": "hello",
         }
-    
 
+class Test_WalkerStateBox:
+
+    def test___init__(self):
+
+        assert WalkerStateBox(a=1)._data == {"a" : 1}
+
+    def test___getitem__(self):
+
+        assert WalkerStateBox(a=1)["a"] == 1
+
+    def test_dict(self):
+        
+        assert WalkerStateBox(a=1).dict() == {"a" : 1}
+
+    def test___eq__(self):
+
+        s = WalkerStateBox(a=1)
+        assert s == s
+
+        assert WalkerStateBox(a=1) == WalkerStateBox(a=1)
+        
 class TestWalker:
 
     def test___init__(self):
