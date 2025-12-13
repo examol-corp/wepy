@@ -720,13 +720,160 @@ class Test_WepyHDF5:
                     init_walkers=[],
                 )
 
+    def test__init_run_records_field(self, wepy_h5_factory, tmpdir):
+
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=_INIT_WALKERS
+            )
+            record_grp = run_grp.create_group("example")
+
+            a_dset = wepy_h5._init_run_records_field(
+                0,
+                "example",
+                field_name="a",
+                field_shape=(1,),
+                field_dtype=np.int64,
+            )
+
+            assert "a" in record_grp
+            assert a_dset.shape == (0,1)
+            assert a_dset.dtype == np.int64
+            assert a_dset.maxshape == (None, 1)
+
+            b_dset = wepy_h5._init_run_records_field(
+                0,
+                "example",
+                field_name="b",
+                field_shape=(3,3),
+                field_dtype=np.float64,
+            )
+
+            assert "b" in record_grp
+            assert b_dset.shape == (0,3,3)
+            assert b_dset.dtype == np.float64
+            assert b_dset.maxshape == (None, 3,3)
+
+            c_dset = wepy_h5._init_run_records_field(
+                0,
+                "example",
+                field_name="c",
+                field_shape=Ellipsis,
+                field_dtype=np.bool,
+            )
+
+            assert "c" in record_grp
+            assert c_dset.shape == (0,)
+            assert h5py.check_vlen_dtype(c_dset.dtype) == np.bool
+            assert c_dset.maxshape == (None,)
+
+
+    def test__init_run_sporadic_record_grp(self, wepy_h5_factory, tmpdir):
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=_INIT_WALKERS
+            )
+
+            record_grp = wepy_h5._init_run_sporadic_record_grp(
+                0,
+                "example",
+                [
+                    ("a", (1,), np.float64),
+                    ("b", (3, 3), np.int32),
+                ],
+            )
+
+            assert "runs/0/example" in wepy_h5.h5
+
+            assert "_cycle_idxs" in record_grp
+            assert record_grp["_cycle_idxs"].shape == (0,)
+            assert record_grp["_cycle_idxs"].dtype == np.int64
+
+            assert "a" in record_grp
+            assert "b" in record_grp
+
+    # TODO:
+    # def test__init_run_continual_record_grp(self, wepy_h5_factory, tmpdir):
+    #     path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+    #     with WepyHDF5(path, mode="r+") as wepy_h5:
+
+    #         run_grp = wepy_h5.new_run(
+    #             init_walkers=_INIT_WALKERS
+    #         )
+
+    #         wepy_h5.init_run_continual_record_grp(0, "example", ("a", "b"),)
+
+    def test__is_sporadic_records(self):
+
+        assert WepyHDF5._is_sporadic_records("resampler")
+        assert WepyHDF5._is_sporadic_records("warping")
+        assert WepyHDF5._is_sporadic_records("resampling")
+        assert WepyHDF5._is_sporadic_records("boundary_conditions")
+
+        # everything else...
+        assert not WepyHDF5._is_sporadic_records("example")
+
+    def test_init_run_record_grp(self, wepy_h5_factory, tmpdir):
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=_INIT_WALKERS
+            )
+
+            # continual
+            example_grp = wepy_h5.init_run_record_grp(
+                0,
+                "example",
+                [
+                    ("a", (1,), np.float64),
+                    ("b", (3, 3), np.int32),
+                ],
+            )
+
+            assert "runs/0/example" in wepy_h5.h5
+            assert "_cycle_idxs" not in example_grp
+
+            # sporadic
+            resampling_grp = wepy_h5.init_run_record_grp(
+                0,
+                "resampling",
+                [
+                    ("a", (1,), np.float64),
+                    ("b", (3, 3), np.int32),
+                ],
+            )
+
+            assert "runs/0/resampling" in wepy_h5.h5
+            assert "_cycle_idxs" in resampling_grp
+            
+    def test_init_run_fields_resampling(self, wepy_h5_factory, tmpdir):
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=_INIT_WALKERS
+            )
+
+            resampling_grp = wepy_h5.init_run_fields_resampling(
+                0,
+                [
+                    ("decision_id", (1,), np.uint32),
+                    ("target_idxs", Ellipsis, np.uint32),
+                ],
+            )
+
+            assert "resampling" in wepy_h5.h5["runs/0"]
+            assert "_cycle_idxs" in resampling_grp
+
 
     # TODO: I know these are working from the WepyHDF5Reporter tests,
     # but these should be tested individually as time permits
     
-    # def test_init_run_fields_resampling(self, wepy_h5_factory, tmpdir):
-    #     pass
-
     # def test_init_run_fields_resampling_decision(self):
     #     pass
 
@@ -744,6 +891,155 @@ class Test_WepyHDF5:
 
     # def test_init_run_fields_bc(self):
     #     pass
+
+    def test__extend_run_record_data_field(self, wepy_h5_factory, tmpdir):
+
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=_INIT_WALKERS
+            )
+
+            resampling_grp = wepy_h5.init_run_fields_resampling(
+                0,
+                [
+                    ("decision_id", (1,), np.uint32),
+                    ("target_idxs", Ellipsis, np.uint32),
+                    ("step_idx", (1,), np.uint32),
+                    ("walker_idx", (1,), np.uint32),
+                ],
+            )
+
+            assert resampling_grp["decision_id"].shape == (0,1)
+            wepy_h5._extend_run_record_data_field(
+                0,
+                "resampling",
+                "decision_id",
+                np.array([[0]]),
+            )
+
+            assert resampling_grp["decision_id"].shape == (1,1)
+            assert np.array_equal(
+                resampling_grp["decision_id"][:],
+                np.array([
+                    [0]
+                ]),
+            )
+
+            wepy_h5._extend_run_record_data_field(
+                0,
+                "resampling",
+                "decision_id",
+                np.array([[0]]),
+            )
+
+            assert resampling_grp["decision_id"].shape == (2,1)
+            assert np.array_equal(
+                resampling_grp["decision_id"][:],
+                np.array([
+                    [0],
+                    [0],
+                ]),
+            )
+            
+        
+    def test_extend_cycle_run_group_records(self, wepy_h5_factory, tmpdir):
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=_INIT_WALKERS
+            )
+
+            resampling_grp = wepy_h5.init_run_fields_resampling(
+                0,
+                [
+                    ("decision_id", (1,), np.uint32),
+                    ("target_idxs", Ellipsis, np.uint32),
+                    ("step_idx", (1,), np.uint32),
+                    ("walker_idx", (1,), np.uint32),
+                ],
+            )
+
+            assert resampling_grp["_cycle_idxs"].shape[0] == 0
+            assert resampling_grp["decision_id"].shape[0] == 0
+            assert resampling_grp["target_idxs"].shape[0] == 0
+
+            wepy_h5.extend_cycle_run_group_records(
+                0,
+                "resampling",
+                0,
+                [
+                    {
+                        "decision_id" : np.array([[0]]),
+                        "target_idxs" : np.array([[[0]]]),
+                        "step_idx" : np.array([[0]]),
+                        "walker_idx" : np.array([[0]]),
+                    },
+                    {
+                        "decision_id" : np.array([[0]]),
+                        "target_idxs" : np.array([[[0]]]),
+                        "step_idx" : np.array([[0]]),
+                        "walker_idx" : np.array([[1]]),
+                    },
+                ]
+            )
+
+            assert resampling_grp["decision_id"].shape == (2,1)
+            assert resampling_grp["target_idxs"].shape == (2,)
+            assert resampling_grp["step_idx"].shape == (2,1)
+            assert resampling_grp["walker_idx"].shape == (2,1)
+
+    def test_extend_cycle_resampling_records(self, wepy_h5_factory, tmpdir):
+        path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
+        with WepyHDF5(path, mode="r+") as wepy_h5:
+
+            run_grp = wepy_h5.new_run(
+                init_walkers=_INIT_WALKERS
+            )
+
+            resampling_grp = wepy_h5.init_run_fields_resampling(
+                0,
+                [
+                    ("decision_id", (1,), np.uint32),
+                    ("target_idxs", Ellipsis, np.uint32),
+                    ("step_idx", (1,), np.uint32),
+                    ("walker_idx", (1,), np.uint32),
+                ],
+            )
+
+            # UGLY,TOREV: This is ugly because the resampler then
+            # needs to handle processing the records into these deeply
+            # bracketed arrays. However, this is the interface and
+            # promised shapes given their interfaces in the
+            # e.g. Resampler components and all the downstream tools
+            # will rely on this structure so it must stay.
+            wepy_h5.extend_cycle_resampling_records(
+                0,
+                0,
+                [
+                    {
+                        "decision_id" : np.array([[0]]),
+                        "target_idxs" : np.array([[[0]]]),
+                        "step_idx" : np.array([[0]]),
+                        "walker_idx" : np.array([[0]]),
+                    },
+                    {
+                        "decision_id" : np.array([[0]]),
+                        "target_idxs" : np.array([[[0]]]),
+                        "step_idx" : np.array([[0]]),
+                        "walker_idx" : np.array([[1]]),
+                    },
+                ]
+            )
+
+            assert resampling_grp["decision_id"].shape == (2,1)
+            assert resampling_grp["target_idxs"].shape == (2,)
+            assert resampling_grp["step_idx"].shape == (2,1)
+            assert resampling_grp["walker_idx"].shape == (2,1)
+            
+    
 
     def test_add_traj(self, wepy_h5_factory, tmpdir, monkeypatch):
         path = wepy_h5_factory(Path(tmpdir) / "0.wepy.h5")
@@ -926,8 +1222,8 @@ class Test_WepyHDF5:
             assert traj_grp["box_vectors/_sparse_idxs"].shape == (0,)
             assert traj_grp["box_vectors/data"].shape == (0,0,0)
 
-
     def test_extend_traj(self, wepy_h5_factory, tmpdir):
         pass
+
 # class Test_WepyHDF5_DataConformance:
 #     pass

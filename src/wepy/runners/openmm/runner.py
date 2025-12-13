@@ -73,9 +73,9 @@ GET_STATE_DEFAULT_KEYS = frozenset(
     }
 )
 
-# default heart beat every 500 steps, should be around 0.5 - 1 picoseconds
-_DEFAULT_HEARTBEAT_INTERVAL = 500
-_DEFAULT_STATE_TIME_INTERVAL = 10 * openmm.unit.picosecond
+# default heart beat every 50 steps
+_DEFAULT_HEARTBEAT_INTERVAL = 50
+_DEFAULT_STATE_TIME_INTERVAL = 1 * openmm.unit.picosecond
 
 DEFAULT_OPENMM_REPORTER_FACTORIES = [
     HeartBeatLoggingReporterFactory(step_interval=_DEFAULT_HEARTBEAT_INTERVAL),

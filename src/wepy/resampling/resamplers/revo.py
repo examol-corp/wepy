@@ -4,16 +4,18 @@ import logging
 import multiprocessing as mp
 import random as rand
 import time
-from typing import Callable, Generic, Literal, TypedDict, TypeVar
+from typing import Callable, Generic, Literal, TypedDict, TypeVar, Annotated
 
 # Third Party Library
 import attrs
 import numpy as np
+from numpy.typing import NDArray
 
 # First Party Library
+from wepy.typing import Shape
 from wepy.resampling.decisions.clone_merge import CloneMergeDecisionRecord
 from wepy.resampling.distances.base import Distance
-from wepy.resampling.resamplers.clone_merge import CloneMergeResampler, CloneMergeResamplerRecord
+from wepy.resampling.resamplers.clone_merge import CloneMergeResampler, CloneMergeResamplingRecord
 from wepy.util.multiprocessing import proc_pool_worker_setup, queue_listener_context
 from wepy.walker import Walker, WalkerState
 from wepy.util.attrs import AttrsMappingMixin
@@ -52,9 +54,14 @@ class _ImageWrapper(Generic[WalkerState_, DistanceImage_]):
 
 @attrs.define
 class REVOResamplerResamplerRecord(AttrsMappingMixin):
-    distance_matrix: np.typing.ArrayLike
-    num_walkers: int
-    variation: float
+    distance_matrix: Annotated[
+        NDArray[np.float32],
+        Shape((Ellipsis, Ellipsis,))
+    ]
+    variation: Annotated[
+        NDArray[np.float32],
+        Shape((1,)),
+    ]
 
 
 class REVOResampler(
@@ -157,26 +164,10 @@ class REVOResampler(
 
     RESAMPLING_RECORD_FIELDS = CloneMergeResampler.RESAMPLING_RECORD_FIELDS
 
-    RESAMPLER_FIELDS = CloneMergeResampler.RESAMPLER_FIELDS + ("variation",)
+    RESAMPLER_FIELDS = CloneMergeResampler.RESAMPLER_FIELDS + ("distance_matrix", "variation",)
 
-    # TOREV: not using these anymore
-    # + (
-    #     "num_walkers",
-    #     "distance_matrix",
-    #     "variation",
-    # )
-    RESAMPLER_SHAPES = CloneMergeResampler.RESAMPLER_SHAPES + (1,)
-    # + (
-    #     (1,),
-    #     Ellipsis,
-    #     (1,),
-    # )
-    RESAMPLER_DTYPES = CloneMergeResampler.RESAMPLER_DTYPES + (float,)
-    #  + (
-    #     int,
-    #     float,
-    #     float,
-    # )
+    RESAMPLER_SHAPES = CloneMergeResampler.RESAMPLER_SHAPES + (Ellipsis, (1,))
+    RESAMPLER_DTYPES = CloneMergeResampler.RESAMPLER_DTYPES + (float, float,)
 
     # fields that can be used for a table like representation
     RESAMPLER_RECORD_FIELDS = CloneMergeResampler.RESAMPLER_RECORD_FIELDS + (
@@ -815,7 +806,7 @@ class REVOResampler(
         walkers: list[Walker[WalkerState_]],
     ) -> tuple[
         list[Walker[WalkerState_]],
-        list[CloneMergeResamplerRecord],
+        list[CloneMergeResamplingRecord],
         list[REVOResamplerResamplerRecord],
     ]:
         """Resamples walkers based on REVO algorithm
@@ -870,44 +861,29 @@ class REVOResampler(
         # to its record as well
         resampling_records = []
         for walker_idx, decision_record in enumerate(decision_records):
-            resampling_record = CloneMergeResamplerRecord(
-                **attrs.asdict(decision_record),
-                step_idx=0,
-                walker_idx=walker_idx
+            # UGLY: we need to wrap the field data into the shape
+            # declared in the CloneMergeResampler, see other notes on
+            # why
+            resampling_record = CloneMergeResamplingRecord(
+                # The decision record fields are simple, so we wrap
+                # them here as well
+                decision_id=np.array([[decision_record.decision_id]]),
+                target_idxs=np.array([[
+                    np.array(decision_record.target_idxs),
+                ]]),
+                step_idx=np.array([[0]]),
+                walker_idx=np.array([[walker_idx]])
             )
             resampling_records.append(resampling_record)
-            # TODO: handle the 2D or 1D issue
-            # resampling_record["step_idx"] = np.array([0])
-            # walker_record["walker_idx"] = np.array([walker_idx])
-
-        # TOREV: need to understand the impact of this on the data
-        # ingestion aspect of things. Otherwise not doing this here
-        # would be much cleaner.
-
-        # # convert the target idxs and decision_id to feature vector arrays
-        # for record in resampling_data:
-        #     record["target_idxs"] = np.array(record["target_idxs"])
-        #     record["decision_id"] = np.array([record["decision_id"]])
-
 
         # flatten the distance matrix and give the number of walkers
         # as well for the resampler data, there is just one per cycle
         resampler_records = [
-            REVOResamplerResamplerRecord(**{
-                "distance_matrix": np.ravel(np.array(distance_matrix)),
-                "num_walkers": len(walkers),
-                "variation": variation,
-            })
+            REVOResamplerResamplerRecord(
+                distance_matrix=np.ravel(np.array(distance_matrix)),
+                variation=np.array([[variation]]),
+            )
         ]
-
-        # TOREV: ditto, wrt to data interfaces
-        # resampler_data = [
-        #      {
-        #          "distance_matrix": np.ravel(np.array(distance_matrix)),
-        #          "num_walkers": np.array([len(walkers)]),
-        #          "variation": np.array([variation]),
-        #      }
-        #  ]
 
         return resampled_walkers, resampling_records, resampler_records
 

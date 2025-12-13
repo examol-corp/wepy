@@ -526,3 +526,84 @@ class Test_WepyHDF5Reporter:
             "box_volume" : (openmm.unit.nanometer ** 3),
         }
 
+    def test_report(self, tmp_path_factory):
+
+        # TODO: using the OpenMM Runner OpenMMState here because the
+        # HDF5 requires a 'positions' field, but this could be another
+        # stripped down kind of state for testing.
+        test_sys = LennardJonesPair()
+
+        d0 = tmp_path_factory.mktemp("0")
+        h5_path = d0 / "main.wepy.h5"
+
+        reporter = WepyHDF5Reporter(
+            file_path=h5_path,
+            topology=test_sys.json_top,
+            **RESAMPLER_REPORTER_ARGS,
+        )
+        reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
+
+        reporter.report(
+            **{
+                "cycle_idx" : 0,
+                "new_walkers" : [
+                    Walker(
+                        OpenMMState.from_dwim(
+                            positions=np.array([
+                                [0., 0., 0.,],
+                                [1., 1., 1.,],
+                            ]) * openmm.unit.nanometer,
+                        ),
+                        0.5,
+                    ),
+                    Walker(
+                        OpenMMState.from_dwim(
+                            positions=np.array([
+                                [1., 1., 1.,],
+                                [0., 0., 0.,],
+                            ]) * openmm.unit.nanometer,
+                        ),
+                        0.5,
+                    ),
+                ],
+                "n_segment_steps" : 100,
+                # Instead of cloning and merging we just swap their
+                # positions to add a little more reality to the test
+                "resampled_walkers" : [
+                    Walker(
+                        OpenMMState.from_dwim(
+                            positions=np.array([
+                                [1., 1., 1.,],
+                                [0., 0., 0.,],
+                            ]) * openmm.unit.nanometer,
+                        ),
+                        0.5,
+                    ),
+                    Walker(
+                        OpenMMState.from_dwim(
+                            positions=np.array([
+                                [0., 0., 0.,],
+                                [1., 1., 1.,],
+                            ]) * openmm.unit.nanometer,
+                        ),
+                        0.5,
+                    ),
+                ],
+                "resampling_data" : [
+                    {
+                        "decision_id" : np.array([[0]]),
+                        "target_idxs" : np.array([[[1]]]),
+                        "step_idx" : np.array([[0]]),
+                        "walker_idx" : np.array([[0]]),
+                    },
+                    {
+                        "decision_id" : np.array([[0]]),
+                        "target_idxs" : np.array([[[0]]]),
+                        "step_idx" : np.array([[0]]),
+                        "walker_idx" : np.array([[1]]),
+                    },
+                ],
+            },
+            **CYCLE_REPORT_DICT_COMMON,
+            **CYCLE_REPORT_DICT_EMPTY_OPTIONALS,
+        )

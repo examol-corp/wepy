@@ -17,7 +17,7 @@ import pytest
 
 # First Party Library
 from wepy.reporter.dashboard import DashboardReporter
-from wepy.resampling.resamplers.revo import REVOResamplerFactory
+from wepy.resampling.resamplers.revo import REVOResamplerFactory, REVOResampler
 from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState
 from wepy.runners.openmm.runner import (
     _DEFAULT_HEARTBEAT_INTERVAL,
@@ -25,6 +25,7 @@ from wepy.runners.openmm.runner import (
 )
 from wepy.sim_manager import Manager
 from wepy.reporter.dashboard import DashboardReporter
+from wepy.reporter.hdf5 import WepyHDF5Reporter
 
 # TODO: use the high-level API imports
 from wepy.walker import Walker
@@ -108,7 +109,15 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
     dashboard_path = outputs_dir / "main.wepy_dash.org"
     dashboard_reporter = DashboardReporter(dashboard_path)
 
-    reporters = [dashboard_reporter]
+    hdf5_path = outputs_dir / "main.wepy.h5"
+    hdf5_reporter = WepyHDF5Reporter.from_components(
+        file_path=hdf5_path,
+        save_fields=("positions",),
+        topology=test_sys.json_top,
+        resampler_class=REVOResampler,
+    )
+
+    reporters = [dashboard_reporter, hdf5_reporter]
 
     sim_manager = Manager(
         init_walkers=init_walkers,
@@ -116,29 +125,26 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
         resampler_factory=resampler_factory,
         # resampler_factory=NoResampler,
         work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
-            # DEBUG
-            # platform="Reference",
-            # num_procs=1,
             platform="CPU",
             num_procs=num_workers,
-            # global_platform_properties={"Threads" : "1"},
             global_platform_properties={"Threads": str(cores_per_worker)},
         ),
         reporters=reporters,
     )
 
-    new_walkers, sim_components = sim_manager.run_simulation(
-        n_cycles=2,
-        segment_lengths=10,
-    )
-    
     # new_walkers, sim_components = sim_manager.run_simulation(
     #     n_cycles=2,
-    #     segment_lengths=DEFAULT_CYCLE_STEPS,
+    #     segment_lengths=10,
     # )
+    new_walkers, sim_components = sim_manager.run_simulation(
+        n_cycles=2,
+        segment_lengths=DEFAULT_CYCLE_STEPS,
+    )
 
     assert dashboard_path.exists()
     _LOGGER.info("\n" + dashboard_path.read_text())
+    assert hdf5_path.exists()
+    # TODO: add some tests for HDF5 data
 
 
 # disable timeout for this one
@@ -146,7 +152,7 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
 def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
 
     outputs_dir = tmp_path_factory.mktemp("outputs")
-    
+
     ala_sys = AlanineDipeptideExplicitSystem()
 
     integrator = openmm.LangevinIntegrator(TEMPERATURE, 0.1, STEP_SIZE)
@@ -199,8 +205,16 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
 
     dashboard_path = outputs_dir / "main.wepy_dash.org"
     dashboard_reporter = DashboardReporter(dashboard_path)
-    reporters = [dashboard_reporter]
-    
+
+    hdf5_path = outputs_dir / "main.wepy.h5"
+    hdf5_reporter = WepyHDF5Reporter.from_components(
+        file_path=hdf5_path,
+        save_fields=("positions",),
+        topology=ala_sys.json_top,
+        resampler_class=REVOResampler,
+    )
+
+    reporters = [dashboard_reporter, hdf5_reporter]
 
     sim_manager = Manager(
         init_walkers=init_walkers,
@@ -235,8 +249,9 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
 
     new_walkers, sim_components = sim_manager.run_simulation(
         n_cycles=3,
-        segment_lengths=10,
+        segment_lengths=DEFAULT_CYCLE_STEPS,
     )
-    
+
     assert dashboard_path.exists()
     _LOGGER.info("\n" + dashboard_path.read_text())
+    assert hdf5_path.exists()

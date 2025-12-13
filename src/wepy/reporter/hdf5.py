@@ -1,7 +1,7 @@
 # Standard Library
 from pathlib import Path
 import logging
-from typing import Self, TypedDict, Literal, Generic, TypeVar
+from typing import Self, TypedDict, Literal, Generic, TypeVar, Any
 
 # Standard Library
 
@@ -15,9 +15,9 @@ from wepy.reporter.base import (
     SimComponentArgs,
     CycleReportDict,
 )
-from wepy.reporter.types import (
-    FieldShapeSpec,
-    FieldDtype,
+from wepy.storage.protocol import (
+    RecordFieldShapeSpec,
+    RecordFieldDtype,
 )
 from wepy.reporter.file import FileReporterABC, FileMode
 from wepy.util.json_top import json_top_atom_count
@@ -25,10 +25,17 @@ from wepy.walker import Walker, WalkerState, WalkerStateBox
 from wepy.resampling.resamplers.resampler import Resampler
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.typing import Shape, Idxs, IdxArray
+from wepy.storage.protocol import Record
 
 logger = logging.getLogger(__name__)
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+ResamplingRecord_ = TypeVar("ResamplingRecord_", bound=Record)
+ResamplerRecord_ = TypeVar("ResamplerRecord_", bound=Record)
+
+WarpingRecord_ = TypeVar("WarpingRecord_", bound=Record)
+BCRecord_ = TypeVar("BCRecord_", bound=Record)
+ProgressRecord_ = TypeVar("ProgressRecord_", bound=Record)
 
 class UnitError(Exception):
     pass
@@ -36,7 +43,17 @@ class UnitError(Exception):
 # TODO: support for pint
 Quantity = openmm.unit.Quantity
 
-class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
+class WepyHDF5Reporter(
+        FileReporterABC,
+        Generic[
+            WalkerState_,
+            ResamplingRecord_,
+            ResamplerRecord_,
+            WarpingRecord_,
+            BCRecord_,
+            ProgressRecord_,
+        ],
+):
     """Reporter for generating an HDF5 format (WepyHDF5) data file from
     simulations.
 
@@ -67,8 +84,8 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
     swmr_mode: bool
     save_fields: tuple[str, ...] | None
     _sparse_fields: dict[str, int]
-    _feature_shapes: dict[str, FieldShapeSpec] | None
-    _feature_dtypes: dict[str, FieldDtype] | None
+    _feature_shapes: dict[str, RecordFieldShapeSpec] | None
+    _feature_dtypes: dict[str, RecordFieldDtype] | None
     _n_dims: int
     resampling_fields: tuple[str, ...]
     decision_enum_dict: dict[str, int]
@@ -115,8 +132,8 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
         # should be derived from runner metadata in the common case. I
         # think in most cases they are determined dynamically, so this
         # needs to be amended.
-        feature_shapes: dict[str, FieldShapeSpec] | None = None,
-        feature_dtypes: dict[str, FieldDtype] | None = None,
+        feature_shapes: dict[str, RecordFieldShapeSpec] | None = None,
+        feature_dtypes: dict[str, RecordFieldDtype] | None = None,
         # Resampling optionals
         resampling_records: tuple[str, ...] | None = None,
         # Resampler fields are optional
@@ -385,8 +402,8 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
         file_path: Path,
         topology: str,
         resampler_class: type[Resampler],
-        feature_shapes: dict[str, FieldShapeSpec] | None = None,
-        feature_dtypes: dict[str, FieldDtype] | None = None,
+        feature_shapes: dict[str, RecordFieldShapeSpec] | None = None,
+        feature_dtypes: dict[str, RecordFieldDtype] | None = None,
         boundary_conditions_class: type[BoundaryConditions] | None = None,
         swmr_mode: bool = False,
         save_fields: tuple[str, ...] | None = None,
@@ -741,33 +758,16 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
             progress_records=self.progress_records,
         )
 
-    def cleanup(self, **kwargs):
-        # it should be already closed at this point but just in case
-        if not self.wepy_h5.closed:
-            self.wepy_h5.close()
-
-        # remove reference to the WepyHDF5 file so we can serialize this object
-        del self.wepy_h5
-
-        super().cleanup(**kwargs)
-
     def report(
         self,
-        new_walkers=None,
-        cycle_idx=None,
-        warp_data=None,
-        bc_data=None,
-        progress_data=None,
-        resampling_data=None,
-        resampler_data=None,
-        **kwargs,
-    ):
-        n_walkers = len(new_walkers)
+        **kwargs: CycleReportDict,
+    ) -> None:
+        n_walkers = len(kwargs["new_walkers"])
 
         # determine which fields to save. If there were none specified
         # save all of them
         if self.save_fields is None:
-            save_fields = list(new_walkers[0].state.dict().keys())
+            save_fields = list(kwargs["new_walkers"][0].state.dict().keys())
         else:
             save_fields = self.save_fields
 
@@ -777,7 +777,7 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
                 self.wepy_h5.swmr_mode = True
 
             # add trajectory data for the walkers
-            for walker_idx, walker in enumerate(new_walkers):
+            for walker_idx, walker in enumerate(kwargs["new_walkers"]):
                 walker_weight = walker.weight
                 walker_data = walker.state.dict()
 
@@ -797,11 +797,23 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
                     # if this is a sparse field we decide
                     # whether it is a valid cycle to save on
                     if field_path in self._sparse_fields:
-                        if cycle_idx % self._sparse_fields[field_path] != 0:
+                        if kwargs["cycle_idx"] % self._sparse_fields[field_path] != 0:
                             # this is not a valid cycle so we
                             # remove from the walker_data
                             walker_data.pop(field_path)
                             continue
+
+                # Convert the walker data to plain non-quantity values. Only
+                # do this for the save fields to avoid expensive conversions
+                # for unused fields (e.g. forces)
+                #
+                # NOTE: do this before creating derived fields so the
+                # Quantities don't propagate to them
+                _state_noq, _units_used = self._resolve_state_units(
+                    units=self.units,
+                    state=WalkerStateBox(**walker_data),
+                )
+                _walker_data_noq = _state_noq.dict()
 
                 # Add the alt_reps fields by slicing the positions
                 for alt_rep_key in self.alt_reps_to_save:
@@ -814,30 +826,32 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
                         # check to make sure this is a cycle this is
                         # to be saved to, if it is not continue on to
                         # the next field without saving this one
-                        if cycle_idx % self._sparse_fields[alt_rep_path] != 0:
+                        if kwargs["cycle_idx"] % self._sparse_fields[alt_rep_path] != 0:
                             continue
 
                     # slice them and save them
 
                     # if the idxs are None we want all of the atoms
                     if alt_rep_idxs is None:
-                        alt_rep_data = walker_data["positions"][:]
+                        alt_rep_data = _walker_data_noq["positions"][:]
                     # otherwise get only th atoms we want
                     else:
-                        alt_rep_data = walker_data["positions"][alt_rep_idxs]
-                    walker_data[alt_rep_path] = alt_rep_data
+                        alt_rep_data = _walker_data_noq["positions"][alt_rep_idxs]
+
+                    _walker_data_noq[alt_rep_path] = alt_rep_data
 
                 # lastly reduce the atoms for the main representation
                 # if this option was given
                 if self.main_rep_idxs is not None:
-                    walker_data["positions"] = walker_data["positions"][
+                    _walker_data_noq["positions"] = _walker_data_noq["positions"][
                         self.main_rep_idxs
                     ]
+
 
                 # for all of these fields we wrap them in another
                 # dimension to make them feature vectors
                 for field_path in list(walker_data.keys()):
-                    walker_data[field_path] = np.array([walker_data[field_path]])
+                    _walker_data_noq[field_path] = np.array([_walker_data_noq[field_path]])
 
                 # save the data to the HDF5 file for this walker
 
@@ -848,37 +862,47 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
                         self.wepy_run_idx,
                         walker_idx,
                         weights=np.array([[walker_weight]]),
-                        data=walker_data,
+                        data=_walker_data_noq,
                     )
                 # start a new trajectory
                 else:
                     # add the traj for the walker with the data
-
                     traj_grp = self.wepy_h5.add_traj(
                         self.wepy_run_idx,
                         weights=np.array([[walker_weight]]),
-                        data=walker_data,
+                        data=_walker_data_noq,
                     )
 
                     # add as metadata the cycle idx where this walker started
-                    traj_grp.attrs["cycle_idx"] = cycle_idx
+                    traj_grp.attrs["cycle_idx"] = kwargs["cycle_idx"]
 
             # report the boundary conditions records data, if boundary
             # conditions were initialized
             if self.warping_fields is not None:
-                self._report_warping(cycle_idx, warp_data)
-                self._report_bc(cycle_idx, bc_data)
-                self._report_progress(cycle_idx, progress_data)
+                self._report_warping(kwargs["cycle_idx"], kwargs["warp_data"])
+                self._report_bc(kwargs["cycle_idx"], kwargs["bc_data"])
+                self._report_progress(kwargs["cycle_idx"], kwargs["progress_data"])
 
             # report the resampling records data
-            self._report_resampling(cycle_idx, resampling_data)
+            self._report_resampling(
+                kwargs["cycle_idx"],
+                kwargs["resampling_data"],
+            )
 
-            self._report_resampler(cycle_idx, resampler_data)
+            self._report_resampler(kwargs["cycle_idx"], kwargs["resampler_data"])
 
-        super().report(**kwargs)
 
+    def cleanup(self, **kwargs: SimComponentArgs) -> None:
+        # # it should be already closed at this point but just in case
+        # if not self.wepy_h5.closed:
+        #     self.wepy_h5.close()
+
+        # remove reference to the WepyHDF5 file so we can serialize this object
+        del self.wepy_h5
+
+        
     # sporadic
-    def _report_warping(self, cycle_idx, warping_data):
+    def _report_warping(self, cycle_idx: int, warping_data: list[WarpingRecord_]) -> None:
         """Method to write warping specific information.
 
         Parameters
@@ -896,7 +920,7 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
                 self.wepy_run_idx, cycle_idx, warping_data
             )
 
-    def _report_bc(self, cycle_idx, bc_data):
+    def _report_bc(self, cycle_idx: int, bc_data: list[BCRecord_]) -> None:
         """Method to write boundary condition update specific information.
 
         Parameters
@@ -912,7 +936,11 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
         if len(bc_data) > 0:
             self.wepy_h5.extend_cycle_bc_records(self.wepy_run_idx, cycle_idx, bc_data)
 
-    def _report_resampler(self, cycle_idx, resampler_data):
+    def _report_resampler(
+            self,
+            cycle_idx: int,
+            resampler_data: list[ResamplerRecord_],
+    ) -> None:
         """Method to write resampler update specific information.
 
         Parameters
@@ -927,12 +955,18 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
 
         if len(resampler_data) > 0:
             self.wepy_h5.extend_cycle_resampler_records(
-                self.wepy_run_idx, cycle_idx, resampler_data
+                self.wepy_run_idx,
+                cycle_idx,
+                resampler_data,
             )
 
     # the resampling records are provided every cycle but they need to
     # be saved as sporadic because of the variable number of walkers
-    def _report_resampling(self, cycle_idx, resampling_data):
+    def _report_resampling(
+            self,
+            cycle_idx: int,
+            resampling_records: list[ResamplingRecord_],
+    ) -> None:
         """Method to write resampling specific information.
 
         Parameters
@@ -946,11 +980,11 @@ class WepyHDF5Reporter(FileReporterABC, Generic[WalkerState_]):
         """
 
         self.wepy_h5.extend_cycle_resampling_records(
-            self.wepy_run_idx, cycle_idx, resampling_data
+            self.wepy_run_idx, cycle_idx, resampling_records
         )
 
     # continual
-    def _report_progress(self, cycle_idx, progress_data):
+    def _report_progress(self, cycle_idx: int, progress_data: ProgressRecord_) -> None:
         """Method to write progress specific information.
 
         Parameters

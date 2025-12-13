@@ -404,7 +404,6 @@ from collections import Counter, defaultdict, namedtuple
 from warnings import warn
 
 # Third Party Library
-import attrs
 import h5py
 import numpy as np
 from numpy.typing import NDArray
@@ -418,12 +417,17 @@ from wepy.util.mdtraj import (
 )
 from wepy.util.util import traj_box_vectors_to_lengths_angles
 from wepy.reporter.file import FileMode
-from wepy.reporter.types import(
-    FieldShapeSpec,
-    FieldDtype,
-)
 from wepy.typing import Shape, Idxs, IdxArray
 from wepy.walker import WalkerStateBox, Walker
+from wepy.resampling.decisions.decision import DecisionRecord
+
+from wepy.storage.protocol import (
+    RecordValueDtype,
+    Record,
+    RecordFieldShapeSpec,
+    RecordFieldDtype,
+    RecordFieldSpec,
+)
 
 # optional dependencies
 try:
@@ -443,7 +447,7 @@ logger = logging.getLogger(__name__)
 H5AttrDtype = str | int | float
 
 H5Attrs = dict[str, H5AttrDtype]
-    
+
 ## h5py settings
 
 # we set the libver to always be the latest (which should be 1.10) so
@@ -1055,8 +1059,8 @@ class WepyHDF5:
         n_dims: int | None = None,
         alt_reps: dict[str, IdxArray] | None = None,
         main_rep_idxs: IdxArray | None = None,
-        feature_shapes_overrides: dict[str, FieldShapeSpec] | None = None,
-        feature_dtypes_overrides: dict[str, FieldDtype] | None = None,
+        feature_shapes_overrides: dict[str, RecordFieldShapeSpec] | None = None,
+        feature_dtypes_overrides: dict[str, RecordFieldDtype] | None = None,
     ):
         """Constructor for the WepyHDF5 class.
 
@@ -1464,7 +1468,12 @@ class WepyHDF5:
                     # (wrapping it in another list)
                     walker_grp.create_dataset(field_key, data=np.array([field_value]))
 
-    def _init_run_sporadic_record_grp(self, run_idx, run_record_key, fields):
+    def _init_run_sporadic_record_grp(
+            self,
+            run_idx: int,
+            run_record_key: str,
+            fields: list[RecordFieldSpec],
+    ) -> h5py.Group:
         """Initialize a sporadic record group for a run.
 
         Parameters
@@ -1489,7 +1498,7 @@ class WepyHDF5:
 
         # initialize the cycles dataset that maps when the records
         # were recorded
-        record_grp.create_dataset(CYCLE_IDXS, (0,), dtype=int, maxshape=(None,))
+        record_grp.create_dataset(CYCLE_IDXS, (0,), dtype=np.int64, maxshape=(None,))
 
         # for each field simply create the dataset
         for field_name, field_shape, field_dtype in fields:
@@ -1532,8 +1541,13 @@ class WepyHDF5:
         return record_grp
 
     def _init_run_records_field(
-        self, run_idx, run_record_key, field_name, field_shape, field_dtype
-    ):
+        self,
+        run_idx: int,
+        run_record_key: str,
+        field_name: str,
+        field_shape: RecordFieldShapeSpec,
+        field_dtype: RecordFieldDtype,
+    ) -> h5py.Dataset:
         """Initialize a single field for a run record group.
 
         Parameters
@@ -1561,7 +1575,7 @@ class WepyHDF5:
         if field_shape is Ellipsis:
             # make a special dtype that allows it to be
             # variable length
-            vlen_dt = h5py.special_dtype(vlen=field_dtype)
+            vlen_dt = h5py.vlen_dtype(field_dtype)
 
             # this is only allowed to be a single dimension
             # since no real shape was given
@@ -1581,7 +1595,10 @@ class WepyHDF5:
 
         return dset
 
-    def _is_sporadic_records(self, run_record_key):
+    @staticmethod
+    def _is_sporadic_records(
+            run_record_key: str
+    ) -> bool:
         """Tests whether a record group is sporadic or not.
 
         Parameters
@@ -2037,8 +2054,12 @@ class WepyHDF5:
             self._add_field_feature_dtype(field_path, field_feature_dtype)
 
     def _extend_run_record_data_field(
-        self, run_idx, run_record_key, field_name, field_data
-    ):
+        self,
+        run_idx: int,
+        run_record_key: str,
+        field_name: str,
+        field_data: NDArray,
+    ) -> None:
         """Primitive record append method.
 
         Adds data for a single field dataset in a run records group. This
@@ -2060,7 +2081,6 @@ class WepyHDF5:
         records_grp = self.h5["{}/{}/{}".format(RUNS, run_idx, run_record_key)]
         field = records_grp[field_name]
 
-        breakpoint()
         # make sure this is a feature vector
         assert (
             len(field_data.shape) > 1
@@ -4290,7 +4310,11 @@ class WepyHDF5:
 
     # application level methods for initializing the run records
     # groups with just the fields and without the objects
-    def init_run_fields_resampling(self, run_idx: int, fields: list[str]) -> h5py.Group:
+    def init_run_fields_resampling(
+            self,
+            run_idx: int,
+            fields: list[RecordFieldSpec],
+    ) -> h5py.Group:
         """Initialize this record group fields datasets.
 
         Parameters
@@ -4309,7 +4333,11 @@ class WepyHDF5:
 
         return grp
 
-    def init_run_fields_resampling_decision(self, run_idx, decision_enum_dict):
+    def init_run_fields_resampling_decision(
+            self,
+            run_idx: int,
+            decision_enum_dict: dict[str,str]
+    ) -> None:
         """Initialize the decision group for this run.
 
         Parameters
@@ -4408,7 +4436,7 @@ class WepyHDF5:
             self,
             run_idx: int,
             run_record_key: str,
-            fields: list[str],
+            fields: list[RecordFieldSpec],
     ) -> h5py.Group:
         """Initialize a record group for a run.
 
@@ -4782,7 +4810,12 @@ class WepyHDF5:
         """
         self.extend_cycle_run_group_records(run_idx, PROGRESS, cycle_idx, progress_data)
 
-    def extend_cycle_resampling_records(self, run_idx, cycle_idx, resampling_data):
+    def extend_cycle_resampling_records(
+            self,
+            run_idx: int,
+            cycle_idx: int,
+            resampling_data: list[Record],
+    ) -> None:
         """Add records for each field for this record group.
 
         Parameters
@@ -4790,14 +4823,21 @@ class WepyHDF5:
         run_idx : int
         cycle_idx : int
             The cycle index these records correspond to.
-        resampling_data : dict of str : arraylike
+        resampling_data : list[dict of str : arraylike]
             Mapping of the record group fields to a collection of
             values for each field.
 
         """
 
+        # TODO: we should probably expand the data arrays to the
+        # feature arrays if that is required so the data types from
+        # the outside stay cleaner.
+
         self.extend_cycle_run_group_records(
-            run_idx, RESAMPLING, cycle_idx, resampling_data
+            run_idx,
+            RESAMPLING,
+            cycle_idx,
+            resampling_data,
         )
 
     def extend_cycle_resampler_records(self, run_idx, cycle_idx, resampler_data):
@@ -4818,8 +4858,12 @@ class WepyHDF5:
         )
 
     def extend_cycle_run_group_records(
-        self, run_idx, run_record_key, cycle_idx, fields_data
-    ):
+        self,
+        run_idx: int,
+        run_record_key: str,
+        cycle_idx: int,
+        fields_data: list[Record],
+    ) -> None:
         """Extend data for a whole records group.
 
         This must have the cycle index for the data it is appending as
@@ -4858,7 +4902,7 @@ class WepyHDF5:
 
         # then add all the data for the field
         for record in fields_data:
-            for field_name, field_data in attrs.asdict(record).items():
+            for field_name, field_data in record.items():
                 self._extend_run_record_data_field(
                     run_idx, run_record_key, field_name, np.array([field_data])
                 )

@@ -1,8 +1,9 @@
 # Standard Library
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Annotated
 
 # Third Party Library
 import numpy as np
+from numpy.typing import NDArray
 import attrs
 
 # First Party Library
@@ -16,15 +17,29 @@ from wepy.resampling.resamplers.resampler import (
 )
 from wepy.walker import Walker, WalkerState
 from wepy.util.attrs import AttrsMappingMixin
+from wepy.typing import Shape
 
 @attrs.define
-class CloneMergeResamplerRecord(AttrsMappingMixin):
+class CloneMergeResamplingRecord(AttrsMappingMixin):
     # from the Decision
-    decision_id: int
-    target_idxs: tuple[int]
+    decision_id: Annotated[
+        NDArray[np.int64],
+        Shape((1,)),
+    ]
+    target_idxs: Annotated[
+        NDArray[np.int64],
+        Shape((Ellipsis,)),
+    ]
+
     # extra for the resampler
-    step_idx: int
-    walker_idx: int
+    step_idx: Annotated[
+        NDArray[np.int64],
+        Shape((1,)),
+    ]
+    walker_idx: Annotated[
+        NDArray[np.int64],
+        Shape((1,)),
+    ]
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 

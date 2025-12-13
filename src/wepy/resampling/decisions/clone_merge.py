@@ -47,12 +47,12 @@ CLONE_MERGE_DECISION_ENUM_VALUES = {1, 2, 3, 4}
 
 class CloneMergeDecisionRecordDict(TypedDict):
     decision_id: int
-    target_idxs: tuple[int]
+    target_idxs: tuple[int, ...]
 
 @attrs.define
 class CloneMergeDecisionRecord(BaseDecisionRecord):
     decision_id: int = attrs.field()
-    target_idxs: tuple[int] = attrs.field()
+    target_idxs: tuple[int, ...] = attrs.field()
 
     @decision_id.validator
     def _check_decision_id(self, attribute, value) -> None:
