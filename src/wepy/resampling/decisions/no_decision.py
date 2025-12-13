@@ -1,5 +1,6 @@
 # Standard Library
 from enum import IntEnum
+from typing import TypedDict
 
 # Third Party Library
 import attrs
@@ -15,11 +16,23 @@ class NothingDecisionEnum(IntEnum):
     NOTHING = 0
     """Do nothing with the walker."""
 
+class NoDecisionRecordDict(TypedDict):
+    decision_id: int
+    target_idx: int
 
 @attrs.define
 class NoDecisionRecord(BaseDecisionRecord):
-    decision_id: int
-    target_idx: int
+    decision_id: int = attrs.field()
+    target_idx: int = attrs.field(validator=attrs.validators.ge(0))
+
+    @decision_id.validator
+    def _check_decision_id(self, attribute, value) -> None:
+
+        if value != NothingDecisionEnum.NOTHING.value:
+            raise ValueError(f"Invalid decision_id ({value}) must be {NothingDecisionEnum.NOTHING.value}")
+
+    def to_dict(self) -> NoDecisionRecordDict:
+        return attrs.asdict(self)
 
 
 class NoDecision(BaseDecisionABC):

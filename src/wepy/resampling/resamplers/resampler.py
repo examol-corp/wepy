@@ -1,6 +1,6 @@
 # Standard Library
 import logging
-from typing import Any, Generic, Literal, Protocol, TypeVar, Union
+from typing import Generic, Protocol, TypeVar, Union
 from warnings import warn
 
 # Third Party Library
@@ -10,6 +10,7 @@ import numpy as np
 from wepy.resampling.decisions.decision import BaseDecisionABC
 from wepy.walker import Walker, WalkerState
 from wepy.reporter.types import FieldShapeSpec, FieldDtype
+from wepy.storage.protocol import Record
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,10 @@ class ResamplerError(Exception):
     pass
 
 
-class Resampler(Protocol, Generic[WalkerState_]):
+ResamplingRecord_ = TypeVar("ResamplingRecord_", bound=Record)
+ResamplerRecord_ = TypeVar("ResamplerRecord_", bound=Record)
+
+class Resampler(Protocol, Generic[WalkerState_, ResamplingRecord_, ResamplerRecord_]):
 
     DECISION: BaseDecisionABC
     CYCLE_FIELDS: tuple[str, ...]
@@ -56,13 +60,12 @@ class Resampler(Protocol, Generic[WalkerState_]):
 
     def resample(self, walkers: list[Walker[WalkerState_]]) -> tuple[
         list[Walker[WalkerState_]],
-        # TODO: better types for this
-        list[dict[str, Any]],
-        list[dict[str, Any]],
+        list[ResamplingRecord_],
+        list[ResamplerRecord_],
     ]: ...
 
 
-class ResamplerABC(Resampler):
+class ResamplerABC(Resampler, Generic[WalkerState_, ResamplingRecord_, ResamplerRecord_]):
     """Abstract base class for implementing resamplers.
 
     All subclasses of Resampler must implement the 'resample' method.
@@ -650,8 +653,8 @@ class ResamplerABC(Resampler):
         debug_mode: bool = False,
     ) -> tuple[
         list[Walker[WalkerState_]],
-        list[dict[str, Any]],
-        list[dict[str, Any]],
+        list[ResamplingRecord_],
+        list[ResamplerRecord_],
     ]:
         """Perform resampling on the set of walkers.
 
@@ -680,3 +683,5 @@ class ResamplerABC(Resampler):
         """
 
         raise NotImplementedError
+
+    

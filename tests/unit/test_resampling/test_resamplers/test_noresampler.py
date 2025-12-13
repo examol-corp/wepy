@@ -1,9 +1,12 @@
 # First Party Library
 from wepy.resampling.decisions.no_decision import NothingDecisionEnum
-from wepy.resampling.resamplers.noresampler import NoResampler, NoResamplerFactory
+from wepy.resampling.resamplers.noresampler import NoResampler, NoResamplerFactory, NoResamplerResamplingRecord, NoResamplerResamplerRecord
 from wepy.runners.mock import MockState
 from wepy.walker import Walker
 
+def test_NoResamplerResamplingRecord():
+
+    assert NoResamplerResamplingRecord(0, (1,)) == NoResamplerResamplingRecord(0, (1,))
 
 class Test_NoResampler:
 
@@ -30,22 +33,20 @@ class Test_NoResampler:
         assert resampler.resample(walkers) == (
             walkers,
             [
-                [
-                    dict(
+                    NoResamplerResamplingRecord(
                         decision_id=NothingDecisionEnum.NOTHING.value,
                         target_idxs=[0],
                     ),
-                    dict(
+                    NoResamplerResamplingRecord(
                         decision_id=NothingDecisionEnum.NOTHING.value,
                         target_idxs=[1],
                     ),
-                    dict(
+                    NoResamplerResamplingRecord(
                         decision_id=NothingDecisionEnum.NOTHING.value,
                         target_idxs=[2],
                     ),
-                ]
             ],
-            [{}],
+            [NoResamplerResamplerRecord()],
         )
 
 

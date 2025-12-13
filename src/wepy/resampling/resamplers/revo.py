@@ -13,9 +13,10 @@ import numpy as np
 # First Party Library
 from wepy.resampling.decisions.clone_merge import CloneMergeDecisionRecord
 from wepy.resampling.distances.base import Distance
-from wepy.resampling.resamplers.clone_merge import CloneMergeResampler
+from wepy.resampling.resamplers.clone_merge import CloneMergeResampler, CloneMergeResamplerRecord
 from wepy.util.multiprocessing import proc_pool_worker_setup, queue_listener_context
 from wepy.walker import Walker, WalkerState
+from wepy.util.attrs import AttrsMappingMixin
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,8 @@ class _ImageWrapper(Generic[WalkerState_, DistanceImage_]):
         logger.info("Finished image computation")
         return result
 
-
-class REVOResamplerResamplerData(TypedDict):
+@attrs.define
+class REVOResamplerResamplerRecord(AttrsMappingMixin):
     distance_matrix: np.typing.ArrayLike
     num_walkers: int
     variation: float
@@ -156,21 +157,26 @@ class REVOResampler(
 
     RESAMPLING_RECORD_FIELDS = CloneMergeResampler.RESAMPLING_RECORD_FIELDS
 
-    RESAMPLER_FIELDS = CloneMergeResampler.RESAMPLER_FIELDS + (
-        "num_walkers",
-        "distance_matrix",
-        "variation",
-    )
-    RESAMPLER_SHAPES = CloneMergeResampler.RESAMPLER_SHAPES + (
-        (1,),
-        Ellipsis,
-        (1,),
-    )
-    RESAMPLER_DTYPES = CloneMergeResampler.RESAMPLER_DTYPES + (
-        int,
-        float,
-        float,
-    )
+    RESAMPLER_FIELDS = CloneMergeResampler.RESAMPLER_FIELDS + ("variation",)
+
+    # TOREV: not using these anymore
+    # + (
+    #     "num_walkers",
+    #     "distance_matrix",
+    #     "variation",
+    # )
+    RESAMPLER_SHAPES = CloneMergeResampler.RESAMPLER_SHAPES + (1,)
+    # + (
+    #     (1,),
+    #     Ellipsis,
+    #     (1,),
+    # )
+    RESAMPLER_DTYPES = CloneMergeResampler.RESAMPLER_DTYPES + (float,)
+    #  + (
+    #     int,
+    #     float,
+    #     float,
+    # )
 
     # fields that can be used for a table like representation
     RESAMPLER_RECORD_FIELDS = CloneMergeResampler.RESAMPLER_RECORD_FIELDS + (
@@ -701,19 +707,10 @@ class REVOResampler(
         logger.info(f"Finished optimization: {final_variation}")
 
         logger.info("Assigning clones")
-        walker_records = self.assign_clones(merge_groups, walker_clone_nums)
+        decision_records = self.assign_clones(merge_groups, walker_clone_nums)
 
-        # TOREV: this was taken out as it probably wasn't necessary,
-        # but this may be critical in analyses, check this
 
-        # because there is only one step in resampling here we just
-        # add another field for the step as 0 and add the walker index
-        # to its record as well
-        # for walker_idx, walker_record in enumerate(walker_actions):
-        #     walker_record["step_idx"] = np.array([0])
-        #     walker_record["walker_idx"] = np.array([walker_idx])
-
-        return walker_records, final_variation
+        return decision_records, final_variation
 
     def _all_to_all_distance(
         self,
@@ -818,8 +815,8 @@ class REVOResampler(
         walkers: list[Walker[WalkerState_]],
     ) -> tuple[
         list[Walker[WalkerState_]],
-        list[list[CloneMergeDecisionRecord]],
-        list[REVOResamplerResamplerData],
+        list[CloneMergeResamplerRecord],
+        list[REVOResamplerResamplerRecord],
     ]:
         """Resamples walkers based on REVO algorithm
 
@@ -858,10 +855,30 @@ class REVOResampler(
         # determine cloning and merging actions to be performed, by
         # maximizing the variation, i.e. the Decider
         logger.info("Making resampling decisions")
-        resampling_data, variation = self.decide(
+        decision_records, variation = self.decide(
             walker_weights, num_walker_copies, distance_matrix
         )
         logger.info("Finished resampling decisions")
+
+        # actually do the cloning and merging of the walkers
+        resampled_walkers = self.DECISION.action(walkers, [decision_records])
+
+        ## Generate the full resampling records
+
+        # because there is only one step in resampling here we just
+        # add another field for the step as 0 and add the walker index
+        # to its record as well
+        resampling_records = []
+        for walker_idx, decision_record in enumerate(decision_records):
+            resampling_record = CloneMergeResamplerRecord(
+                **attrs.asdict(decision_record),
+                step_idx=0,
+                walker_idx=walker_idx
+            )
+            resampling_records.append(resampling_record)
+            # TODO: handle the 2D or 1D issue
+            # resampling_record["step_idx"] = np.array([0])
+            # walker_record["walker_idx"] = np.array([walker_idx])
 
         # TOREV: need to understand the impact of this on the data
         # ingestion aspect of things. Otherwise not doing this here
@@ -872,17 +889,15 @@ class REVOResampler(
         #     record["target_idxs"] = np.array(record["target_idxs"])
         #     record["decision_id"] = np.array([record["decision_id"]])
 
-        # actually do the cloning and merging of the walkers
-        resampled_walkers = self.DECISION.action(walkers, [resampling_data])
 
         # flatten the distance matrix and give the number of walkers
         # as well for the resampler data, there is just one per cycle
-        resampler_data = [
-            {
+        resampler_records = [
+            REVOResamplerResamplerRecord(**{
                 "distance_matrix": np.ravel(np.array(distance_matrix)),
                 "num_walkers": len(walkers),
                 "variation": variation,
-            }
+            })
         ]
 
         # TOREV: ditto, wrt to data interfaces
@@ -894,7 +909,7 @@ class REVOResampler(
         #      }
         #  ]
 
-        return resampled_walkers, resampling_data, resampler_data
+        return resampled_walkers, resampling_records, resampler_records
 
 
 @attrs.define

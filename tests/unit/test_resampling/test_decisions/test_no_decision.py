@@ -1,3 +1,4 @@
+import pytest
 # First Party Library
 from wepy.resampling.decisions.no_decision import (
     NoDecision,
@@ -7,8 +8,38 @@ from wepy.resampling.decisions.no_decision import (
 from wepy.runners.mock import MockState
 from wepy.walker import Walker
 
+class Test_NoDecisionRecord:
 
-class TestNoDecision:
+    def test___init__(self):
+
+        NoDecisionRecord(
+            decision_id=0,
+            target_idx=1,
+        )
+
+        with pytest.raises(ValueError):
+            NoDecisionRecord(
+                decision_id=1,
+                target_idx=1,
+            )
+
+        with pytest.raises(ValueError):
+            NoDecisionRecord(
+                decision_id=0,
+                target_idx=-1,
+            )
+
+    def test_to_dict(self):
+
+        assert NoDecisionRecord(
+            decision_id=0,
+            target_idx=0
+        ).to_dict() == {
+            "decision_id" : 0,
+            "target_idx" : 0,
+        }
+
+class Test_NoDecision:
 
     def test_action(self):
 

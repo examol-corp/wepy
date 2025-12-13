@@ -2,6 +2,7 @@
 import logging
 from collections import defaultdict
 from enum import IntEnum
+from typing import TypedDict
 
 # Third Party Library
 import attrs
@@ -12,6 +13,8 @@ from wepy.walker import Walker, keep_merge, split
 
 logger = logging.getLogger(__name__)
 
+class CloneMergeDecisionError(Exception):
+    pass
 
 # the possible types of decisions that can be made enumerated for
 # storage, these each correspond to specific instruction type
@@ -39,11 +42,50 @@ class CloneMergeDecisionEnum(IntEnum):
     """Do nothing with the sample value (state) but squashed walkers will
     donate their weight to it."""
 
+# TODO: get this automatically
+CLONE_MERGE_DECISION_ENUM_VALUES = {1, 2, 3, 4}
+
+class CloneMergeDecisionRecordDict(TypedDict):
+    decision_id: int
+    target_idxs: tuple[int]
 
 @attrs.define
 class CloneMergeDecisionRecord(BaseDecisionRecord):
-    decision_id: int
-    target_idxs: list[int]
+    decision_id: int = attrs.field()
+    target_idxs: tuple[int] = attrs.field()
+
+    @decision_id.validator
+    def _check_decision_id(self, attribute, value) -> None:
+        if value not in CLONE_MERGE_DECISION_ENUM_VALUES:
+            raise ValueError(f"Invalid decision_id ({value}) must be one of {CLONE_MERGE_DECISION_ENUM_VALUES}")
+
+    @target_idxs.validator
+    def _check_decision_id(self, attribute, value) -> None:
+
+        if len(value) == 0:
+            raise ValueError("Must provide at least one target index in target_idxs.")
+
+        if any(idx < 0 for idx in value):
+            raise ValueError("All target_idx values must be >= 0")
+
+    def __attrs_post_init__(self) -> None:
+
+        if self.decision_id in {1, 3, 4}:
+            if len(self.target_idxs) != 1:
+                raise CloneMergeDecisionError(
+                    f"For decision_id ({CloneMergeDecisionEnum(self.decision_id).name}:{self.decision_id}) "
+                    f"only a single target_idx is allowed."
+                )
+
+        else:
+            if len(self.target_idxs) < 2:
+                raise CloneMergeDecisionError(
+                    f"For decision_id ({CloneMergeDecisionEnum(self.decision_id).name}:{self.decision_id}) "
+                    f"more than one target_idx must be given."
+                )
+
+    def to_dict(self) -> CloneMergeDecisionRecordDict:
+        return attrs.asdict(self)
 
 
 class MultiCloneMergeDecision(BaseDecisionABC):
@@ -90,7 +132,7 @@ class MultiCloneMergeDecision(BaseDecisionABC):
     def action(
         cls,
         walkers: list[Walker],
-        decisions: list[CloneMergeDecisionRecord],
+        decisions: list[list[CloneMergeDecisionRecord]],
     ) -> list[Walker]:
         # list for the modified walkers
         mod_walkers = [None for i in range(len(walkers))]

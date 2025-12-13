@@ -48,7 +48,7 @@ perform them on the collection of walkers.
 # Standard Library
 import logging
 from enum import IntEnum
-from typing import Any, Union, Generic, TypeVar
+from typing import Any, Union, Generic, TypeVar, Protocol, TypedDict
 
 # Third Party Library
 import attrs
@@ -58,17 +58,25 @@ from wepy.walker import Walker
 
 logger = logging.getLogger(__name__)
 
+DecisionFieldDtype = Union[int,]
+DecisionFieldShapeSpec = tuple[int | type(Ellipsis), ...]
+
+class DecisionRecord(Protocol):
+
+    def to_dict(self) -> dict[str, DecisionFieldDtype]: ...
+
+class BaseDecisionRecordDict(TypedDict):
+    decision_id: int
 
 @attrs.define
 class BaseDecisionRecord:
     decision_id: int
 
-
-DecisionFieldDtype = Union[int,]
-DecisionFieldShapeSpec = tuple[int | type(Ellipsis), ...]
+    def to_dict(self) -> BaseDecisionRecordDict:
+        return attrs.asdict(self)
 
 DecisionEnum_ = TypeVar("DecisionEnum_")
-DecisionRecord_ = TypeVar("DecisionRecord", bound=BaseDecisionRecord)
+DecisionRecord_ = TypeVar("DecisionRecord", bound=DecisionRecord)
 
 
 # ABC for the Decision class

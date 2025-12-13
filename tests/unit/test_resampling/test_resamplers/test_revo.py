@@ -330,7 +330,7 @@ class Test_REVOResampler:
             num_proc=1,
         )
 
-        resampled_walkers, resampling_data, resampler_data = resampler.resample(
+        resampled_walkers, resampling_records, resampler_records = resampler.resample(
             [
                 Walker(
                     MockState(1),
@@ -344,3 +344,5 @@ class Test_REVOResampler:
         )
 
         assert len(resampled_walkers) == 2
+        assert len(resampling_records) == 2
+        assert len(resampler_records) == 1

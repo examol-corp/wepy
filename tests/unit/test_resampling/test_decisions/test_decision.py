@@ -21,6 +21,10 @@ class MockDecision(BaseDecisionABC):
     DEFAULT_DECISION = ENUM.NOTHING
     ANCESTOR_DECISION_IDS = (ENUM.NOTHING.value,)
 
+class Test_BaseDecisionRecord:
+
+    def test_to_dict(self):
+        assert BaseDecisionRecord(decision_id=1).to_dict() == {"decision_id" : 1}
 
 class Test_Decision:
 

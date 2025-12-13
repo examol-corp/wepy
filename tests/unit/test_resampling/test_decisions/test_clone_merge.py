@@ -7,10 +7,86 @@ from wepy.resampling.decisions.clone_merge import (
     CloneMergeDecisionEnum,
     CloneMergeDecisionRecord,
     MultiCloneMergeDecision,
+    CloneMergeDecisionError,
 )
 from wepy.runners.mock import MockState
 from wepy.walker import Walker
 
+
+class Test_CloneMergeDecisionRecord:
+
+    def test___init__(self):
+
+        # single target records
+        CloneMergeDecisionRecord(
+            decision_id=1,
+            target_idxs=(0,),
+        )
+        CloneMergeDecisionRecord(
+            decision_id=3,
+            target_idxs=(0,),
+        )
+        CloneMergeDecisionRecord(
+            decision_id=4,
+            target_idxs=(0,),
+        )
+
+        # clone
+        CloneMergeDecisionRecord(
+            decision_id=2,
+            target_idxs=(0,1),
+        )
+
+        with pytest.raises(ValueError):
+            CloneMergeDecisionRecord(
+                decision_id=7,
+                target_idxs=(0,),
+            )
+
+        with pytest.raises(ValueError):
+            CloneMergeDecisionRecord(
+                decision_id=1,
+                target_idxs=(),
+            )
+
+        with pytest.raises(ValueError):
+            CloneMergeDecisionRecord(
+                decision_id=1,
+                target_idxs=(-1,),
+            )
+
+        with pytest.raises(CloneMergeDecisionError):
+            CloneMergeDecisionRecord(
+                decision_id=1,
+                target_idxs=(0,1,),
+            )
+
+        with pytest.raises(CloneMergeDecisionError):
+            CloneMergeDecisionRecord(
+                decision_id=3,
+                target_idxs=(0,1,),
+            )
+        with pytest.raises(CloneMergeDecisionError):
+            CloneMergeDecisionRecord(
+                decision_id=4,
+                target_idxs=(0,1,),
+            )
+
+        with pytest.raises(CloneMergeDecisionError):
+            CloneMergeDecisionRecord(
+                decision_id=2,
+                target_idxs=(0,),
+            )
+
+    def test_to_dict(self):
+
+        assert CloneMergeDecisionRecord(
+            decision_id=1,
+            target_idxs=(0,)
+        ).to_dict() == {
+            "decision_id" : 1,
+            "target_idxs" : (0,),
+        }
 
 class TestMultiCloneMergeDecision:
 
@@ -230,8 +306,8 @@ class TestMultiCloneMergeDecision:
         MultiCloneMergeDecision.parents(
             [
                 CloneMergeDecisionRecord(
-                    decision_id=0,
-                    target_idxs=idx,
+                    decision_id=1,
+                    target_idxs=(idx,),
                 )
                 for idx in range(4)
             ],
