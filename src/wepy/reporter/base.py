@@ -10,8 +10,6 @@ from wepy.runners.runner import Runner
 from wepy.walker import Walker
 from wepy.work_mapper.base import WorkMapper
 
-from .types import FieldShapeSpec, FieldDtype
-
 logger = logging.getLogger(__name__)
 
 

@@ -9,13 +9,11 @@ import numpy as np
 # First Party Library
 from wepy.resampling.decisions.decision import BaseDecisionABC
 from wepy.walker import Walker, WalkerState
-from wepy.reporter.types import FieldShapeSpec, FieldDtype
-from wepy.storage.protocol import Record
+from wepy.storage.protocol import Record, RecordFieldShapeSpec, RecordFieldDtype
 
 logger = logging.getLogger(__name__)
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
-
 
 class ResamplerError(Exception):
     """Error raised when some constraint on resampling properties is
@@ -24,7 +22,6 @@ class ResamplerError(Exception):
 
     pass
 
-
 ResamplingRecord_ = TypeVar("ResamplingRecord_", bound=Record)
 ResamplerRecord_ = TypeVar("ResamplerRecord_", bound=Record)
 
@@ -32,24 +29,24 @@ class Resampler(Protocol, Generic[WalkerState_, ResamplingRecord_, ResamplerReco
 
     DECISION: BaseDecisionABC
     CYCLE_FIELDS: tuple[str, ...]
-    CYCLE_SHAPES: tuple[tuple[int, ...], ...]
-    CYCLE_DTYPES: tuple[int | float, ...]
-    CYCLE_RECORD_FIELDS: None | tuple[str, ...]
+    CYCLE_SHAPES: tuple[RecordFieldShapeSpec, ...]
+    CYCLE_DTYPES: tuple[RecordFieldDtype, ...]
+    CYCLE_RECORD_FIELDS: tuple[str, ...] | None
     RESAMPLING_FIELDS: tuple[str, ...]
-    RESAMPLING_SHAPES: tuple[FieldShapeSpec, ...]
-    RESAMPLING_DTYPES: tuple[FieldDtype, ...]
+    RESAMPLING_SHAPES: tuple[RecordFieldShapeSpec | None, ...]
+    RESAMPLING_DTYPES: tuple[RecordFieldDtype | None, ...]
     RESAMPLING_RECORD_FIELDS: None | tuple[str, ...]
     RESAMPLER_FIELDS: tuple[str, ...]
-    RESAMPLER_SHAPES: tuple[FieldShapeSpec, ...]
+    RESAMPLER_SHAPES: tuple[RecordFieldShapeSpec | None, ...]
 
-    RESAMPLER_DTYPES: tuple[FieldDtype, ...]
-    RESAMPLER_RECORD_FIELDS: None | tuple[str, ...]
+    RESAMPLER_DTYPES: tuple[RecordFieldDtype | None, ...]
+    RESAMPLER_RECORD_FIELDS: tuple[str, ...] | None
 
     @classmethod
     def resampling_fields(cls) -> tuple[
         tuple[str, ...],
-        tuple[FieldShapeSpec, ...],
-        tuple[FieldDtype, ...],
+        tuple[RecordFieldShapeSpec, ...],
+        tuple[RecordFieldDtype, ...],
     ]: ...
 
     @classmethod
