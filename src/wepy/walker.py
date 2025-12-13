@@ -36,6 +36,8 @@ import copy
 # Third Party Library
 import attrs
 
+from wepy.util.attrs import AttrsMappingMixin
+
 from wepy.missing import MISSING
 
 logger = logging.getLogger(__name__)
@@ -51,15 +53,10 @@ class WalkerState(Protocol[T]):
 
     def dict(self) -> dict[str, T]: ...
 
-class AttrsWalkerStateMixin:
+# TODO: merge with the AttrsMappingMixin
+class AttrsWalkerStateMixin(AttrsMappingMixin):
     """A convenient mixin for implementing the WalkerState interface
     for attrs classes."""
-
-    def __getitem__(self, key: str) -> Any:
-        if (value := getattr(self, key, MISSING)) is MISSING:
-            raise KeyError(f"'key' '{key}' not found")
-        else:
-            return value
 
     def dict(self) -> dict[str, Any]:
         return attrs.asdict(self)

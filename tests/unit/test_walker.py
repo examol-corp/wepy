@@ -9,8 +9,8 @@ from wepy.missing import MISSING
 from wepy.walker import (
     Walker,
     WalkerState,
+    AttrsWalkerStateMixin,    
     WalkerStateBox,
-    AttrsWalkerStateMixin,
     clone,
     keep_merge,
     merge,
