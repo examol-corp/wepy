@@ -10,6 +10,7 @@ from typing import Callable
 import attrs
 
 # First Party Library
+import more_itertools
 from wepy.runners.openmm import (
     GPU_PLATFORMS,
     OpenMMPlatformName,
@@ -113,7 +114,7 @@ class OpenMMProcPoolWorkMapper(WorkMapper):
 
             results = []
             for batch_idx, batch in enumerate(
-                itertools.batched(
+                more_itertools.chunked(
                     zip(walker_states, segment_lengths, strict=True),
                     self._num_procs,
                     strict=False,

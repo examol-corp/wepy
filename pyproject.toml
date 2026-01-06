@@ -35,6 +35,7 @@ dependencies = [
   "tabulate",
   "jinja2",
   "pint",
+  "more-itertools",
 ]
 
 [project.optional-dependencies]
