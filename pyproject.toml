@@ -4,7 +4,7 @@ name = "wepy"
 description = "Weighted Ensemble Framework"
 readme = { "file" = "README.md", "content-type" = "text/plain" }
 license = "MIT"
-requires-python = ">=3.12"
+requires-python = ">=3.11"
 
 authors = [
   { name = "Samuel Lotz", email = "samuel.lotz@salotz.info" },
