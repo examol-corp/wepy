@@ -1,5 +1,8 @@
 #!/usr/bin/env just --justfile
 
+default_python := "3.14"
+
+
 fmt-check:
     uv run black --check src tests sphinx/conf.py
 
@@ -14,12 +17,12 @@ fix:
     uv run isort src tests sphinx/conf.py
     uv run ruff check --fix src tests sphinx/conf.py
 
-
 check:
     uv run mypy src
 
-test:
-    uv run pytest tests/unit
+test python=default_python:
+    uv sync --python {{python}} --all-extras
+    uv run --python {{python}} pytest tests/unit
 
 test-integration:
     uv run pytest --durations=0 -s -o log_cli=true --log-cli-level=INFO tests/integration

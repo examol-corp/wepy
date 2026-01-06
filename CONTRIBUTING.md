@@ -4,6 +4,15 @@
 uv sync --all-extras
 ```
 
+To test against other python versions run this first for each version
+you are interested in:
+
+```
+uv sync --python 3.11 --all-extras
+```
+
+
+
 
 
 
