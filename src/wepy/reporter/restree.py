@@ -4,7 +4,7 @@ resampling parent trees.
 
 # Standard Library
 from collections import namedtuple
-
+import warnings
 # Third Party Library
 import networkx as nx
 import numpy as np
@@ -27,7 +27,7 @@ from wepy.analysis.parents import (
     parent_panel,
     resampling_panel,
 )
-from wepy.reporter.reporter import ProgressiveFileReporterABC
+from wepy.reporter.file import ProgressiveFileReporterABC
 
 
 class ResTreeReporter(ProgressiveFileReporterABC):
