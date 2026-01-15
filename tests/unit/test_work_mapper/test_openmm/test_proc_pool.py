@@ -40,6 +40,9 @@ def openmm_state() -> OpenMMState:
 
 
 class Test_OpenMMProcPoolWorkMapper:
+
+    @pytest.mark.timeout(5)
+    @pytest.mark.flaky(reruns=20)
     def test_all(self, openmm_runner):
 
         lj_sys = LennardJonesPair()
@@ -67,40 +70,3 @@ class Test_OpenMMProcPoolWorkMapper:
             init_states,
             [10 for _ in range(len(init_states))],
         )
-
-
-# class TestOpenMMRayPoolWorkMapper:
-
-#     @pytest.mark.ray
-#     def test_all(self, openmm_runner):
-
-#         lj_sys = LennardJonesPair()
-
-#         init_states = [
-#             OpenMMState.from_dwim(
-#                 positions=lj_sys.positions,
-#             )
-#             for _
-#             in range(4)
-#         ]
-
-#         mapper = OpenMMRayPoolWorkMapper(
-#             platform="CPU",
-#             device_ids=[0,1],
-#             global_platform_properties={"Threads" : "1"},
-#             # ray_init_args={
-
-#             # }
-#         )
-
-#         mapper.init()
-#         new_states = mapper.map(
-#             [
-#                 OpenMMTask(
-#                     runner=openmm_runner,
-#                     segment_length=100000,
-#                 )
-#                 for _ in range(len(init_states))
-#             ],
-#             init_states,
-#         )

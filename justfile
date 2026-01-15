@@ -1,6 +1,6 @@
 #!/usr/bin/env just --justfile
 
-default_python := "3.14"
+default_python := "3.13"
 
 
 fmt-check:
@@ -21,11 +21,22 @@ check:
     uv run mypy src
 
 test python=default_python:
-    uv sync --python {{python}} --all-extras
-    uv run --python {{python}} pytest tests/unit
+    uv run --all-extras --python {{python}} pytest tests/unit
 
-test-integration:
-    uv run pytest --durations=0 -s -o log_cli=true --log-cli-level=INFO tests/integration
+test-comprehensive:
+    uv run --all-extras --python 3.11 pytest tests/unit
+    uv run --all-extras --python 3.12 pytest tests/unit
+    uv run --all-extras --python 3.13 pytest tests/unit
+    uv run --all-extras --python 3.14 pytest tests/unit
+    
+
+test-integration python=default_python:
+    uv run --all-extras --python {{ python }} \
+        pytest \
+            --durations=0 \
+            -s \
+            -o log_cli=true --log-cli-level=INFO \
+            tests/integration
 
 clean:
     find . -type d -name "__pycache__" -prune -exec rm -rf {} +

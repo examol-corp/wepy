@@ -5,6 +5,7 @@ import importlib.resources
 import attrs
 import mdtraj
 import numpy as np
+import numpy.typing
 import openmm
 import openmm.app
 
@@ -47,8 +48,8 @@ class AlanineDipeptideExplicitSystem:
 @attrs.define
 class AlanineDipeptideRamachandranDistanceImage(WalkerState):
 
-    phis: np.typing.ArrayLike
-    psis: np.typing.ArrayLike
+    phis: numpy.typing.ArrayLike
+    psis: numpy.typing.ArrayLike
 
 
 @attrs.define
@@ -97,10 +98,17 @@ class AlanineDipeptideRamachandranDistance(Distance):
         angles_a = np.concatenate((image_a.phis, image_a.psis))
         angles_b = np.concatenate((image_b.phis, image_b.psis))
 
+        # TODO: which one to use?
+        
         # compute the circular difference
-        deltas = np.atan2(
+        deltas = np.arctan2(
             np.sin(angles_a - angles_b),
             np.cos(angles_a - angles_b),
         )
 
+        # deltas = np.atan2(
+        #     np.sin(angles_a - angles_b),
+        #     np.cos(angles_a - angles_b),
+        # )
+        
         return np.sqrt(np.sum(deltas**2))

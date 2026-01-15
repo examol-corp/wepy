@@ -1,6 +1,7 @@
 # Third Party Library
 import attrs
 import numpy as np
+import numpy.typing
 import openmm
 import openmm.app
 import openmm.unit
@@ -114,7 +115,7 @@ class LennardJonesPair:
 
 @attrs.define
 class PairDistanceImage:
-    positions: np.typing.ArrayLike
+    positions: numpy.typing.ArrayLike
 
 
 class PairDistance(Distance):

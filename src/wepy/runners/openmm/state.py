@@ -15,6 +15,7 @@ from typing import (
 # Third Party Library
 import attrs
 import numpy as np
+import numpy.typing
 import openmm
 import openmm.unit
 from immutables import Map as frozenmap
@@ -626,7 +627,7 @@ def _maybe_array_equal(
         return np.array_equal(arr0, arr1)
 
 
-def _gen_unit_cube() -> np.typing.ArrayLike:
+def _gen_unit_cube() -> numpy.typing.ArrayLike:
     return np.array(
         [
             [1.0, 0.0, 0.0],

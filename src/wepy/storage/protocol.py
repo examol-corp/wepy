@@ -56,7 +56,7 @@ RecordFieldDtype = Union[
     np.float16,
     np.float32,
     np.float64,
-    np.bool,
+    bool,
 ] 
 
 

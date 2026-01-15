@@ -24,7 +24,7 @@ classifiers = [
 dependencies = [
   "attrs",
   "immutables",
-  "numpy>=2",
+  "numpy",
   "h5py>=3",
   "networkx",
   "pandas",

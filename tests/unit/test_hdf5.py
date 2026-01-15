@@ -761,12 +761,12 @@ class Test_WepyHDF5:
                 "example",
                 field_name="c",
                 field_shape=Ellipsis,
-                field_dtype=np.bool,
+                field_dtype=bool,
             )
 
             assert "c" in record_grp
             assert c_dset.shape == (0,)
-            assert h5py.check_vlen_dtype(c_dset.dtype) == np.bool
+            assert h5py.check_vlen_dtype(c_dset.dtype) == bool
             assert c_dset.maxshape == (None,)
 
 

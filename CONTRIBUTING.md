@@ -12,7 +12,25 @@ uv sync --python 3.11 --all-extras
 ```
 
 
+## Tests
 
+The standard test run like:
+
+```
+uv run --all-extras pytest tests/unit
+```
+
+The flake finder flag will enable running certain tests multiple
+times. Typically for parallel routines which intermittently fail.
+
+You can test on other python versions like:
+
+```
+uv run --python 3.11 --all-extras pytest --flake-finder tests/unit
+```
+
+The `--flake-finder` flag will run things multiple times to see if
+they are flaky.
 
 
 
