@@ -60,6 +60,7 @@ from .runners.openmm.logger import (
 from .runners.openmm.state import (
     OpenMMStateWrapper,
     OpenMMState,
+    OPENMM_DEFAULT_UNITS,
 )
 from .runners.openmm.runner import (
     OpenMMRunner,

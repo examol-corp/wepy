@@ -18,6 +18,7 @@ from .state import (
     dummy_context,
     get_context_state,
     state_to_xml,
+    OPENMM_DEFAULT_UNITS,
 )
 
 __all__ = [
@@ -35,4 +36,5 @@ __all__ = [
     "PlatformKwargs",
     "UnitCellLoggingReporterFactory",
     "EnergyLoggingReporterFactory",
+    "OPENMM_DEFAULT_UNITS",
 ]

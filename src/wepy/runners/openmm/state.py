@@ -1,6 +1,6 @@
 # Standard Library
 import logging
-from collections.abc import Collection
+from collections.abc import Collection, Mapping
 from typing import (
     Any,
     ClassVar,
@@ -222,8 +222,8 @@ OPENMM_DEFAULT_UNITS: frozenmap[str, openmm.unit.Unit] = frozenmap(
     box_volume=openmm.unit.nanometer**3,
     velocities=openmm.unit.nanometer / openmm.unit.picosecond,
     forces=openmm.unit.kilojoule / openmm.unit.nanometer,
-    kinetic_energy=openmm.unit.kilojoule,
-    potential_energy=openmm.unit.kilojoule,
+    kinetic_energy=(openmm.unit.kilojoule / openmm.unit.mole),
+    potential_energy=(openmm.unit.kilojoule / openmm.unit.mole),
 )
 
 
@@ -411,24 +411,6 @@ def get_state_fields_present(sim_state: openmm.State) -> frozenset[StateFieldNam
         present_fields.add("time")
 
     return frozenset(present_fields)
-
-
-# the names of the units from the units objects above. This is used
-# for saving them to files
-UNIT_NAMES: tuple[tuple[str, str], ...] = (
-    ("positions_unit", openmm.unit.nanometer.get_name()),
-    ("time_unit", openmm.unit.picosecond.get_name()),
-    ("box_vectors_unit", openmm.unit.nanometer.get_name()),
-    ("velocities_unit", (openmm.unit.nanometer / openmm.unit.picosecond).get_name()),
-    (
-        "forces_unit",
-        (openmm.unit.kilojoule / (openmm.unit.nanometer * openmm.unit.mole)).get_name(),
-    ),
-    ("box_volume_unit", openmm.unit.nanometer.get_name()),
-    ("kinetic_energy_unit", (openmm.unit.kilojoule / openmm.unit.mole).get_name()),
-    ("potential_energy_unit", (openmm.unit.kilojoule / openmm.unit.mole).get_name()),
-)
-"""Mapping of unit identifier strings to the serialized string spec of the unit."""
 
 
 ## Wrapper for a openmm.State
