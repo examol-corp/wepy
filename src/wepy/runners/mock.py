@@ -97,5 +97,9 @@ class MockRunner(Runner):
 class MockRunnerFactory:
     fail: bool = False
 
+    @classmethod
+    def type(cls) -> type[MockRunner]:
+        return MockRunner
+
     def __call__(self) -> MockRunner:
         return MockRunner(fail=self.fail)

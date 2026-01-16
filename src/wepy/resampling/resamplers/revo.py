@@ -901,6 +901,10 @@ class REVOResamplerFactory(Generic[DistanceMetric_]):
     pmax: float = 0.1
     seed: int | None = None
 
+    @classmethod
+    def type(cls) -> type[REVOResampler]:
+        return REVOResampler
+    
     def __call__(
         self,
         num_cores: int,

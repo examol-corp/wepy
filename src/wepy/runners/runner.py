@@ -185,10 +185,6 @@ class Runner(Protocol[WalkerState_, RunSegmentData_]):
         ...
 
 
-RunnerFactory = Callable[
-    [],
-    Runner,
-]
 
 
 @attrs.define
@@ -231,3 +227,14 @@ class NoRunner(Runner):
 
         self.state_machine.send(RunnerEvent.POST_SEGMENT)
         self.state_machine.send(RunnerEvent.POST_CYCLE)
+
+@attrs.define
+class NoRunnerFactory:
+
+    @classmethod
+    def type(cls) -> type[NoRunner]:
+        return NoRunner
+
+    def __call__(self) -> NoRunner:
+        return NoRunner()
+    

@@ -55,11 +55,12 @@ import psutil
 from immutables import Map as frozenmap
 
 # First Party Library
+from wepy.factory import Factory
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.monitor import Monitor
 from wepy.reporter.base import CycleReportDict, Reporter
 from wepy.resampling.resamplers.resampler import Resampler
-from wepy.runners.runner import Runner, RunnerFactory, RunSegmentData
+from wepy.runners.runner import Runner, RunSegmentData
 from wepy.walker import Walker
 from wepy.work_mapper.base import WorkMapper
 from wepy.work_mapper.serial import SerialMapper
@@ -339,8 +340,9 @@ class ManagerStateMachine:
         return self.state
 
 
-ResamplerFactory = Callable[[], Resampler]
-WorkMapperFactory = Callable[[], WorkMapper]
+ResamplerFactory = Factory[Resampler]
+WorkMapperFactory = Factory[WorkMapper]
+RunnerFactory = Factory[Runner]
 
 State_ = TypeVar("State_")
 RunSegmentData_ = TypeVar("RunSegmentData_", bound=RunSegmentData, covariant=True)

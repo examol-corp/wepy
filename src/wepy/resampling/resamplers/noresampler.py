@@ -71,10 +71,12 @@ class NoResampler(ResamplerABC):
         return walkers, resampling_data, resampler_data
 
 
+@attrs.define
 class NoResamplerFactory:
 
-    def __init__(self) -> None:
-        pass
+    @classmethod
+    def type(cls) -> type[NoResampler]:
+        return NoResampler
 
     def __call__(self, num_cores: int) -> NoResampler:
         return NoResampler()

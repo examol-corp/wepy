@@ -79,6 +79,10 @@ class OpenMMSerialWorkMapperFactory:
     platform: OpenMMPlatformName
     global_platform_properties: dict[str, str] | None = None
 
+    @classmethod
+    def type(cls) -> type[OpenMMSerialWorkMapper]:
+        return OpenMMSerialWorkMapper
+
     def __call__(self) -> OpenMMSerialWorkMapper:
 
         return OpenMMSerialWorkMapper(

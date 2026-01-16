@@ -245,6 +245,11 @@ class OpenMMProcPoolWorkMapperFactory:
                 f"When device_ids is given ({self.device_ids}) it must be the same length as the number of processes: {self.num_procs}"
             )
 
+    @classmethod
+    def type(cls) -> type[OpenMMProcPoolWorkMapper]:
+        return OpenMMProcPoolWorkMapper
+        
+
     def __call__(self) -> OpenMMProcPoolWorkMapper:
 
         return OpenMMProcPoolWorkMapper(
