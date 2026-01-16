@@ -106,9 +106,9 @@ class RunnerDashboardSection:
         Runner: {{ name }}
         """
     )
-    def __init__(self, runner=None, name=None, **kwargs):
-        if runner is not None:
-            self.runner_name = type(runner).__name__
+    def __init__(self, runner_factory = None, name=None):
+        if runner_factory is not None:
+            self.runner_name = runner_factory.type().__name__
 
         elif name is not None:
             self.runner_name = name
