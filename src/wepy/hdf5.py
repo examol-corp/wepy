@@ -1823,7 +1823,7 @@ class WepyHDF5:
         # make sure this is a feature vector
         assert (
             len(field_data.shape) > 1
-        ), "field_data must be a feature vector with the same number of dimensions as the number"
+        ), f"field_data (path={field_path}, shape={field_data.shape}) must be a feature vector with the same number of dimensions as the number."
 
         # of datase new frames
         n_new_frames = field_data.shape[0]

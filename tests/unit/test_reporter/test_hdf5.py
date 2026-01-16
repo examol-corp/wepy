@@ -22,6 +22,7 @@ LJ_OPENMM_SIM_COMPONENTS = {
                             [0., 0., 0.,],
                             [0., 0., 0.,],
                         ]) * openmm.unit.nanometer,
+                        time=(1.3 * openmm.unit.nanosecond),
                     ),
                     0.5,
                 ),
@@ -31,6 +32,7 @@ LJ_OPENMM_SIM_COMPONENTS = {
                             [0., 0., 0.,],
                             [0., 0., 0.,],
                         ]) * openmm.unit.nanometer,
+                        time=(1.3 * openmm.unit.nanosecond),
                     ),
                     0.5,
                 ),
@@ -540,6 +542,8 @@ class Test_WepyHDF5Reporter:
             file_path=h5_path,
             topology=test_sys.json_top,
             **RESAMPLER_REPORTER_ARGS,
+            # test output of both an array and a scalar
+            save_fields=("positions", "time"),
         )
         reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
 
@@ -553,6 +557,7 @@ class Test_WepyHDF5Reporter:
                                 [0., 0., 0.,],
                                 [1., 1., 1.,],
                             ]) * openmm.unit.nanometer,
+                            time=(1.0 * openmm.unit.picosecond),
                         ),
                         0.5,
                     ),
@@ -562,6 +567,7 @@ class Test_WepyHDF5Reporter:
                                 [1., 1., 1.,],
                                 [0., 0., 0.,],
                             ]) * openmm.unit.nanometer,
+                            time=(1.0 * openmm.unit.picosecond),
                         ),
                         0.5,
                     ),
@@ -576,6 +582,7 @@ class Test_WepyHDF5Reporter:
                                 [1., 1., 1.,],
                                 [0., 0., 0.,],
                             ]) * openmm.unit.nanometer,
+                            time=(1.0 * openmm.unit.picosecond),
                         ),
                         0.5,
                     ),
@@ -585,6 +592,7 @@ class Test_WepyHDF5Reporter:
                                 [0., 0., 0.,],
                                 [1., 1., 1.,],
                             ]) * openmm.unit.nanometer,
+                            time=(1.0 * openmm.unit.picosecond),
                         ),
                         0.5,
                     ),
@@ -607,3 +615,17 @@ class Test_WepyHDF5Reporter:
             **CYCLE_REPORT_DICT_COMMON,
             **CYCLE_REPORT_DICT_EMPTY_OPTIONALS,
         )
+
+        with reporter.wepy_h5 as wepy_h5:
+
+            assert len(wepy_h5.h5['runs/0/trajectories']) == 2
+
+            assert "0" in wepy_h5.h5['runs/0/trajectories']
+            assert "1" in wepy_h5.h5['runs/0/trajectories']
+
+            assert "weights" in wepy_h5.h5['runs/0/trajectories/0']
+            assert "positions" in wepy_h5.h5['runs/0/trajectories/0']
+            assert "time" in wepy_h5.h5['runs/0/trajectories/0']
+
+            assert wepy_h5.h5['runs/0/trajectories/0/positions'].shape == (1,2,3)
+            assert wepy_h5.h5['runs/0/trajectories/0/time'].shape == (1,1)

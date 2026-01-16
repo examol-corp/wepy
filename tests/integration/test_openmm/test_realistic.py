@@ -53,6 +53,14 @@ MIN_INTERVAL_STEPS = (
 DEFAULT_CYCLE_TIME = 10.0 * openmm.unit.picosecond
 DEFAULT_CYCLE_STEPS = round(DEFAULT_CYCLE_TIME / STEP_SIZE)
 
+DEFAULT_SAVE_FIELDS = (
+    "positions",
+    "box_vectors",
+    "box_volume",
+    "potential_energy",
+    "kinetic_energy",
+)
+
 
 def test_lennard_jones_revo_procpool(tmp_path_factory):
 
@@ -112,7 +120,7 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
     hdf5_path = outputs_dir / "main.wepy.h5"
     hdf5_reporter = WepyHDF5Reporter.from_components(
         file_path=hdf5_path,
-        save_fields=("positions",),
+        save_fields=DEFAULT_SAVE_FIELDS,
         topology=test_sys.json_top,
         resampler_class=REVOResampler,
     )
@@ -209,7 +217,7 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
     hdf5_path = outputs_dir / "main.wepy.h5"
     hdf5_reporter = WepyHDF5Reporter.from_components(
         file_path=hdf5_path,
-        save_fields=("positions",),
+        save_fields=DEFAULT_SAVE_FIELDS,
         topology=ala_sys.json_top,
         resampler_class=REVOResampler,
     )

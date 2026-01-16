@@ -848,10 +848,19 @@ class WepyHDF5Reporter(
                     ]
 
 
-                # for all of these fields we wrap them in another
-                # dimension to make them feature vectors
+                # for all of these fields we wrap them in additional
+                # dimensions to make them feature vectors
                 for field_path in list(walker_data.keys()):
-                    _walker_data_noq[field_path] = np.array([_walker_data_noq[field_path]])
+
+                    # first if its a scalar wrap in the first layer
+                    _val = _walker_data_noq[field_path]
+                    if np.isscalar(_val):
+                        _val = np.array([_val])
+
+                    # then reshape to feature vector
+                    _val = _val.reshape((1, *_val.shape))
+
+                    _walker_data_noq[field_path] = _val
 
                 # save the data to the HDF5 file for this walker
 
