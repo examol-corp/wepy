@@ -26,6 +26,7 @@ from wepy.resampling.resamplers.resampler import Resampler
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.typing import Shape, Idxs, IdxArray
 from wepy.storage.protocol import Record
+from wepy.runners.openmm import OPENMM_DEFAULT_UNITS
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +161,9 @@ class WepyHDF5Reporter(
         topology : str
             JSON string representing topology of system being simulated.
 
-        units : Mapping of trajectory field names to Unit objects.
+        units : Mapping of trajectory field names to Unit objects. If
+          None the defaults will be used. If not all units are defined
+          then the missing ones will be filled in by the defaults.
 
         sparse_fields : dict of str: int, optional
             List of trajectory fields that should be initialized as sparse.
@@ -392,9 +395,9 @@ class WepyHDF5Reporter(
 
         # if units were given add them otherwise set as an empty dictionary
         if units is None:
-            self.units = {}
+            self.units = OPENMM_DEFAULT_UNITS
         else:
-            self.units = units
+            self.units = dict(OPENMM_DEFAULT_UNITS) | units
 
     @classmethod
     def from_components(
@@ -698,8 +701,11 @@ class WepyHDF5Reporter(
             # If no self.units were given, use the first
             # init walker to determine the units for a field overall, set
             # this and use for the rest of the walkers
+
             if walker_idx == 0:
-                self.units.update(units_used)
+                for unit_name, unit in units_used.items():
+                    if unit_name not in self.units:
+                        self.units.update(units_used)
 
             converted_filtered_init_walkers.append(
                 Walker(state=_state, weight=init_walker.weight)

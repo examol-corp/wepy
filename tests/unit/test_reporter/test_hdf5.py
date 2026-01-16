@@ -6,7 +6,7 @@ from wepy_tools.systems.lennard_jones import LennardJonesPair
 from wepy.resampling.resamplers.noresampler import NoResampler
 from wepy.walker import Walker, WalkerStateBox
 from wepy.runners.mock import MockState, MockRunner
-from wepy.runners.openmm import OpenMMState
+from wepy.runners.openmm import OpenMMState, OPENMM_DEFAULT_UNITS
 from wepy.work_mapper.serial import SerialMapper
 from wepy.hdf5 import WepyHDF5
 from wepy.resampling.decisions.no_decision import (
@@ -106,7 +106,7 @@ class Test_WepyHDF5Reporter:
         )
         assert reporter.main_rep_idxs is None
 
-        assert reporter.units == {}
+        assert reporter.units == OPENMM_DEFAULT_UNITS
 
         reporter = WepyHDF5Reporter(
             file_path=h5_path,
@@ -122,9 +122,11 @@ class Test_WepyHDF5Reporter:
             topology=test_sys.json_top,
             **RESAMPLER_REPORTER_ARGS,
             units={
-                "positions" : "nanometer",
+                "positions" : openmm.unit.angstrom,
             }
         )
+
+        assert reporter.units == dict(OPENMM_DEFAULT_UNITS) | {"positions" : openmm.unit.angstrom}
 
         reporter = WepyHDF5Reporter(
             file_path=h5_path,
@@ -483,18 +485,14 @@ class Test_WepyHDF5Reporter:
         reporter = WepyHDF5Reporter(
             file_path=h5_path,
             topology=test_sys.json_top,
-            units={"positions" : openmm.unit.angstrom},
+            units=None,
             **RESAMPLER_REPORTER_ARGS,
         )
 
         reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
 
-        assert reporter.units == {
-            "positions" : openmm.unit.angstrom,
-            "time" : openmm.unit.picosecond,
-            "box_vectors" : openmm.unit.nanometer,
-            "box_volume" : (openmm.unit.nanometer ** 3),
-        }
+        assert reporter.units == OPENMM_DEFAULT_UNITS
+
         assert reporter.wepy_run_idx == 0
         assert reporter._tmp_topology is None
         assert reporter.file_path == h5_path
@@ -503,31 +501,63 @@ class Test_WepyHDF5Reporter:
 
         # minimal tests, see _initialize_h5_run for more in depth tests
         with reporter.wepy_h5 as wepy_h5:
+            # should be defaults
+            assert wepy_h5.h5["units/positions"][()].decode() == "nanometer"
+            assert wepy_h5.h5["units/box_vectors"][()].decode() == "nanometer"
+            assert wepy_h5.h5["units/box_volume"][()].decode() == "nanometer**3"
+            assert wepy_h5.h5["units/time"][()].decode() == "picosecond"
             assert "0" in wepy_h5.h5["runs"]
             assert "init_walkers" in wepy_h5.h5["runs/0"]
             assert len(wepy_h5.h5["runs/0/init_walkers"]) == 2
 
         # if no units are given, derive them dynamically from
         # quantities
-        d0 = tmp_path_factory.mktemp("0")
-        h5_path = d0 / "main.wepy.h5"
+        d1 = tmp_path_factory.mktemp("1")
+        h5_path = d1 / "main.wepy.h5"
 
         reporter = WepyHDF5Reporter(
             file_path=h5_path,
             topology=test_sys.json_top,
-            units=None,
+            units={
+                # provide explicit units for all the encountered
+                # fields. These should be the reporter units
+                "box_vectors" : openmm.unit.angstrom,
+                "time" : openmm.unit.nanosecond,
+            },
             **RESAMPLER_REPORTER_ARGS,
         )
 
         reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
 
-        assert reporter.units == {
-            "positions" : openmm.unit.nanometer,
-            "time" : openmm.unit.picosecond,
-            "box_vectors" : openmm.unit.nanometer,
-            "box_volume" : (openmm.unit.nanometer ** 3),
+        assert {
+            unit_name : unit
+            for unit_name, unit
+            in reporter.units.items()
+            if unit_name in {"box_vectors", "time"}
+        } == {
+            "box_vectors" : openmm.unit.angstrom,
+            "time" : openmm.unit.nanosecond,
         }
 
+        assert {
+            unit_name : unit
+            for unit_name, unit
+            in reporter.units.items()
+            if unit_name not in {"box_vectors", "time"}
+        } == {
+            unit_name : unit
+            for unit_name, unit
+            in OPENMM_DEFAULT_UNITS.items()
+            if unit_name not in {"box_vectors", "time"}
+        }
+        
+        with reporter.wepy_h5 as wepy_h5:
+            # the overridden ones
+            assert wepy_h5.h5["units/box_vectors"][()].decode() == "angstrom"
+            assert wepy_h5.h5["units/time"][()].decode() == "nanosecond"
+            # some of the defaults
+            assert wepy_h5.h5["units/positions"][()].decode() == "nanometer"
+            assert wepy_h5.h5["units/box_volume"][()].decode() == "nanometer**3"
     def test_report(self, tmp_path_factory):
 
         # TODO: using the OpenMM Runner OpenMMState here because the
