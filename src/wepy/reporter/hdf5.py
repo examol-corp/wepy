@@ -1,5 +1,6 @@
 # Standard Library
 from pathlib import Path
+import builtins
 import logging
 from typing import Self, TypedDict, Literal, Generic, TypeVar, Any
 
@@ -84,6 +85,7 @@ class WepyHDF5Reporter(
     # static attributes
     swmr_mode: bool
     save_fields: tuple[str, ...] | None
+    init_walker_save_fields: tuple[str, ...] | None | Literal[Ellipsis]
     _sparse_fields: dict[str, int]
     _feature_shapes: dict[str, RecordFieldShapeSpec] | None
     _feature_dtypes: dict[str, RecordFieldDtype] | None
@@ -122,6 +124,7 @@ class WepyHDF5Reporter(
         resampling_fields: tuple[str, ...],
         swmr_mode: bool = False,
         save_fields: tuple[str, ...] | None = None,
+        init_walker_save_fields: tuple[str, ...] | None | Literal[Ellipsis] = None,
         units: dict[str, openmm.unit.Unit] | None = None,
         sparse_fields: dict[str, int | Literal[Ellipsis]] | None = None,
         n_dims: int = 3,
@@ -157,6 +160,11 @@ class WepyHDF5Reporter(
            be stored. Allows for the ignoring of some states. If None
            all fields from states will attempted to be saved. To not
            save anything provide an empty tuple ().
+
+        init_walker_save_fields : A selection of fields to require for
+          the initial walkers. If None this will require the same as
+          the 'save_fields' argument. If Ellipsis this will accept
+          whatever fields the init_walkers have without error.
 
         topology : str
             JSON string representing topology of system being simulated.
@@ -263,6 +271,7 @@ class WepyHDF5Reporter(
 
         # which fields from the walker to save, if None then save all of them
         self.save_fields = save_fields
+        self.init_walker_save_fields = init_walker_save_fields
 
         # check sparse fields
         if sparse_fields is not None:
@@ -410,6 +419,7 @@ class WepyHDF5Reporter(
         boundary_conditions_class: type[BoundaryConditions] | None = None,
         swmr_mode: bool = False,
         save_fields: tuple[str, ...] | None = None,
+        init_walker_save_fields: tuple[str, ...] | None | Literal[Ellipsis] = None,
         units: dict[str, openmm.unit.Unit] | None = None,
         sparse_fields: dict[str, int] | None = None,
         n_dims: int = 3,
@@ -468,6 +478,7 @@ class WepyHDF5Reporter(
             feature_dtypes=feature_dtypes,
             swmr_mode=swmr_mode,
             save_fields=save_fields,
+            init_walker_save_fields=init_walker_save_fields,
             units=units,
             sparse_fields=sparse_fields,
             n_dims=n_dims,
@@ -637,16 +648,60 @@ class WepyHDF5Reporter(
         ## Do checks on the inputs and figure out runtime field metadata
 
         # if we specify save fields only save these for the initial walkers
-        if self.save_fields is not None:
-            state_fields = list(kwargs["init_walkers"][0].state.dict().keys())
+        state_fields = set(kwargs["init_walkers"][0].state.dict().keys())
+        match (self.save_fields, self.init_walker_save_fields):
 
-            # make sure all the save_fields are present in the state
-            assert all(
+            # NOTE: the builtins.Ellipsis is needed to avoid matching
+            # anything
+            case (_, builtins.Ellipsis):
+                _save_fields = state_fields
+                logger.info(
+                    f"Accepting and saving all fields found in init_walkers: {state_fields}"
+                )
+                logger.warning("To ensure all required data is in a simulation these fields should be explicit.")
+                
+
+            case (None, None):
+                _save_fields = state_fields
+                logger.info(
+                    f"Accepting and saving all fields found in init_walkers: {state_fields}"
+                )
+                logger.warning(
+                    "'save_fields' is None and 'init_walker_save_fields' is None. "
+                    "Any found fields will be saved. This is inadvisable and fields should be "
+                    "declared to avoid spurious data outputs."
+                )
+            case (fields, None):
+                _save_fields = set(fields)
+                logger.info(
+                    f"Initial walker fields being saved determined from 'save_fields': {_save_fields}"
+                )
+
+            case (_, fields):
+                _save_fields = set(fields)
+                logger.info(
+                    f"Initial walker fields being saved determined from 'init_walker_save_fields': {_save_fields}"
+                )
+
+
+        if _save_fields == state_fields:
+            filtered_init_walkers = kwargs["init_walkers"]
+
+        elif not all(
                 [
                     True if save_field in state_fields else False
-                    for save_field in self.save_fields
+                        for save_field
+                        in _save_fields
                 ]
-            ), "Not all specified save_fields present in walker states"
+        ):
+
+                # make sure all the save_fields are present in the state
+                raise ValueError(
+                    f"init_walkers should have all fields as required: {_save_fields}. "
+                    f"Found: {state_fields}"
+                )
+
+        else:
 
             filtered_init_walkers = []
             for walker in kwargs["init_walkers"]:
@@ -654,7 +709,7 @@ class WepyHDF5Reporter(
                 state_d = {
                     k: v
                     for k, v in walker.state.dict().items()
-                    if k in self.save_fields
+                    if k in _save_fields
                 }
 
                 # and saving alternate representations as we would
@@ -688,12 +743,9 @@ class WepyHDF5Reporter(
                 new_state = WalkerStateBox(**state_d)
 
                 filtered_init_walkers.append(Walker(new_state, walker.weight))
-        # otherwise save the full state
-        else:
-            filtered_init_walkers = kwargs["init_walkers"]
 
         # If the state field values are quantities convert them to
-        # plain values. 
+        # plain values.
         converted_filtered_init_walkers = []
         for walker_idx, init_walker in enumerate(filtered_init_walkers):
             _state, units_used = self._resolve_state_units(self.units, init_walker.state)
@@ -711,8 +763,6 @@ class WepyHDF5Reporter(
                 Walker(state=_state, weight=init_walker.weight)
             )
 
-        # Run the constructor intialization
-        logger.info(f"Initializing HDF5 file at {self.file_path}")
 
         # convert units to strings
         _str_units = {
@@ -720,6 +770,10 @@ class WepyHDF5Reporter(
             for key, unit
             in self.units.items()
         }
+        logger.info(f"Serialized units: {_str_units}")
+
+        # Run the constructor intialization
+        logger.info(f"Initializing HDF5 file at {self.file_path}")
 
         init_wepy_h5 = WepyHDF5(
             self.file_path,

@@ -474,7 +474,6 @@ class Test_WepyHDF5Reporter:
         )
         assert units_used == {"positions" : openmm.unit.nanometer}
         
-
     def test_init(self, tmp_path_factory):
 
         test_sys = LennardJonesPair()
@@ -501,14 +500,25 @@ class Test_WepyHDF5Reporter:
 
         # minimal tests, see _initialize_h5_run for more in depth tests
         with reporter.wepy_h5 as wepy_h5:
+
             # should be defaults
             assert wepy_h5.h5["units/positions"][()].decode() == "nanometer"
             assert wepy_h5.h5["units/box_vectors"][()].decode() == "nanometer"
             assert wepy_h5.h5["units/box_volume"][()].decode() == "nanometer**3"
             assert wepy_h5.h5["units/time"][()].decode() == "picosecond"
+
             assert "0" in wepy_h5.h5["runs"]
             assert "init_walkers" in wepy_h5.h5["runs/0"]
             assert len(wepy_h5.h5["runs/0/init_walkers"]) == 2
+            assert "0" in wepy_h5.h5["runs/0/init_walkers"]
+            # all the fields in the state will be saved, since no save_fields given
+            assert "positions" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "box_vectors" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "box_volume" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "time" in wepy_h5.h5["runs/0/init_walkers/0"]
+
+            # compare to the different unit output later
+            nanometer_bvs = wepy_h5.h5["runs/0/init_walkers/0/box_vectors"][:]
 
         # if no units are given, derive them dynamically from
         # quantities
@@ -558,6 +568,108 @@ class Test_WepyHDF5Reporter:
             # some of the defaults
             assert wepy_h5.h5["units/positions"][()].decode() == "nanometer"
             assert wepy_h5.h5["units/box_volume"][()].decode() == "nanometer**3"
+
+            # compare the numbers from each to make sure they have the same magnitude
+            angstrom_bvs = wepy_h5.h5["runs/0/init_walkers/0/box_vectors"][:]
+            assert np.array_equal(
+                nanometer_bvs * 10,
+                angstrom_bvs,
+            )
+        
+        # test the init_walker_save_fields behavior
+        d2 = tmp_path_factory.mktemp("2")
+        h5_path = d2 / "main.wepy.h5"
+
+        reporter = WepyHDF5Reporter(
+            file_path=h5_path,
+            topology=test_sys.json_top,
+            units=None,
+            **RESAMPLER_REPORTER_ARGS,
+            save_fields=("positions",),
+            init_walker_save_fields=None,
+        )
+
+        reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
+
+        with reporter.wepy_h5 as wepy_h5:
+            assert "0" in wepy_h5.h5["runs"]
+            assert "init_walkers" in wepy_h5.h5["runs/0"]
+            assert len(wepy_h5.h5["runs/0/init_walkers"]) == 2
+            assert "0" in wepy_h5.h5["runs/0/init_walkers"]
+            assert "positions" in wepy_h5.h5["runs/0/init_walkers/0"]
+
+            # the remainder of the fields that were in the state should not be saved
+            assert not "box_vectors" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert not "box_volume" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert not "time" in wepy_h5.h5["runs/0/init_walkers/0"]
+            
+
+        ## Test the save fields family of arguments
+        d3 = tmp_path_factory.mktemp("3")
+        h5_path = d3 / "main.wepy.h5"
+
+        reporter = WepyHDF5Reporter(
+            file_path=h5_path,
+            topology=test_sys.json_top,
+            units=None,
+            **RESAMPLER_REPORTER_ARGS,
+            save_fields=("positions",),
+            init_walker_save_fields=("positions",),
+        )
+
+        reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
+
+        with reporter.wepy_h5 as wepy_h5:
+            assert "positions" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert not "box_vectors" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert not "box_volume" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert not "time" in wepy_h5.h5["runs/0/init_walkers/0"]
+
+        # special cases for the init walkers, save all fields that
+        # were given to it
+        d4 = tmp_path_factory.mktemp("4")
+        h5_path = d4 / "main.wepy.h5"
+
+        reporter = WepyHDF5Reporter(
+            file_path=h5_path,
+            topology=test_sys.json_top,
+            units=None,
+            **RESAMPLER_REPORTER_ARGS,
+            save_fields=("positions",),
+            init_walker_save_fields=Ellipsis,
+        )
+
+        reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
+
+        with reporter.wepy_h5 as wepy_h5:
+            assert "positions" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "box_vectors" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "box_volume" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "time" in wepy_h5.h5["runs/0/init_walkers/0"]
+
+        # Match a different set of fields for init_walkers than the
+        # save_fields
+        d5 = tmp_path_factory.mktemp("5")
+        h5_path = d5 / "main.wepy.h5"
+
+        reporter = WepyHDF5Reporter(
+            file_path=h5_path,
+            topology=test_sys.json_top,
+            units=None,
+            **RESAMPLER_REPORTER_ARGS,
+            save_fields=("positions", "box_vectors", "time",),
+            # only take positions and box_vectors
+            init_walker_save_fields=("positions", "box_vectors",),
+        )
+
+        reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
+
+        with reporter.wepy_h5 as wepy_h5:
+            assert "positions" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "box_vectors" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert not "box_volume" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert not "time" in wepy_h5.h5["runs/0/init_walkers/0"]
+            
     def test_report(self, tmp_path_factory):
 
         # TODO: using the OpenMM Runner OpenMMState here because the

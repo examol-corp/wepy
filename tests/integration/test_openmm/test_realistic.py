@@ -16,6 +16,7 @@ import psutil
 import pytest
 
 # First Party Library
+import wepy
 from wepy.reporter.dashboard import DashboardReporter
 from wepy.resampling.resamplers.revo import REVOResamplerFactory, REVOResampler
 from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState
@@ -121,6 +122,8 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
     hdf5_reporter = WepyHDF5Reporter.from_components(
         file_path=hdf5_path,
         save_fields=DEFAULT_SAVE_FIELDS,
+        # only require these fields for the initial walkers
+        init_walker_save_fields=("positions", "box_vectors",),
         topology=test_sys.json_top,
         resampler_class=REVOResampler,
     )
@@ -211,13 +214,18 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
         distance_metric=distance_metric,
     )
 
+    # TODO:
+    # openmm_dashboard_section = wepy.OpenMMRunnerDashboardSection(runner_factory)
     dashboard_path = outputs_dir / "main.wepy_dash.org"
     dashboard_reporter = DashboardReporter(dashboard_path)
+
 
     hdf5_path = outputs_dir / "main.wepy.h5"
     hdf5_reporter = WepyHDF5Reporter.from_components(
         file_path=hdf5_path,
         save_fields=DEFAULT_SAVE_FIELDS,
+        # only require these fields for the initial walkers
+        init_walker_save_fields=("positions", "box_vectors",),
         topology=ala_sys.json_top,
         resampler_class=REVOResampler,
     )
