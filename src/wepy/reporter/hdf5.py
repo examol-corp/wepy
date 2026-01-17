@@ -335,7 +335,7 @@ class WepyHDF5Reporter(
         if alt_reps is not None:
             self.alt_reps_idxs = {
                 key: np.array(idxs)
-                for key, (idxs, frequence)
+                for key, (idxs, _)
                 in alt_reps.items()
             }
 
@@ -425,7 +425,7 @@ class WepyHDF5Reporter(
         n_dims: int = 3,
         main_rep_idxs: Idxs | None = None,
         all_atoms_rep_freq: int | None = None,
-        alt_reps: dict[str, tuple[Idxs, int]]=None,
+        alt_reps: dict[str, tuple[Idxs, int]] = None,
     ) -> Self:
         """Construct reporter from simulation components.
 
