@@ -16,6 +16,7 @@ import psutil
 import pytest
 
 # First Party Library
+import mdtraj
 import wepy
 from wepy.reporter.dashboard import DashboardReporter
 from wepy.resampling.resamplers.revo import REVOResamplerFactory, REVOResampler
@@ -121,11 +122,14 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
     hdf5_path = outputs_dir / "main.wepy.h5"
     hdf5_reporter = WepyHDF5Reporter.from_components(
         file_path=hdf5_path,
+        topology=test_sys.json_top,
+        resampler_class=REVOResamplerFactory.type(),
         save_fields=DEFAULT_SAVE_FIELDS,
         # only require these fields for the initial walkers
         init_walker_save_fields=("positions",),
-        topology=test_sys.json_top,
-        resampler_class=REVOResamplerFactory.type(),
+        sparse_fields={
+            "velocities" : 2,
+        },
     )
 
     reporters = [dashboard_reporter, hdf5_reporter]
@@ -219,15 +223,26 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
     dashboard_path = outputs_dir / "main.wepy_dash.org"
     dashboard_reporter = DashboardReporter(dashboard_path)
 
+    mdj_top = mdtraj.Topology.from_openmm(ala_sys.topology)
+    protein_idxs = mdj_top.select("protein")
+    water_idxs = mdj_top.select("water")
 
     hdf5_path = outputs_dir / "main.wepy.h5"
     hdf5_reporter = WepyHDF5Reporter.from_components(
         file_path=hdf5_path,
-        save_fields=DEFAULT_SAVE_FIELDS,
-        # only require these fields for the initial walkers
-        init_walker_save_fields=("positions", "box_vectors",),
         topology=ala_sys.json_top,
         resampler_class=REVOResampler,
+        save_fields=DEFAULT_SAVE_FIELDS + ("velocities",),
+        # only require these fields for the initial walkers
+        init_walker_save_fields=("positions", "box_vectors",),
+        sparse_fields={
+            "velocities" : 2,
+        },
+        main_rep_idxs=protein_idxs,
+        all_atoms_rep_freq=2,
+        alt_reps={
+            "water" : (water_idxs, 2),
+        }
     )
 
     reporters = [dashboard_reporter, hdf5_reporter]
