@@ -2081,10 +2081,9 @@ class WepyHDF5:
         records_grp = self.h5["{}/{}/{}".format(RUNS, run_idx, run_record_key)]
         field = records_grp[field_name]
 
-        # make sure this is a feature vector
         assert (
             len(field_data.shape) > 1
-        ), "field_data must be a feature vector with the same number of dimensions as the number"
+        ), f"field_data (record={run_record_key}, name={field_name}, shape={field_data.shape}) must be a feature vector with the same number of dimensions as the number"
 
         # of datase new frames
         n_new_frames = field_data.shape[0]
@@ -4904,7 +4903,12 @@ class WepyHDF5:
         for record in fields_data:
             for field_name, field_data in record.items():
                 self._extend_run_record_data_field(
-                    run_idx, run_record_key, field_name, np.array([field_data])
+                    run_idx,
+                    run_record_key,
+                    field_name,
+                    # wrap in an extra dimension to keep them as
+                    # feature vectors
+                    np.array([field_data]),
                 )
 
     ### Analysis Routines

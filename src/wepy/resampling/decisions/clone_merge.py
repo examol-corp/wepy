@@ -51,6 +51,7 @@ class CloneMergeDecisionRecordDict(TypedDict):
 
 @attrs.define
 class CloneMergeDecisionRecord(BaseDecisionRecord):
+    # TODO: get types correct
     decision_id: int = attrs.field()
     target_idxs: tuple[int, ...] = attrs.field()
 

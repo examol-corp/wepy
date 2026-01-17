@@ -1,3 +1,4 @@
+import numpy as np
 # First Party Library
 from wepy.resampling.decisions.no_decision import NothingDecisionEnum
 from wepy.resampling.resamplers.noresampler import NoResampler, NoResamplerFactory, NoResamplerResamplingRecord, NoResamplerResamplerRecord
@@ -34,16 +35,16 @@ class Test_NoResampler:
             walkers,
             [
                     NoResamplerResamplingRecord(
-                        decision_id=NothingDecisionEnum.NOTHING.value,
-                        target_idxs=[0],
+                        decision_id=np.array([NothingDecisionEnum.NOTHING.value]),
+                        target_idxs=np.array([[0]]),
                     ),
                     NoResamplerResamplingRecord(
-                        decision_id=NothingDecisionEnum.NOTHING.value,
-                        target_idxs=[1],
+                        decision_id=np.array([NothingDecisionEnum.NOTHING.value]),
+                        target_idxs=np.array([[1]]),
                     ),
                     NoResamplerResamplingRecord(
-                        decision_id=NothingDecisionEnum.NOTHING.value,
-                        target_idxs=[2],
+                        decision_id=np.array([NothingDecisionEnum.NOTHING.value]),
+                        target_idxs=np.array([[2]]),
                     ),
             ],
             [NoResamplerResamplerRecord()],
