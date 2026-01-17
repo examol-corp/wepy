@@ -34,7 +34,7 @@ from .resampling.decisions.clone_merge import MultiCloneMergeDecision
 from .resampling.resamplers.noresampler import NoResampler, NoResamplerFactory
 from .resampling.resamplers.resampler import Resampler
 from .resampling.resamplers.revo import REVOResampler, REVOResamplerFactory
-from .resampling.resamplers.wexplore import WExploreResampler
+from .resampling.resamplers.wexplore import WExploreResampler, WExploreResamplerFactory
 from .resampling.distances.base import Distance
 from .resampling.distances.mock import MockDistance
 from .resampling.distances.simple import XYDistanceState, XYEuclideanDistance
@@ -216,4 +216,5 @@ __all__ = [
     "NoRunnerFactory",
     "SerialMapperFactory",
     "OPENMM_DEFAULT_UNITS",
+    "WExploreResamplerFactory",
 ]

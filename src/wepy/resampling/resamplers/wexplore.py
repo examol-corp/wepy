@@ -1,9 +1,7 @@
 # Standard Library
 import itertools as it
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
+from typing import Generic, TypeVar
 import math
 import random as rand
 from collections import defaultdict
@@ -12,10 +10,18 @@ from copy import copy, deepcopy
 # Third Party Library
 import networkx as nx
 import numpy as np
+import attrs
 
 # First Party Library
 from wepy.resampling.resamplers.clone_merge import CloneMergeResampler
 from wepy.resampling.resamplers.resampler import ResamplerError
+from wepy.resampling.distances.base import Distance
+from wepy.walker import WalkerState
+
+logger = logging.getLogger(__name__)
+
+DistanceMetric_ = TypeVar("DistanceMetric_", bound=Distance)
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 
 
 class RegionTreeError(Exception):
@@ -2077,7 +2083,10 @@ class RegionTree(nx.DiGraph):
         return merge_groups, walkers_num_clones
 
 
-class WExploreResampler(CloneMergeResampler):
+class WExploreResampler(
+        CloneMergeResampler,
+        Generic[DistanceMetric_, WalkerState_],
+):
     """Resampler implementing the WExplore algorithm.
 
     See the paper for a full description of the algorithm, but
@@ -2288,13 +2297,13 @@ class WExploreResampler(CloneMergeResampler):
 
     def __init__(
         self,
-        seed=None,
-        distance=None,
-        max_region_sizes=None,
-        init_state=None,
-        pmin=1e-12,
-        pmax=0.1,
-        max_n_regions=(10, 10, 10, 10),
+        distance: Distance,
+        max_region_sizes: tuple[float, ...],
+        init_state: WalkerState_,
+        pmin: float = 1e-12,
+        pmax: float = 0.1,
+        max_n_regions: tuple[int, ...] = (10, 10, 10, 10),
+        seed: int | None = None,
         **kwargs,
     ):
         """Constructor for the WExploreResampler.
@@ -2648,3 +2657,44 @@ class WExploreResampler(CloneMergeResampler):
         )
 
         return resampled_walkers, resampling_data, resampler_data
+
+@attrs.define
+class WExploreResamplerFactory(Generic[DistanceMetric_, WalkerState_]):
+
+    distance_metric: DistanceMetric_
+    init_state: WalkerState_
+    max_region_sizes: tuple[float, ...]
+    max_n_regions: tuple[int, ...]
+    pmin: float = 1e-12
+    pmax: float = 0.1
+    seed: int | None = None
+
+    def __attrs_post_init__(self) -> None:
+
+        if len(self.max_region_sizes) != len(self.max_n_regions):
+
+            raise ValueError(
+                "The number of levels must be the same. Received: "
+                f"max_region_sizes={len(self.max_region_sizes)} "
+                f"max_n_regions={len(self.max_n_regions)}"
+            )
+
+    @classmethod
+    def type(cls) -> type[WExploreResampler]:
+        return WExploreResampler
+    
+    def __call__(
+        self,
+        num_cores: int,
+    ) -> WExploreResampler:
+
+        return WExploreResampler(
+            distance=self.distance_metric,
+            init_state=self.init_state,
+            max_n_regions=self.max_n_regions,
+            max_region_sizes=self.max_region_sizes,
+            pmin=self.pmin,
+            pmax=self.pmax,
+            seed=self.seed,
+        )
+    
