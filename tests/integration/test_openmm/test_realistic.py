@@ -123,9 +123,9 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
         file_path=hdf5_path,
         save_fields=DEFAULT_SAVE_FIELDS,
         # only require these fields for the initial walkers
-        init_walker_save_fields=("positions", "box_vectors",),
+        init_walker_save_fields=("positions",),
         topology=test_sys.json_top,
-        resampler_class=REVOResampler,
+        resampler_class=REVOResamplerFactory.type(),
     )
 
     reporters = [dashboard_reporter, hdf5_reporter]
