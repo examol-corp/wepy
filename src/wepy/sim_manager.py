@@ -492,6 +492,14 @@ class Manager(Generic[State_]):
         ## Monitor
         self.monitor = sim_monitor
 
+        # OPT,IDEA: figure out a general resource allocation scheme
+        # that lets you customize more than just the number of cores
+        # and lets you configure per component how many resources they
+        # can have during the simulation. Currently we just tell each
+        # component what we have. This isn't too bad as nothing else
+        # is CPU bound and they run sequentially so they wouldn't be
+        # competing for them at runtime.
+
         # figure out how many cores we have at our disposal if not
         # already given
         if num_cores is None:

@@ -2685,7 +2685,7 @@ class WExploreResamplerFactory(Generic[DistanceMetric_, WalkerState_]):
     
     def __call__(
         self,
-        num_cores: int,
+        num_cores: int | None = None,
     ) -> WExploreResampler:
 
         return WExploreResampler(

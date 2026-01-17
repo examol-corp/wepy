@@ -907,7 +907,7 @@ class REVOResamplerFactory(Generic[DistanceMetric_]):
     
     def __call__(
         self,
-        num_cores: int,
+        num_cores: int | None = None,
     ) -> REVOResampler:
 
         return REVOResampler(
