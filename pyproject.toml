@@ -75,6 +75,8 @@ build-backend = "uv_build"
 [dependency-groups]
 
 dev = [
+  # for ad hoc executables like for data generation
+  "cyclopts",
   # testing
   "pytest",
   "coverage",
