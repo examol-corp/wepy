@@ -18,20 +18,10 @@ import pytest
 # First Party Library
 import mdtraj
 import wepy
-from wepy.reporter.dashboard import DashboardReporter
-from wepy.resampling.resamplers.revo import REVOResamplerFactory, REVOResampler
-from wepy.runners.openmm import OpenMMRunnerFactory, OpenMMState
 from wepy.runners.openmm.runner import (
     _DEFAULT_HEARTBEAT_INTERVAL,
     _DEFAULT_STATE_TIME_INTERVAL,
 )
-from wepy.sim_manager import Manager
-from wepy.reporter.dashboard import DashboardReporter
-from wepy.reporter.hdf5 import WepyHDF5Reporter
-
-# TODO: use the high-level API imports
-from wepy.walker import Walker
-from wepy.work_mapper.openmm import OpenMMProcPoolWorkMapperFactory
 from wepy_tools.systems.alanine_dipeptide import (
     AlanineDipeptideExplicitSystem,
     AlanineDipeptideRamachandranDistance,
@@ -72,7 +62,7 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
 
     integrator = openmm.LangevinIntegrator(TEMPERATURE, 0.1, STEP_SIZE)
 
-    runner_factory = OpenMMRunnerFactory(
+    runner_factory = wepy.OpenMMRunnerFactory(
         system=test_sys.system,
         topology=test_sys.topology,
         integrator=integrator,
@@ -81,7 +71,7 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
     # num_walkers = 48
     num_walkers = 4
 
-    init_state = OpenMMState.from_dwim(
+    init_state = wepy.OpenMMState.from_dwim(
         positions=test_sys.positions,
     )
 
@@ -91,7 +81,7 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
 
     init_walker_weight = 1 / num_walkers
     init_walkers = [
-        Walker(
+        wepy.Walker(
             state=walker_state,
             weight=init_walker_weight,
         )
@@ -110,21 +100,21 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
 
     distance_metric = PairDistance()
 
-    resampler_factory = REVOResamplerFactory(
+    resampler_factory = wepy.REVOResamplerFactory(
         merge_dist=4,
         char_dist=0.1,
         distance_metric=distance_metric,
     )
 
     dashboard_path = outputs_dir / "main.wepy_dash.org"
-    dashboard_reporter = DashboardReporter(dashboard_path)
+    dashboard_reporter = wepy.DashboardReporter(dashboard_path)
 
     hdf5_path = outputs_dir / "main.wepy.h5"
-    hdf5_reporter = WepyHDF5Reporter.from_components(
+    hdf5_reporter = wepy.WepyHDF5Reporter.from_components(
         file_path=hdf5_path,
         topology=test_sys.json_top,
-        resampler_class=REVOResamplerFactory.type(),
-        save_fields=DEFAULT_SAVE_FIELDS,
+        resampler_class=wepy.REVOResamplerFactory.type(),
+        save_fields=DEFAULT_SAVE_FIELDS + ("velocities",),
         # only require these fields for the initial walkers
         init_walker_save_fields=("positions",),
         sparse_fields={
@@ -134,12 +124,12 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
 
     reporters = [dashboard_reporter, hdf5_reporter]
 
-    sim_manager = Manager(
+    sim_manager = wepy.Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
         resampler_factory=resampler_factory,
         # resampler_factory=NoResampler,
-        work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
+        work_mapper_factory=wepy.OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
             num_procs=num_workers,
             global_platform_properties={"Threads": str(cores_per_worker)},
@@ -179,7 +169,7 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
     )
     ala_sys.system.addForce(barostat)
 
-    runner_factory = OpenMMRunnerFactory(
+    runner_factory = wepy.OpenMMRunnerFactory(
         system=ala_sys.system,
         topology=ala_sys.topology,
         integrator=integrator,
@@ -193,7 +183,7 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
 
     init_walker_weight = 1 / num_walkers
     init_walkers = [
-        Walker(
+        wepy.Walker(
             state=walker_state,
             weight=init_walker_weight,
         )
@@ -212,7 +202,7 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
 
     distance_metric = AlanineDipeptideRamachandranDistance(ala_sys.json_top)
 
-    resampler_factory = REVOResamplerFactory(
+    resampler_factory = wepy.REVOResamplerFactory(
         merge_dist=4,
         char_dist=0.1,
         distance_metric=distance_metric,
@@ -221,17 +211,17 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
     # TODO:
     # openmm_dashboard_section = wepy.OpenMMRunnerDashboardSection(runner_factory)
     dashboard_path = outputs_dir / "main.wepy_dash.org"
-    dashboard_reporter = DashboardReporter(dashboard_path)
+    dashboard_reporter = wepy.DashboardReporter(dashboard_path)
 
     mdj_top = mdtraj.Topology.from_openmm(ala_sys.topology)
     protein_idxs = mdj_top.select("protein")
     water_idxs = mdj_top.select("water")
 
     hdf5_path = outputs_dir / "main.wepy.h5"
-    hdf5_reporter = WepyHDF5Reporter.from_components(
+    hdf5_reporter = wepy.WepyHDF5Reporter.from_components(
         file_path=hdf5_path,
         topology=ala_sys.json_top,
-        resampler_class=REVOResampler,
+        resampler_class=wepy.REVOResampler,
         save_fields=DEFAULT_SAVE_FIELDS + ("velocities",),
         # only require these fields for the initial walkers
         init_walker_save_fields=("positions", "box_vectors",),
@@ -247,12 +237,12 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
 
     reporters = [dashboard_reporter, hdf5_reporter]
 
-    sim_manager = Manager(
+    sim_manager = wepy.Manager(
         init_walkers=init_walkers,
         runner_factory=runner_factory,
         # resampler=NoResampler(),
         resampler_factory=resampler_factory,
-        work_mapper_factory=OpenMMProcPoolWorkMapperFactory(
+        work_mapper_factory=wepy.OpenMMProcPoolWorkMapperFactory(
             platform="CPU",
             num_procs=num_workers,
             # NOTE,TOREV: in practice not limiting this is just faster
