@@ -26,13 +26,13 @@ from wepy.walker import Walker, WalkerState, WalkerStateBox
 from wepy.resampling.resamplers.resampler import Resampler
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.typing import Shape, Idxs, IdxArray
-from wepy.storage.protocol import Record
+from wepy.storage.protocol import Record, ResamplingRecord
 from wepy.runners.openmm import OPENMM_DEFAULT_UNITS
 
 logger = logging.getLogger(__name__)
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
-ResamplingRecord_ = TypeVar("ResamplingRecord_", bound=Record)
+ResamplingRecord_ = TypeVar("ResamplingRecord_", bound=ResamplingRecord)
 ResamplerRecord_ = TypeVar("ResamplerRecord_", bound=Record)
 
 WarpingRecord_ = TypeVar("WarpingRecord_", bound=Record)

@@ -67,10 +67,12 @@ class DecisionRecord(Protocol):
 
 class BaseDecisionRecordDict(TypedDict):
     decision_id: int
+    target_idxs: tuple[int, ...]
 
 @attrs.define
 class BaseDecisionRecord:
     decision_id: int
+    target_idxs: tuple[int, ...]
 
     def to_dict(self) -> BaseDecisionRecordDict:
         return attrs.asdict(self)
@@ -91,22 +93,21 @@ class BaseDecisionABC(Generic[DecisionEnum_, DecisionRecord_]):
 
     DECISION_RECORD: DecisionRecord_ = BaseDecisionRecord
 
-    FIELDS: tuple[str, ...] = ("decision_id",)
+    FIELDS: tuple[str, ...] = ("decision_id", "target_idxs",)
     """The names of the fields that go into the decision record."""
-
-    # suggestion for subclassing, FIELDS and others
-    # FIELDS = super().FIELDS + ('target_idxs',)
-    # etc.
 
     #  An Ellipsis instead of fields indicate there is a variable
     # number of fields.
-    SHAPES: tuple[DecisionFieldShapeSpec, ...] = ((1,),)
+    SHAPES: tuple[DecisionFieldShapeSpec, ...] = (
+        (1,),
+        Ellipsis,
+    )
     """Field data shapes."""
 
-    DTYPES: tuple[DecisionFieldDtype, ...] = (int,)
+    DTYPES: tuple[DecisionFieldDtype, ...] = (int, int,)
     """Field data types."""
 
-    RECORD_FIELDS: tuple[str, ...] = ("decision_id",)
+    RECORD_FIELDS: tuple[str, ...] = ("decision_id", "target_idxs",)
     """The fields that could be used in a reduced table-like representation."""
 
     ANCESTOR_DECISION_IDS: tuple[int, ...]
@@ -211,36 +212,36 @@ class BaseDecisionABC(Generic[DecisionEnum_, DecisionRecord_]):
         d = cls.enum_dict_by_name()
         return d[enum_name]
 
-    @classmethod
-    def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord_:
-        """Generate a record for the enum_value and the other fields.
+    # @classmethod
+    # def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord_:
+    #     """Generate a record for the enum_value and the other fields.
 
-        Parameters
-        ----------
-        enum_value : int
+    #     Parameters
+    #     ----------
+    #     enum_value : int
 
-        Returns
-        -------
-        rec : dict of str: value
+    #     Returns
+    #     -------
+    #     rec : dict of str: value
 
-        """
+    #     """
 
-        assert (
-            enum_value in cls.enum_dict_by_value()
-        ), "value is not a valid Enumerated value"
+    #     assert (
+    #         enum_value in cls.enum_dict_by_value()
+    #     ), "value is not a valid Enumerated value"
 
-        for field_key in fields.keys():
-            assert (
-                field_key in cls.FIELDS
-            ), "The field {} is not a field for that decision".format(field_key)
-            assert field_key != "decision_id", "'decision_id' cannot be an extra field"
+    #     for field_key in fields.keys():
+    #         assert (
+    #             field_key in cls.FIELDS
+    #         ), "The field {} is not a field for that decision".format(field_key)
+    #         assert field_key != "decision_id", "'decision_id' cannot be an extra field"
 
-        rec_d = {"decision_id": enum_value}
-        rec_d.update(fields)
+    #     rec_d = {"decision_id": enum_value}
+    #     rec_d.update(fields)
 
-        rec = cls.DECISION_RECORD(**rec_d)
+    #     rec = cls.DECISION_RECORD(**rec_d)
 
-        return rec
+    #     return rec
 
     @classmethod
     def action(

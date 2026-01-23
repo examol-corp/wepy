@@ -58,10 +58,18 @@ ParentForest : Class that imposes the forest (tree) structure over the
 
 # Standard Library
 import itertools as it
-from copy import copy
+import copy
 
 # Third Party Library
 import networkx as nx
+
+from wepy.resampling.decisions.decision import BaseDecisionABC
+from wepy.boundary_conditions.boundary import BoundaryConditions
+
+from wepy.storage.protocol import (
+    ResamplingRecordUnstruct,
+    DecisionRecordUnstruct,
+)
 
 DISCONTINUITY_VALUE = -1
 """Special value used to determine if a parent-child relationship has
@@ -70,8 +78,18 @@ to set this value.
 
 """
 
+DecisionPanel = list[list[list[DecisionRecordUnstruct]]]
 
-def resampling_panel(resampling_records, is_sorted=False):
+ParentPanel = list[list[list[int]]]
+ParentTable = list[list[int]]
+
+# (traj_idx, cycle_idx)
+Trace = list[tuple[int, int]]
+
+def resampling_panel(
+        resampling_records: list[ResamplingRecordUnstruct],
+        is_sorted: bool = False,
+) -> DecisionPanel:
     """Converts an unordered collection of resampling records into a
     structured array (lists) corresponding to cycles and resampling
     steps within cycles.
@@ -99,12 +117,21 @@ def resampling_panel(resampling_records, is_sorted=False):
 
     res_panel = []
 
+    _resampling_records = [
+            (run_record.cycle_idx, run_record.record)
+            for run_record
+            in resampling_records
+    ]
     # if the records are not sorted this must be done:
     if not is_sorted:
-        resampling_records.sort()
+        _resampling_records.sort(key=lambda tup: tup[0])
+
+    # otherwise just unpack them
+    else:
+        _resampling_records = copy.copy(resampling_records)
 
     # iterate through the resampling records
-    rec_it = iter(resampling_records)
+    rec_it = iter(_resampling_records)
     last_cycle_idx = None
     cycle_recs = []
     stop = False
@@ -114,7 +141,7 @@ def resampling_panel(resampling_records, is_sorted=False):
         cycle_stop = False
         while not cycle_stop:
             try:
-                rec = next(rec_it)
+                cycle_idx, record = next(rec_it)
             except StopIteration:
                 # this is the last record of all the records
                 stop = True
@@ -128,11 +155,11 @@ def resampling_panel(resampling_records, is_sorted=False):
                 # cycle_idx so we know when in the records we have
                 # gotten to the next cycle of records
                 if last_cycle_idx is None:
-                    last_cycle_idx = rec.cycle_idx
+                    last_cycle_idx = cycle_idx
 
                 # if the resampling record retrieved is from the next
                 # cycle we finish the last cycle
-                if rec.cycle_idx > last_cycle_idx:
+                if cycle_idx > last_cycle_idx:
                     cycle_stop = True
                     # save the current cycle as a special
                     # list which we will iterate through
@@ -142,11 +169,11 @@ def resampling_panel(resampling_records, is_sorted=False):
 
                     # start a new cycle_recs for the record
                     # we just got
-                    cycle_recs = [rec]
+                    cycle_recs = [record]
                     last_cycle_idx += 1
 
             if not cycle_stop:
-                cycle_recs.append(rec)
+                cycle_recs.append(record)
 
             else:
                 # we need to break up the records in the cycle into steps
@@ -168,7 +195,7 @@ def resampling_panel(resampling_records, is_sorted=False):
 
                     # or if the next stop index has been obtained
                     else:
-                        if cycle_rec.step_idx > step_idx:
+                        if cycle_rec["step_idx"] > step_idx:
                             step_stop = True
                             # save the current step as a special
                             # list which we will iterate through
@@ -188,12 +215,15 @@ def resampling_panel(resampling_records, is_sorted=False):
                         step_row = [None for _ in range(len(curr_step_recs))]
                         for walker_rec in curr_step_recs:
                             # collect data from the record
-                            walker_idx = walker_rec.walker_idx
-                            decision_id = walker_rec.decision_id
-                            instruction = walker_rec.target_idxs
+                            walker_idx = walker_rec["walker_idx"]
+                            decision_id = walker_rec["decision_id"]
+                            target_idxs = walker_rec["target_idxs"]
 
                             # set the resampling record for the walker in the step records
-                            step_row[walker_idx] = (decision_id, instruction)
+                            step_row[walker_idx] = DecisionRecordUnstruct({
+                                "decision_id" : decision_id,
+                                "target_idxs" : target_idxs,
+                            })
 
                         # add the records for this step to the cycle table
                         cycle_table.append(step_row)
@@ -204,7 +234,10 @@ def resampling_panel(resampling_records, is_sorted=False):
     return res_panel
 
 
-def parent_panel(decision_class, resampling_panel):
+def parent_panel(
+        decision_class: type[BaseDecisionABC],
+        resampling_panel: DecisionPanel,
+) -> ParentPanel:
     """Using the parental interpretation of resampling records given by
     the decision_class, convert resampling records in a resampling
     panel to parent indices.
@@ -231,9 +264,16 @@ def parent_panel(decision_class, resampling_panel):
         parent_table = []
 
         # now iterate through the rest of the stages
-        for step in cycle:
+        for step_recs in cycle:
+
+            # cast the unstructured record to decision records
+            decision_recs = [
+                decision_class.DECISION_RECORD(**step_rec)
+                for step_rec
+                in step_recs
+            ]
             # get the parents idxs for the children of this step
-            step_parents = decision_class.parents(step)
+            step_parents = decision_class.parents(decision_recs)
 
             # for the full stage table save all the intermediate parents
             parent_table.append(step_parents)
@@ -244,7 +284,7 @@ def parent_panel(decision_class, resampling_panel):
     return parent_panel_in
 
 
-def net_parent_table(parent_panel):
+def net_parent_table(parent_panel: ParentPanel) -> ParentTable:
     """Reduces a full parent panel to get parent indices on a cycle basis.
 
     The full parent panel has parent indices for every step in each
@@ -295,8 +335,10 @@ def net_parent_table(parent_panel):
 
 
 def parent_table_discontinuities(
-    boundary_condition_class, parent_table, warping_records
-):
+    boundary_condition_class: type[BoundaryConditions],
+    parent_table: ParentTable,
+    warping_records,
+) -> ParentTable:
     """Given a parent table and warping records returns a new parent table
     with the discontinuous warping events for parents set to a special
     value (-1).
@@ -320,7 +362,7 @@ def parent_table_discontinuities(
     """
 
     # Make a copy of the parent table
-    new_parent_table = copy(parent_table)
+    new_parent_table = copy.copy(parent_table)
 
     for warp_record in warping_records:
         cycle_idx = warp_record[0]
@@ -343,8 +385,11 @@ def parent_table_discontinuities(
     return new_parent_table
 
 
-def parent_cycle_discontinuities(parent_idxs, discontinuities):
-    parent_row = copy(parent_idxs)
+def parent_cycle_discontinuities(
+        parent_idxs: list[int],
+        discontinuities: list[bool],
+) -> list[int]:
+    parent_row = copy.copy(parent_idxs)
     for walker_idx, disc in enumerate(discontinuities):
         # if there was a discontinuity in this walker, we need to
         # check for which children it had and apply the discontinuity
@@ -359,7 +404,12 @@ def parent_cycle_discontinuities(parent_idxs, discontinuities):
     return parent_row
 
 
-def ancestors(parent_table, cycle_idx, walker_idx, ancestor_cycle=0):
+def ancestors(
+        parent_table: ParentTable,
+        cycle_idx: int,
+        walker_idx: int,
+        ancestor_cycle: int = 0,
+) -> Trace:
     """Returns the lineage of ancestors as walker indices leading up to
     the given walker.
 
@@ -402,7 +452,10 @@ def ancestors(parent_table, cycle_idx, walker_idx, ancestor_cycle=0):
     return lineage
 
 
-def sliding_window(parent_table, window_length):
+def sliding_window(
+        parent_table: ParentTable,
+        window_length: int,
+) -> list[Trace]:
     """Return contig walker traces of sliding windows of given length over
     the parent forest imposed over the contig given by the parent table.
 

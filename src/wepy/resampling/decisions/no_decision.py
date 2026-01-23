@@ -18,18 +18,33 @@ class NothingDecisionEnum(IntEnum):
 
 class NoDecisionRecordDict(TypedDict):
     decision_id: int
-    target_idx: int
+    target_idx: tuple[int, ...]
 
 @attrs.define
 class NoDecisionRecord(BaseDecisionRecord):
     decision_id: int = attrs.field()
-    target_idx: int = attrs.field(validator=attrs.validators.ge(0))
+    target_idxs: tuple[int, ...] = attrs.field()
 
     @decision_id.validator
     def _check_decision_id(self, attribute, value) -> None:
 
         if value != NothingDecisionEnum.NOTHING.value:
             raise ValueError(f"Invalid decision_id ({value}) must be {NothingDecisionEnum.NOTHING.value}")
+
+    @target_idxs.validator
+    def _check_target_idxs(self, attribute, value) -> None:
+
+        if len(value) < 1:
+            raise ValueError(
+                f"'target_idxs' must have at least one entry."
+            )
+
+        if any(idx < 0 for idx in value):
+
+            raise ValueError(
+                f"'target_idxs' values must be non-negative, received: {value}"
+            )
+        
 
     def to_dict(self) -> NoDecisionRecordDict:
         return attrs.asdict(self)
@@ -40,12 +55,13 @@ class NoDecision(BaseDecisionABC):
 
     ENUM = NothingDecisionEnum
     DEFAULT_DECISION = ENUM.NOTHING
+    DECISION_RECORD = NoDecisionRecord
 
-    FIELDS = BaseDecisionABC.FIELDS + ("target_idxs",)
-    SHAPES = BaseDecisionABC.SHAPES + (Ellipsis,)
-    DTYPES = BaseDecisionABC.DTYPES + (int,)
+    FIELDS = BaseDecisionABC.FIELDS
+    SHAPES = BaseDecisionABC.SHAPES
+    DTYPES = BaseDecisionABC.DTYPES
 
-    RECORD_FIELDS = BaseDecisionABC.RECORD_FIELDS + ("target_idxs",)
+    RECORD_FIELDS = BaseDecisionABC.RECORD_FIELDS
 
     ANCESTOR_DECISION_IDS = (ENUM.NOTHING.value,)
 
@@ -60,21 +76,22 @@ class NoDecision(BaseDecisionABC):
         # go through each decision and perform the decision
         # instructions
         for step_idx, step_recs in enumerate(decisions):
-            for walker_idx, decision in enumerate(step_recs):
+            for walker_idx, decision_record in enumerate(step_recs):
 
-                if decision.decision_id == cls.ENUM.NOTHING.value:
+                if decision_record.decision_id == cls.ENUM.NOTHING.value:
+
+                    target_idx = decision_record.target_idxs[0]
+                    
                     # check to make sure a walker doesn't already exist
                     # where you are going to put it
-                    if mod_walkers[decision.target_idx] is not None:
+                    if mod_walkers[target_idx] is not None:
                         raise ValueError(
-                            "Multiple walkers assigned to position {}".format(
-                                decision.target_idx
-                            )
+                            f"Multiple walkers assigned to position {target_idx}"
                         )
 
                     # put the walker in the position specified by the
                     # instruction
-                    mod_walkers[decision.target_idx] = walkers[walker_idx]
+                    mod_walkers[target_idx] = walkers[walker_idx]
 
         return mod_walkers
 
@@ -84,6 +101,6 @@ class NoDecision(BaseDecisionABC):
         step_parents = [None for i in range(len(step))]
         for parent_idx, parent_rec in enumerate(step):
 
-            step_parents[parent_rec.target_idx] = parent_idx
+            step_parents[parent_rec.target_idxs[0]] = parent_idx
 
         return step_parents

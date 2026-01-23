@@ -14,29 +14,29 @@ class Test_NoDecisionRecord:
 
         NoDecisionRecord(
             decision_id=0,
-            target_idx=1,
+            target_idxs=(1,),
         )
 
         with pytest.raises(ValueError):
             NoDecisionRecord(
                 decision_id=1,
-                target_idx=1,
+                target_idxs=(1,),
             )
 
         with pytest.raises(ValueError):
             NoDecisionRecord(
                 decision_id=0,
-                target_idx=-1,
+                target_idxs=(-1,),
             )
 
     def test_to_dict(self):
 
         assert NoDecisionRecord(
             decision_id=0,
-            target_idx=0
+            target_idxs=(0,)
         ).to_dict() == {
             "decision_id" : 0,
-            "target_idx" : 0,
+            "target_idxs" : (0,),
         }
 
 class Test_NoDecision:
@@ -66,13 +66,13 @@ class Test_NoDecision:
                         NoDecisionRecord(
                             **{
                                 "decision_id": NothingDecisionEnum.NOTHING,
-                                "target_idx": 0,
+                                "target_idxs": (0,),
                             }
                         ),
                         NoDecisionRecord(
                             **{
                                 "decision_id": NothingDecisionEnum.NOTHING,
-                                "target_idx": 1,
+                                "target_idxs": (1,),
                             }
                         ),
                     ]
@@ -88,13 +88,13 @@ class Test_NoDecision:
                     NoDecisionRecord(
                         **{
                             "decision_id": NothingDecisionEnum.NOTHING,
-                            "target_idx": 1,
+                            "target_idxs": (1,),
                         }
                     ),
                     NoDecisionRecord(
                         **{
                             "decision_id": NothingDecisionEnum.NOTHING,
-                            "target_idx": 0,
+                            "target_idxs": (0,),
                         }
                     ),
                 ]
@@ -107,14 +107,14 @@ class Test_NoDecision:
             [
                 NoDecisionRecord(
                     **{
-                        "decision_id": NothingDecisionEnum.NOTHING,
-                        "target_idx": 0,
+                        "decision_id": NothingDecisionEnum.NOTHING.value,
+                        "target_idxs": (0,),
                     }
                 ),
                 NoDecisionRecord(
                     **{
-                        "decision_id": NothingDecisionEnum.NOTHING,
-                        "target_idx": 1,
+                        "decision_id": NothingDecisionEnum.NOTHING.value,
+                        "target_idxs": (1,),
                     }
                 ),
             ]
@@ -125,13 +125,13 @@ class Test_NoDecision:
                 NoDecisionRecord(
                     **{
                         "decision_id": NothingDecisionEnum.NOTHING,
-                        "target_idx": 1,
+                        "target_idxs": (1,),
                     }
                 ),
                 NoDecisionRecord(
                     **{
                         "decision_id": NothingDecisionEnum.NOTHING,
-                        "target_idx": 0,
+                        "target_idxs": (0,),
                     }
                 ),
             ]

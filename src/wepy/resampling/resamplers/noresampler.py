@@ -15,23 +15,34 @@ from wepy.resampling.resamplers.resampler import Resampler, ResamplerABC
 from wepy.walker import Walker
 from wepy.util.attrs import AttrsMappingMixin
 from wepy.resampling.decisions.no_decision import NoDecisionRecord
+from wepy.storage.protocol import ResamplingRecord
 
 @attrs.define
-class NoResamplerResamplingRecord(AttrsMappingMixin):
-    decision_id: Annotated[
-        NDArray[np.int64],
-        Shape((1,)),
-    ]
-    # NOTE,UGLY: It isn't strictly necessary to have multiple target
-    # indices for this type of resampling record to have all the
-    # information, but all of the downstream infrastucture for
-    # interpreting them relies on there being multiple indices so we
-    # don't want to break this for this record that is only used for
-    # troubleshooting really.
-    target_idxs: Annotated[
-        NDArray[np.int64],
-        Shape((1,1,)),
-    ]
+class NoResamplerResamplingRecord(AttrsMappingMixin, ResamplingRecord):
+
+    # TODO: remove this once new interface is stable
+    #
+    # decision_id: Annotated[
+    #     NDArray[np.int64],
+    #     Shape((1,)),
+    # ]
+    # target_idxs: Annotated[
+    #     NDArray[np.int64],
+    #     Shape((1,1,)),
+    # ]
+    # step_idx: Annotated[
+    #     NDArray[np.int64],
+    #     Shape((1,)),
+    # ]
+    # walker_idx: Annotated[
+    #     NDArray[np.int64],
+    #     Shape((1,)),
+    # ]
+
+    decision_id: int
+    target_idxs: tuple[int, ...]
+    step_idx: int
+    walker_idx: int
 
 
 @attrs.define
@@ -69,9 +80,11 @@ class NoResampler(ResamplerABC):
 
             # UGLY: we need to wrap the field data into the shape
             walker_record = NoResamplerResamplingRecord(
-                decision_id=np.array([NothingDecisionEnum.NOTHING.value]),
+                decision_id=NothingDecisionEnum.NOTHING.value,
                 # NOTE: two dimensions to match the target_idxs shape
-                target_idxs=np.array([[walker_idx]]),
+                target_idxs=(walker_idx,),
+                walker_idx=walker_idx,
+                step_idx=0,
             )
 
             _resampling_data.append(walker_record)

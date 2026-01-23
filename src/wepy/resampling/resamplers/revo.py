@@ -867,12 +867,10 @@ class REVOResampler(
             resampling_record = CloneMergeResamplingRecord(
                 # The decision record fields are simple, so we wrap
                 # them here as well
-                decision_id=np.array([decision_record.decision_id]),
-                target_idxs=np.array([
-                    np.array(decision_record.target_idxs),
-                ]),
-                step_idx=np.array([0]),
-                walker_idx=np.array([walker_idx])
+                decision_id=decision_record.decision_id,
+                target_idxs=decision_record.target_idxs,
+                step_idx=0,
+                walker_idx=walker_idx
             )
             resampling_records.append(resampling_record)
 
@@ -881,7 +879,7 @@ class REVOResampler(
         resampler_records = [
             REVOResamplerResamplerRecord(
                 distance_matrix=np.ravel(np.array(distance_matrix)),
-                variation=np.array([[variation]]),
+                variation=variation,
             )
         ]
 

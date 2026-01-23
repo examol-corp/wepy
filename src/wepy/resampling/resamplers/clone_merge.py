@@ -19,8 +19,10 @@ from wepy.walker import Walker, WalkerState
 from wepy.util.attrs import AttrsMappingMixin
 from wepy.typing import Shape
 
+from wepy.storage.protocol import ResamplingRecord
+
 @attrs.define
-class CloneMergeResamplingRecord(AttrsMappingMixin):
+class CloneMergeResamplingRecord(AttrsMappingMixin, ResamplingRecord):
     # from the Decision
     decision_id: Annotated[
         NDArray[np.int64],

@@ -7,8 +7,12 @@ from wepy.walker import Walker
 
 def test_NoResamplerResamplingRecord():
 
-    assert NoResamplerResamplingRecord(0, (1,)) == NoResamplerResamplingRecord(0, (1,))
-
+    NoResamplerResamplingRecord(
+        decision_id=0,
+        target_idxs=(1,),
+        walker_idx=1,
+        step_idx=0
+    )
 class Test_NoResampler:
 
     def test_resample(self):
@@ -35,16 +39,22 @@ class Test_NoResampler:
             walkers,
             [
                     NoResamplerResamplingRecord(
-                        decision_id=np.array([NothingDecisionEnum.NOTHING.value]),
-                        target_idxs=np.array([[0]]),
+                        decision_id=NothingDecisionEnum.NOTHING.value,
+                        target_idxs=(0,),
+                        walker_idx=0,
+                        step_idx=0,
                     ),
                     NoResamplerResamplingRecord(
-                        decision_id=np.array([NothingDecisionEnum.NOTHING.value]),
-                        target_idxs=np.array([[1]]),
+                        decision_id=NothingDecisionEnum.NOTHING.value,
+                        target_idxs=(1,),
+                        walker_idx=1,
+                        step_idx=0,
                     ),
                     NoResamplerResamplingRecord(
-                        decision_id=np.array([NothingDecisionEnum.NOTHING.value]),
-                        target_idxs=np.array([[2]]),
+                        decision_id=NothingDecisionEnum.NOTHING.value,
+                        target_idxs=(2,),
+                        walker_idx=2,
+                        step_idx=0,
                     ),
             ],
             [NoResamplerResamplerRecord()],
