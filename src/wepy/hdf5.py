@@ -3611,7 +3611,7 @@ class WepyHDF5:
 
         """
 
-        trajs_grp = self.run_trajs(0)
+        trajs_grp = self.run_trajs(run_idx)
         return len(trajs_grp)
 
     def num_run_cycles(self, run_idx: int) -> int:
