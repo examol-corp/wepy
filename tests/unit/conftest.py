@@ -622,3 +622,12 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
         
         
     return path
+
+@pytest.fixture(scope="function")
+def wepy_h5_full_init(_wepy_h5_full_init, tmpdir) -> Path:
+
+    path = tmpdir / "main.wepy.h5"
+
+    reflink_or_copy(_wepy_h5_full_init, path)
+
+    return path
