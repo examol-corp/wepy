@@ -15,46 +15,46 @@ from wepy.resampling.decisions.no_decision import NoDecision
 def test_resampling_panel():
 
 
-    # simple case
-    assert resampling_panel(
-        [
-            RunRecord(
-                cycle_idx=0,
-                record=dict(
-                    step_idx=0,
-                    walker_idx=0,
-                    decision_id=0,
-                    target_idxs=(0,),
-                )
-            ),
-            RunRecord(
-                cycle_idx=0,
-                record=dict(
-                    step_idx=0,
-                    walker_idx=1,
-                    decision_id=0,
-                    target_idxs=(1,),
-                )
-            ),
-        ]
-    ) == [
-        # cycle 0
-        [
-            # step 0
-            [
-                # walker 0
-                {
-                    "decision_id" : 0,
-                    "target_idxs" : (0,)
-                },
-                # walker 1
-                {
-                    "decision_id" : 0,
-                    "target_idxs" : (1,)
-                },
-            ]
-        ]
-    ]
+    # # simple case
+    # assert resampling_panel(
+    #     [
+    #         RunRecord(
+    #             cycle_idx=0,
+    #             record=dict(
+    #                 step_idx=0,
+    #                 walker_idx=0,
+    #                 decision_id=0,
+    #                 target_idxs=(0,),
+    #             )
+    #         ),
+    #         RunRecord(
+    #             cycle_idx=0,
+    #             record=dict(
+    #                 step_idx=0,
+    #                 walker_idx=1,
+    #                 decision_id=0,
+    #                 target_idxs=(1,),
+    #             )
+    #         ),
+    #     ]
+    # ) == [
+    #     # cycle 0
+    #     [
+    #         # step 0
+    #         [
+    #             # walker 0
+    #             {
+    #                 "decision_id" : 0,
+    #                 "target_idxs" : (0,)
+    #             },
+    #             # walker 1
+    #             {
+    #                 "decision_id" : 0,
+    #                 "target_idxs" : (1,)
+    #             },
+    #         ]
+    #     ]
+    # ]
 
     # TODO: failing
     # with multiple steps

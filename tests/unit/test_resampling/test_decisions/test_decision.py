@@ -76,12 +76,12 @@ class Test_Decision:
     def test_enum_by_name(self):
         assert MockDecision.enum_by_name("NOTHING") == MockDecisionEnum.NOTHING
 
-    # def test_record(self):
+    def test_record(self):
 
-    #     assert MockDecision.record(0, (0,)) == BaseDecisionRecord(
-    #         decision_id=0,
-    #         target_idxs=(0,),
-    #     )
+        assert MockDecision.record(0, target_idxs=(0,)) == BaseDecisionRecord(
+            decision_id=0,
+            target_idxs=(0,),
+        )
 
     def test_action(self):
 

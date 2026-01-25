@@ -29,35 +29,23 @@ from wepy.resampling.resamplers.noresampler import NoResampler, NoResamplerResam
 
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 
-def reflink_or_copy(src: Path, dst: Path) -> None:
-    """
-    Create a copy-on-write reflink if supported.
-    Fall back to a full copy otherwise.
-    """
-    try:
-        if sys.platform.startswith("linux"):
-            subprocess.run(
-                ["cp", "--reflink=auto", src, dst],
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        elif sys.platform == "darwin":
-            subprocess.run(
-                ["cp", "-c", src, dst],  # APFS clone
-                check=True,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        else:
-            raise RuntimeError("No reflink support")
-    except Exception:
-        shutil.copy2(src, dst)
-
-
-
-       
-
+_INIT_WALKERS = [
+                    Walker(
+                        WalkerStateBox(
+                            positions=np.array([
+                                [1., 1., 1.],
+                                [2., 2., 2.],
+                            ]),
+                            box_vectors=np.array([
+                                [1., 0., 0.],
+                                [0., 1., 0.],
+                                [0., 0., 1.],
+                            ]),
+                            kinetic_energy=3.455,
+                        ),
+                        0.1,
+                    ),
+                ]
 
 # # TODO: this will be easier once we have a fixture for a full WepyHDF5
 # def test__iter_field_paths(wepy_h5_file_ro):
@@ -2090,6 +2078,73 @@ class Test_WepyHDF5:
                     ],
                 ],
             ]
+
+    def test__get_sparse_traj_field(self, wepy_h5_full_init):
+        with WepyHDF5(wepy_h5_full_init, mode='r') as wepy_h5:
+
+            v_masked = wepy_h5._get_sparse_traj_field(0, 0, "velocities", masked=True)
+
+            assert np.ma.is_masked(v_masked)
+            assert v_masked.shape == (2, 2, 3)
+
+            assert np.all(v_masked[0].mask)
+            assert np.all(np.isnan(v_masked[0].data))
+            
+            assert not np.any(v_masked[1].mask)
+            assert not np.any(np.isnan(v_masked[1].data))
+
+            v_unmasked = wepy_h5._get_sparse_traj_field(0, 0, "velocities", masked=False)
+
+            assert v_unmasked.shape == (1, 2, 3)
+            assert not np.ma.is_masked(v_unmasked)
+
+            # TODO:
+            # v_unmasked_sel = wepy_h5._get_sparse_traj_field(
+            #     0, 0, "velocities", masked=False,
+            #     frames=[0],
+            # )
+
+            # assert v_unmasked_sel.shape == (1, 2, 3)
+            # assert not np.ma.is_masked(v_unmasked_sel)
+
+
+    def test__get_contiguous_traj_field(self, wepy_h5_full_init):
+        with WepyHDF5(wepy_h5_full_init, mode='r') as wepy_h5:
+
+            p = wepy_h5._get_contiguous_traj_field(0, 0, "positions", frames=None)
+
+            assert p.shape == (2, 2, 3)
+
+            p = wepy_h5._get_contiguous_traj_field(0, 0, "positions", frames=[0])
+            assert p.shape == (1, 2, 3)
+
+            p = wepy_h5._get_contiguous_traj_field(0, 0, "positions", frames=[1])
+            assert p.shape == (1, 2, 3)
+
+            p = wepy_h5._get_contiguous_traj_field(0, 0, "positions", frames=[0,1])
+            assert p.shape == (2, 2, 3)
+
+            # TODO: better error here
+            # p = wepy_h5._get_contiguous_traj_field(0, 0, "positions", frames=[0,1,2])
+            
+        
+    def test_get_traj_field(self, wepy_h5_full_init):
+        with WepyHDF5(wepy_h5_full_init, mode='r') as wepy_h5:
+            p = wepy_h5.get_traj_field(0, 0, "positions")
+
+            assert p.shape == (2, 2, 3)
+            assert not np.ma.is_masked(p)
+
+            v_masked = wepy_h5.get_traj_field(0, 0, "velocities")
+
+            assert v_masked.shape == (2, 2, 3)
+            assert np.ma.is_masked(v_masked)
+
+            v_unmasked = wepy_h5.get_traj_field(0, 0, "velocities", masked=False)
+
+            assert v_unmasked.shape == (1, 2, 3)
+            assert not np.ma.is_masked(v_unmasked)
+            
 
 
     # TODO: for observables

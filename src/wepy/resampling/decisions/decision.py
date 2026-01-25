@@ -212,36 +212,36 @@ class BaseDecisionABC(Generic[DecisionEnum_, DecisionRecord_]):
         d = cls.enum_dict_by_name()
         return d[enum_name]
 
-    # @classmethod
-    # def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord_:
-    #     """Generate a record for the enum_value and the other fields.
+    @classmethod
+    def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord_:
+        """Generate a record for the enum_value and the other fields.
 
-    #     Parameters
-    #     ----------
-    #     enum_value : int
+        Parameters
+        ----------
+        enum_value : int
 
-    #     Returns
-    #     -------
-    #     rec : dict of str: value
+        Returns
+        -------
+        rec : dict of str: value
 
-    #     """
+        """
 
-    #     assert (
-    #         enum_value in cls.enum_dict_by_value()
-    #     ), "value is not a valid Enumerated value"
+        assert (
+            enum_value in cls.enum_dict_by_value()
+        ), "value is not a valid Enumerated value"
 
-    #     for field_key in fields.keys():
-    #         assert (
-    #             field_key in cls.FIELDS
-    #         ), "The field {} is not a field for that decision".format(field_key)
-    #         assert field_key != "decision_id", "'decision_id' cannot be an extra field"
+        for field_key in fields.keys():
+            assert (
+                field_key in cls.FIELDS
+            ), "The field {} is not a field for that decision".format(field_key)
+            assert field_key != "decision_id", "'decision_id' cannot be an extra field"
 
-    #     rec_d = {"decision_id": enum_value}
-    #     rec_d.update(fields)
+        rec_d = {"decision_id": enum_value}
+        rec_d.update(fields)
 
-    #     rec = cls.DECISION_RECORD(**rec_d)
+        rec = cls.DECISION_RECORD(**rec_d)
 
-    #     return rec
+        return rec
 
     @classmethod
     def action(

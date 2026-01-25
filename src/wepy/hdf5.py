@@ -396,7 +396,7 @@ import gc
 import itertools as it
 import json
 import logging
-from typing import Any, TypedDict, NotRequired, Literal, Union, Required
+from typing import Any, TypedDict, NotRequired, Literal, Union, Required, Generator
 
 # Standard Library
 import os.path as osp
@@ -422,6 +422,7 @@ from wepy.walker import WalkerStateBox, Walker
 from wepy.resampling.decisions.decision import DecisionRecord
 
 from wepy.storage.protocol import (
+    ContigWalkerTrace, RunTrace, ContigTrace,
     RecordValueDtype,
     Record,
     RunRecord,
@@ -738,7 +739,7 @@ class WepyHDF5ReadError(WepyHDF5Error):
     pass
 
 # utility for paths
-def _iter_field_paths(grp: h5py.Group):
+def _iter_field_paths(grp: h5py.Group) -> list[str]:
     """Return all subgroup field name paths from a group.
 
     Useful for compound fields. For example if you have the group
@@ -2573,7 +2574,13 @@ class WepyHDF5:
 
         return records
 
-    def _get_contiguous_traj_field(self, run_idx, traj_idx, field_path, frames=None):
+    def _get_contiguous_traj_field(
+            self,
+            run_idx: int,
+            traj_idx: int,
+            field_path: str,
+            frames: list[int] | None = None,
+    ) -> FieldsData:
         """Access actual data for a trajectory field.
 
         Parameters
@@ -2592,7 +2599,7 @@ class WepyHDF5:
 
         """
 
-        field_thing = self.get_traj_field(run_idx, traj_idx, field_path)
+        field_thing = self.traj_field_entity(run_idx, traj_idx, field_path)
 
         if frames is None:
             field = field_thing[:]
@@ -2602,8 +2609,13 @@ class WepyHDF5:
         return field
 
     def _get_sparse_traj_field(
-        self, run_idx, traj_idx, field_path, frames=None, masked=True
-    ):
+        self,
+        run_idx: int,
+        traj_idx: int,
+        field_path: str,
+        frames: list[int] | None = None,
+        masked: bool = True,
+    ) -> FieldsData:
         """Access actual data for a trajectory field.
 
         Parameters
@@ -2677,7 +2689,14 @@ class WepyHDF5:
 
         return data
 
-    def _add_run_field(self, run_idx, field_path, data, sparse_idxs=None, force=False):
+    def _add_run_field(
+            self,
+            run_idx: int,
+            field_path: str,
+            data: NDArray,
+            sparse_idxs: list[int] | None = None,
+            force: bool = False,
+    ) -> None:
         """Add a trajectory field to all trajectories in a run.
 
         By enforcing adding it to all trajectories at one time we
@@ -2773,7 +2792,13 @@ class WepyHDF5:
                     *idx_tup, field_path, data[i], sparse_idxs=sparse_idxs[i]
                 )
 
-    def _add_field(self, field_path, data, sparse_idxs=None, force=False):
+    def _add_field(
+            self,
+            field_path: str,
+            data: list[NDArray],
+            sparse_idxs: list[int] | None = None,
+            force: bool = False
+    ) -> None:
         """Add a trajectory field to all runs in a file.
 
         Parameters
@@ -3044,7 +3069,15 @@ class WepyHDF5:
         """
         return self.records_grp(run_idx, PROGRESS)
 
-    def iter_runs(self, idxs: bool = False, run_sel: list[int] | None = None):
+    def iter_runs(
+            self,
+            idxs: bool = False,
+            run_sel: list[int] | None = None,
+    ) -> Generator[
+        tuple[int, h5py.Group] | h5py.Group,
+        None,
+        None,
+    ]:
         """Generator for iterating through the runs of a file.
 
         Parameters
@@ -3075,7 +3108,15 @@ class WepyHDF5:
                 else:
                     yield run
 
-    def iter_trajs(self, idxs: bool = False, traj_sel: list[int] | None = None):
+    def iter_trajs(
+            self,
+            idxs: bool = False,
+            traj_sel: list[int] | None = None,
+    ) -> Generator[
+        tuple[tuple[int, int], h5py.Group] | h5py.Group,
+        None,
+        None,
+    ]:
         """Generator for iterating over trajectories in a file.
 
         Parameters
@@ -3109,7 +3150,15 @@ class WepyHDF5:
             else:
                 yield traj
 
-    def iter_run_trajs(self, run_idx: int, idxs: bool = False):
+    def iter_run_trajs(
+            self,
+            run_idx: int,
+            idxs: bool = False,
+    ) -> Generator[
+        tuple[tuple[int, int], h5py.Group],
+        None,
+        None,
+    ]:
         """Iterate over the trajectories of a run.
 
         Parameters
@@ -4210,7 +4259,7 @@ class WepyHDF5:
         """
         self.init_record_fields(PROGRESS, bc.progress_record_field_names())
 
-    def add_continuation(self, continuation_run, base_run):
+    def add_continuation(self, continuation_run: int, base_run: int) -> None:
         """Add a continuation between runs.
 
         Parameters
@@ -5643,7 +5692,14 @@ class WepyHDF5:
 
     ## Trajectory Getters
 
-    def get_traj_field(self, run_idx, traj_idx, field_path, frames=None, masked=True):
+    def get_traj_field(
+            self,
+            run_idx: int,
+            traj_idx: int,
+            field_path: str,
+            frames: list[int] | None = None,
+            masked: bool = True
+    ) -> FieldsData:
         """Returns a numpy array for the given trajectory field.
 
         You can control how sparse fields are returned using the
@@ -5688,10 +5744,10 @@ class WepyHDF5:
 
     def get_trace_fields(
         self,
-        frame_tups,
-        fields,
-        same_order=True,
-    ):
+        frame_tups: RunTrace,
+        fields: list[str],
+        same_order: bool = True,
+    ) -> FieldsData:
         """Get trajectory field data for the frames specified by the trace.
 
         Parameters
@@ -5796,7 +5852,12 @@ class WepyHDF5:
 
         return frame_fields
 
-    def get_run_trace_fields(self, run_idx, frame_tups, fields):
+    def get_run_trace_fields(
+            self,
+            run_idx: int,
+            frame_tups: ContigWalkerTrace,
+            fields: str,
+    ) -> FieldsData:
         """Get trajectory field data for the frames specified by the trace
         within a single run.
 
@@ -5834,7 +5895,11 @@ class WepyHDF5:
 
         return frame_fields
 
-    def get_contig_trace_fields(self, contig_trace, fields):
+    def get_contig_trace_fields(
+            self,
+            contig_trace: ContigTrace,
+            fields: list[str],
+    ) -> FieldsData:
         """Get field data for all trajectories of a contig for the frames
         specified by the contig trace.
 
@@ -5919,7 +5984,16 @@ class WepyHDF5:
 
         return field_values
 
-    def iter_trajs_fields(self, fields, idxs=False, traj_sel=None):
+    def iter_trajs_fields(
+            self,
+            fields: list[str],
+            idxs: bool = False,
+            traj_sel: list[tuple[int, int]] | None = None,
+    ) -> Generator[
+        tuple[tuple[int, int], FieldsData] | FieldsData,
+        None,
+        None,
+    ]:
         """Generator for iterating over fields trajectories in a file.
 
         Parameters
@@ -5978,7 +6052,13 @@ class WepyHDF5:
                 yield dsets
 
     def traj_fields_map(
-        self, func, fields, args, map_func=map, idxs=False, traj_sel=None
+        self,
+        func,
+        fields: list[str],
+        args: None | tuple[Any, ...],
+        map_func=map,
+        idxs: bool = False,
+        traj_sel: list[tuple[int, int]] | None = None,
     ):
         """Function for mapping work onto field of trajectories.
 
@@ -6051,7 +6131,13 @@ class WepyHDF5:
         else:
             return results
 
-    def to_mdtraj(self, run_idx, traj_idx, frames=None, alt_rep=None):
+    def to_mdtraj(
+            self,
+            run_idx: int,
+            traj_idx: int,
+            frames: list[int] | None = None,
+            alt_rep: str | None = None,
+    ) -> mdtraj.Trajectory:
         """Convert a trajectory to an mdtraj Trajectory object.
 
         Works if the right trajectory fields are defined. Minimally
@@ -6146,7 +6232,7 @@ class WepyHDF5:
 
         return traj
 
-    def trace_to_mdtraj(self, trace, alt_rep=None):
+    def trace_to_mdtraj(self, trace: RunTrace, alt_rep: str | None = None) -> mdtraj.Trajectory:
         """Generate an mdtraj Trajectory from a trace of frames from the runs.
 
         Uses the default fields for positions (unless an alternate
@@ -6182,7 +6268,12 @@ class WepyHDF5:
 
         return self.traj_fields_to_mdtraj(trace_fields, alt_rep=alt_rep)
 
-    def run_trace_to_mdtraj(self, run_idx, trace, alt_rep=None):
+    def run_trace_to_mdtraj(
+            self,
+            run_idx: int,
+            trace: ContigWalkerTrace,
+            alt_rep: str | None = None,
+    ) -> mdtraj.Trajectory:
         """Generate an mdtraj Trajectory from a trace of frames from the runs.
 
         Uses the default fields for positions (unless an alternate
@@ -6223,7 +6314,7 @@ class WepyHDF5:
 
         return self.traj_fields_to_mdtraj(trace_fields, alt_rep=alt_rep)
 
-    def _choose_rep_path(self, alt_rep):
+    def _choose_rep_path(self, alt_rep: str | None) -> str:
         """Given a positions specification string, gets the field name/path
         for it.
 
@@ -6267,7 +6358,7 @@ class WepyHDF5:
 
         return rep_path
 
-    def traj_fields_to_mdtraj(self, traj_fields, alt_rep=POSITIONS):
+    def traj_fields_to_mdtraj(self, traj_fields: FieldsData, alt_rep: str = POSITIONS) -> mdtraj.Trajectory:
         """Create an mdtraj.Trajectory from a traj_fields dictionary.
 
         Parameters

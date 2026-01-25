@@ -31,6 +31,7 @@ import pandas as pd
 from geomm.free_energy import free_energy as calc_free_energy
 
 # First Party Library
+from wepy.storage.protocol import ContigWalkerTrace, RunTrace, ContigTrace
 from wepy.analysis.network_layouts.layout_graph import LayoutGraph
 from wepy.analysis.network_layouts.tree import ResamplingTreeLayout
 from wepy.analysis.parents import (
@@ -59,14 +60,6 @@ PROGRESS: Final = "progress"
 BC: Final = "boundary_conditions"
 """Record key for boundary condition records."""
 
-# (traj_idx, cycle_idx)
-ContigWalkerTrace = list[tuple[int, int], ...]
-
-# (run_idx, traj_idx, cycle_idx)
-RunTrace = list[tuple[int, int, int], ...]
-
-# (run_idx, cycle_idx)
-ContigTrace = list[tuple[int, int], ...]
 
 # (run_idx, cycle_idx)
 NodeId = tuple[int, int]

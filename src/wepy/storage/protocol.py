@@ -123,3 +123,15 @@ class WarpRecordUnstruct(TypedDict, total=False):
     target_idx: Required[int]
     weight: Required[float]
 
+
+
+# Trace types used in data access
+# (traj_idx, cycle_idx)
+ContigWalkerTrace = list[tuple[int, int], ...]
+
+# (run_idx, traj_idx, cycle_idx)
+RunTrace = list[tuple[int, int, int], ...]
+
+# (run_idx, cycle_idx)
+ContigTrace = list[tuple[int, int], ...]
+
