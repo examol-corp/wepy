@@ -116,11 +116,11 @@ class MultiCloneMergeDecision(BaseDecisionABC):
 
     DECISION_RECORD = CloneMergeDecisionRecord
 
-    FIELDS = BaseDecisionABC.FIELDS + ("target_idxs",)
-    SHAPES = BaseDecisionABC.SHAPES + (Ellipsis,)
-    DTYPES = BaseDecisionABC.DTYPES + (int,)
+    FIELDS = BaseDecisionABC.FIELDS
+    SHAPES = BaseDecisionABC.SHAPES
+    DTYPES = BaseDecisionABC.DTYPES
 
-    RECORD_FIELDS = BaseDecisionABC.RECORD_FIELDS + ("target_idxs",)
+    RECORD_FIELDS = BaseDecisionABC.RECORD_FIELDS
 
     # the decision types that pass on their state
     ANCESTOR_DECISION_IDS = (
