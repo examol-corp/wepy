@@ -72,6 +72,12 @@ Issues = "https://github.com/ADicksonLab/wepy/issues"
 requires = ["uv_build>=0.9.11,<0.10.0"]
 build-backend = "uv_build"
 
+[tool.uv.build]
+packages = [
+  "src/wepy",
+  "src/wepy_tools",
+]
+
 [dependency-groups]
 
 dev = [

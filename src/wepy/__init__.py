@@ -75,6 +75,7 @@ from .runners.openmm.reporter import OpenMMReporter, OpenMMReporterNextReport
 from .runners.openmm.runner import (
     OpenMMRunner,
     OpenMMRunnerFactory,
+    DEFAULT_OPENMM_REPORTER_FACTORIES,
 )
 from .runners.openmm.state import (
     OPENMM_DEFAULT_UNITS,
