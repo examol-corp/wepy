@@ -1,19 +1,19 @@
 # Standard Library
 import logging
-from typing import Generic, Protocol, TypeVar, Union
+from typing import Generic, Protocol, TypeVar
 from warnings import warn
 
 # Third Party Library
-import numpy as np
 
 # First Party Library
 from wepy.resampling.decisions.decision import BaseDecisionABC
+from wepy.storage.protocol import Record, RecordFieldDtype, RecordFieldShapeSpec
 from wepy.walker import Walker, WalkerState
-from wepy.storage.protocol import Record, RecordFieldShapeSpec, RecordFieldDtype
 
 logger = logging.getLogger(__name__)
 
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+
 
 class ResamplerError(Exception):
     """Error raised when some constraint on resampling properties is
@@ -22,8 +22,10 @@ class ResamplerError(Exception):
 
     pass
 
+
 ResamplingRecord_ = TypeVar("ResamplingRecord_", bound=Record)
 ResamplerRecord_ = TypeVar("ResamplerRecord_", bound=Record)
+
 
 class Resampler(Protocol, Generic[WalkerState_, ResamplingRecord_, ResamplerRecord_]):
 
@@ -62,7 +64,9 @@ class Resampler(Protocol, Generic[WalkerState_, ResamplingRecord_, ResamplerReco
     ]: ...
 
 
-class ResamplerABC(Resampler, Generic[WalkerState_, ResamplingRecord_, ResamplerRecord_]):
+class ResamplerABC(
+    Resampler, Generic[WalkerState_, ResamplingRecord_, ResamplerRecord_]
+):
     """Abstract base class for implementing resamplers.
 
     All subclasses of Resampler must implement the 'resample' method.
@@ -680,5 +684,3 @@ class ResamplerABC(Resampler, Generic[WalkerState_, ResamplingRecord_, Resampler
         """
 
         raise NotImplementedError
-
-    

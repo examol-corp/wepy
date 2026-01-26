@@ -1,19 +1,17 @@
-from typing import NamedTuple
+# Standard Library
+
+# First Party Library
 from wepy.analysis.parents import (
-    resampling_panel,
-    parent_panel,
-    net_parent_table,
-    parent_table_discontinuities,
-    parent_cycle_discontinuities,
     ancestors,
-    sliding_window,
-    ParentForest,
+    net_parent_table,
+    parent_panel,
+    resampling_panel,
 )
-from wepy.storage.protocol import RunRecord
 from wepy.resampling.decisions.no_decision import NoDecision
+from wepy.storage.protocol import RunRecord
+
 
 def test_resampling_panel():
-
 
     # # simple case
     # assert resampling_panel(
@@ -64,36 +62,39 @@ def test_resampling_panel():
             RunRecord(
                 cycle_idx=0,
                 record=dict(
-                step_idx=0,
-                walker_idx=0,
-                decision_id=0,
-                target_idxs=(0,),)
+                    step_idx=0,
+                    walker_idx=0,
+                    decision_id=0,
+                    target_idxs=(0,),
+                ),
             ),
             RunRecord(
                 cycle_idx=0,
                 record=dict(
-                step_idx=0,
-                walker_idx=1,
-                decision_id=0,
-                target_idxs=(1,),)
+                    step_idx=0,
+                    walker_idx=1,
+                    decision_id=0,
+                    target_idxs=(1,),
+                ),
             ),
-
             # step 1
             RunRecord(
                 cycle_idx=0,
                 record=dict(
-                step_idx=1,
-                walker_idx=0,
-                decision_id=0,
-                target_idxs=(1,),)
+                    step_idx=1,
+                    walker_idx=0,
+                    decision_id=0,
+                    target_idxs=(1,),
+                ),
             ),
             RunRecord(
                 cycle_idx=0,
                 record=dict(
-                step_idx=1,
-                walker_idx=1,
-                decision_id=0,
-                target_idxs=(0,),)
+                    step_idx=1,
+                    walker_idx=1,
+                    decision_id=0,
+                    target_idxs=(0,),
+                ),
             ),
         ]
     ) == [
@@ -102,32 +103,21 @@ def test_resampling_panel():
             # step 0
             [
                 # walker 0
-                {
-                    "decision_id" : 0,
-                    "target_idxs" : (0,)
-                },
+                {"decision_id": 0, "target_idxs": (0,)},
                 # walker 1
-                {
-                    "decision_id" : 0,
-                    "target_idxs" : (1,)
-                },
+                {"decision_id": 0, "target_idxs": (1,)},
             ],
             # step 1
             [
                 # walker 0
-                {
-                    "decision_id" : 0,
-                    "target_idxs" : (1,)
-                },
+                {"decision_id": 0, "target_idxs": (1,)},
                 # walker 1
-                {
-                    "decision_id" : 0,
-                    "target_idxs" : (0,)
-                },
+                {"decision_id": 0, "target_idxs": (0,)},
             ],
         ]
     ]
-    
+
+
 def test_parent_panel():
 
     assert parent_panel(
@@ -138,18 +128,12 @@ def test_parent_panel():
                 # step 0
                 [
                     # walker 0
-                    {
-                        "decision_id" : 0,
-                        "target_idxs" : (0,)
-                    },
+                    {"decision_id": 0, "target_idxs": (0,)},
                     # walker 1
-                    {
-                        "decision_id" : 0,
-                        "target_idxs" : (1,)
-                    }
+                    {"decision_id": 0, "target_idxs": (1,)},
                 ],
             ],
-        ]
+        ],
     ) == [
         [
             [0, 1],
@@ -164,63 +148,52 @@ def test_parent_panel():
                 # step 0
                 [
                     # walker 0
-                    {
-                        "decision_id" : 0,
-                        "target_idxs" : (0,)
-                    },
+                    {"decision_id": 0, "target_idxs": (0,)},
                     # walker 1
-                    {
-                        "decision_id" : 0,
-                        "target_idxs" : (1,)
-                    }
+                    {"decision_id": 0, "target_idxs": (1,)},
                 ],
                 # step 1
                 [
                     # walker 0
-                    {
-                        "decision_id" : 0,
-                        "target_idxs" : (1,)
-                    },
+                    {"decision_id": 0, "target_idxs": (1,)},
                     # walker 1
-                    {
-                        "decision_id" : 0,
-                        "target_idxs" : (0,)
-                    }
+                    {"decision_id": 0, "target_idxs": (0,)},
                 ],
             ],
-        ]
+        ],
     ) == [
         [
             [0, 1],
             [1, 0],
         ]
     ]
-    
+
+
 def test_net_parent_table():
 
-    net_parent_table([
+    net_parent_table(
         [
-            [0, 1],
+            [
+                [0, 1],
+            ]
         ]
-    ]) == [
+    ) == [
         # cycle 0
-        [
-            0, 1
-        ]
+        [0, 1]
     ]
-    
 
-    net_parent_table([
+    net_parent_table(
         [
-            [0, 1],
-            [1, 0],
+            [
+                [0, 1],
+                [1, 0],
+            ]
         ]
-    ]) == [
+    ) == [
         # cycle 0
-        [
-            1, 0
-        ]
+        [1, 0]
     ]
+
 
 # TODO: tests for discontinuities
 #
@@ -229,6 +202,7 @@ def test_net_parent_table():
 
 # def test_parent_cycle_discontinuities():
 #     pass
+
 
 def test_ancestors():
 
@@ -301,11 +275,13 @@ def test_ancestors():
         (0, 2),
         (1, 3),
     ]
-    
+
+
 # TODO: test this
 #
 # def test_sliding_window():
 #     pass
+
 
 # TODO: need Contig for this to work
 class Test_ParentForest:

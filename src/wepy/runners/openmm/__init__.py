@@ -12,13 +12,13 @@ from .runner import (
     PlatformKwargs,
 )
 from .state import (
+    OPENMM_DEFAULT_UNITS,
     OpenMMState,
     OpenMMStateValidationError,
     OpenMMStateWrapper,
     dummy_context,
     get_context_state,
     state_to_xml,
-    OPENMM_DEFAULT_UNITS,
 )
 
 __all__ = [

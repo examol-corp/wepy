@@ -1,28 +1,28 @@
+# Standard Library
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 from typing import Callable
 
-from pathlib import Path
-
+# Third Party Library
+import numpy as np
 import pytest
 
-import numpy as np
-
+# First Party Library
+from wepy.hdf5 import WepyHDF5
+from wepy.resampling.decisions.no_decision import NoDecision
+from wepy.resampling.resamplers.noresampler import (
+    NoResampler,
+    NoResamplerResamplingRecord,
+)
+from wepy.typing import IdxArray
 from wepy.walker import Walker, WalkerStateBox
 from wepy_tools.systems.lennard_jones import LennardJonesPair
-from wepy.typing import IdxArray
-from wepy.hdf5 import WepyHDF5
-from wepy.resampling.resamplers.noresampler import (
-    NoResamplerResamplingRecord,
-    NoResampler,
-)
-from wepy.resampling.decisions.no_decision import NoDecision
 
 
 def reflink_or_copy(src: Path, dst: Path) -> None:
-    """
-    Create a copy-on-write reflink if supported.
+    """Create a copy-on-write reflink if supported.
     Fall back to a full copy otherwise.
     """
     try:
@@ -45,6 +45,7 @@ def reflink_or_copy(src: Path, dst: Path) -> None:
     except Exception:
         shutil.copy2(src, dst)
 
+
 DATA_DIR = Path(__file__).parent.parent / "data"
 
 
@@ -64,10 +65,10 @@ def wepy_h5_factory() -> Callable[[Path], Path]:
     test_sys = LennardJonesPair()
 
     def _factory(
-            path: Path,
-            sparse_fields: tuple[str, ...] | None = None,
-            alt_reps: dict[str, IdxArray] | None = None,
-            main_rep_idxs: IdxArray | None = None,
+        path: Path,
+        sparse_fields: tuple[str, ...] | None = None,
+        alt_reps: dict[str, IdxArray] | None = None,
+        main_rep_idxs: IdxArray | None = None,
     ) -> Path:
 
         # create the file
@@ -84,23 +85,29 @@ def wepy_h5_factory() -> Callable[[Path], Path]:
 
     return _factory
 
+
 _INIT_WALKERS = [
-                    Walker(
-                        WalkerStateBox(
-                            positions=np.array([
-                                [1., 1., 1.],
-                                [2., 2., 2.],
-                            ]),
-                            box_vectors=np.array([
-                                [1., 0., 0.],
-                                [0., 1., 0.],
-                                [0., 0., 1.],
-                            ]),
-                            kinetic_energy=3.455,
-                        ),
-                        0.1,
-                    ),
+    Walker(
+        WalkerStateBox(
+            positions=np.array(
+                [
+                    [1.0, 1.0, 1.0],
+                    [2.0, 2.0, 2.0],
                 ]
+            ),
+            box_vectors=np.array(
+                [
+                    [1.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 0.0, 1.0],
+                ]
+            ),
+            kinetic_energy=3.455,
+        ),
+        0.1,
+    ),
+]
+
 
 @pytest.fixture(scope="session")
 def _wepy_h5_run_init(wepy_h5_factory, tmp_path_factory) -> Path:
@@ -121,9 +128,7 @@ def _wepy_h5_run_init(wepy_h5_factory, tmp_path_factory) -> Path:
     # initialize the file
     with WepyHDF5(path, mode="r+") as wepy_h5:
 
-        run_grp = wepy_h5.new_run(
-            init_walkers=_INIT_WALKERS
-        )
+        run_grp = wepy_h5.new_run(init_walkers=_INIT_WALKERS)
 
         wepy_h5.init_run_fields_resampling_decision(
             0,
@@ -170,13 +175,13 @@ def _wepy_h5_run_init(wepy_h5_factory, tmp_path_factory) -> Path:
             "progress",
             [name for name, _, _ in progress_fields],
         )
-        
 
         # TODO: more fields for resampler records and BC
         # records. These are always optional and strictly accessory so
         # holding off on writing more test cases on these.
 
     return path
+
 
 @pytest.fixture(scope="function")
 def wepy_h5_run_init(_wepy_h5_run_init, tmpdir) -> Path:
@@ -215,41 +220,77 @@ def _wepy_h5_traj_init(_wepy_h5_run_init, tmp_path_factory) -> Path:
         traj0_grp = wepy_h5.add_traj(
             0,
             data={
-                "positions" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
-                "box_vectors" : np.array([[
-                            [1., 0., 0.],
-                            [0., 1., 0.],
-                            [0., 0., 1.],
-                        ]]),
-                "kinetic_energy" : np.array([
-                    [4.87],
-                ]),
+                "positions": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
+                "box_vectors": np.array(
+                    [
+                        [
+                            [1.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0],
+                            [0.0, 0.0, 1.0],
+                        ]
+                    ]
+                ),
+                "kinetic_energy": np.array(
+                    [
+                        [4.87],
+                    ]
+                ),
             },
             weights=np.array([[0.2]]),
-            metadata={"foo" : "hello"},
+            metadata={"foo": "hello"},
         )
- 
+
         traj1_grp = wepy_h5.add_traj(
             0,
             data={
-                "positions" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
-                "box_vectors" : np.array([[
-                            [1., 0., 0.],
-                            [0., 1., 0.],
-                            [0., 0., 1.],
-                        ]]),
-                "kinetic_energy" : np.array([
-                    [4.87],
-                ]),
+                "positions": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
+                "box_vectors": np.array(
+                    [
+                        [
+                            [1.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0],
+                            [0.0, 0.0, 1.0],
+                        ]
+                    ]
+                ),
+                "kinetic_energy": np.array(
+                    [
+                        [4.87],
+                    ]
+                ),
             },
             weights=np.array([[0.2]]),
-            metadata={"foo" : "hello"},
+            metadata={"foo": "hello"},
         )
 
         wepy_h5.extend_cycle_resampling_records(
@@ -271,7 +312,7 @@ def _wepy_h5_traj_init(_wepy_h5_run_init, tmp_path_factory) -> Path:
                     walker_idx=1,
                     step_idx=0,
                 ),
-            ]
+            ],
         )
 
         wepy_h5.extend_cycle_progress_records(
@@ -280,21 +321,20 @@ def _wepy_h5_traj_init(_wepy_h5_run_init, tmp_path_factory) -> Path:
             [
                 # only a single record for the cycle
                 {
-                    "ensemble_average" : 1.2,
-                    "walker_distances" : [
-                        1., 1.,
+                    "ensemble_average": 1.2,
+                    "walker_distances": [
+                        1.0,
+                        1.0,
                     ],
                 },
-            ]
+            ],
         )
 
         # TODO: the other record groups
-        
+
     return path
 
 
-
-        
 @pytest.fixture(scope="function")
 def wepy_h5_traj_init(_wepy_h5_traj_init, tmpdir) -> Path:
 
@@ -303,6 +343,7 @@ def wepy_h5_traj_init(_wepy_h5_traj_init, tmpdir) -> Path:
     reflink_or_copy(_wepy_h5_traj_init, path)
 
     return path
+
 
 @pytest.fixture(scope="session")
 def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
@@ -332,7 +373,6 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
 
     # Add the new data
     with WepyHDF5(path, mode="r+") as wepy_h5:
-    
 
         # extend run 0
         wepy_h5.extend_traj(
@@ -340,22 +380,52 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
             0,
             weights=np.array([[0.2]]),
             data={
-                "positions" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
-                "box_vectors" : np.array([[
-                            [1., 0., 0.],
-                            [0., 1., 0.],
-                            [0., 0., 1.],
-                        ]]),
-                "kinetic_energy" : np.array([
-                    [4.87],
-                ]),
-                "velocities" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
+                "positions": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
+                "box_vectors": np.array(
+                    [
+                        [
+                            [1.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0],
+                            [0.0, 0.0, 1.0],
+                        ]
+                    ]
+                ),
+                "kinetic_energy": np.array(
+                    [
+                        [4.87],
+                    ]
+                ),
+                "velocities": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
             },
         )
 
@@ -364,22 +434,52 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
             1,
             weights=np.array([[0.2]]),
             data={
-                "positions" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
-                "box_vectors" : np.array([[
-                            [1., 0., 0.],
-                            [0., 1., 0.],
-                            [0., 0., 1.],
-                        ]]),
-                "kinetic_energy" : np.array([
-                    [4.87],
-                ]),
-                "velocities" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
+                "positions": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
+                "box_vectors": np.array(
+                    [
+                        [
+                            [1.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0],
+                            [0.0, 0.0, 1.0],
+                        ]
+                    ]
+                ),
+                "kinetic_energy": np.array(
+                    [
+                        [4.87],
+                    ]
+                ),
+                "velocities": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
             },
         )
 
@@ -402,7 +502,7 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
                     walker_idx=1,
                     step_idx=0,
                 ),
-            ]
+            ],
         )
 
         wepy_h5.extend_cycle_progress_records(
@@ -411,12 +511,13 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
             [
                 # only a single record for the cycle
                 {
-                    "ensemble_average" : 1.2,
-                    "walker_distances" : [
-                        1., 1.,
+                    "ensemble_average": 1.2,
+                    "walker_distances": [
+                        1.0,
+                        1.0,
                     ],
                 },
-            ]
+            ],
         )
 
         # run 1, a continuation of run 0
@@ -462,41 +563,77 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
         wepy_h5.add_traj(
             1,
             data={
-                "positions" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
-                "box_vectors" : np.array([[
-                            [1., 0., 0.],
-                            [0., 1., 0.],
-                            [0., 0., 1.],
-                        ]]),
-                "kinetic_energy" : np.array([
-                    [4.87],
-                ]),
+                "positions": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
+                "box_vectors": np.array(
+                    [
+                        [
+                            [1.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0],
+                            [0.0, 0.0, 1.0],
+                        ]
+                    ]
+                ),
+                "kinetic_energy": np.array(
+                    [
+                        [4.87],
+                    ]
+                ),
             },
             weights=np.array([[0.2]]),
-            metadata={"foo" : "hello"},
+            metadata={"foo": "hello"},
         )
- 
+
         wepy_h5.add_traj(
             1,
             data={
-                "positions" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
-                "box_vectors" : np.array([[
-                            [1., 0., 0.],
-                            [0., 1., 0.],
-                            [0., 0., 1.],
-                        ]]),
-                "kinetic_energy" : np.array([
-                    [4.87],
-                ]),
+                "positions": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
+                "box_vectors": np.array(
+                    [
+                        [
+                            [1.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0],
+                            [0.0, 0.0, 1.0],
+                        ]
+                    ]
+                ),
+                "kinetic_energy": np.array(
+                    [
+                        [4.87],
+                    ]
+                ),
             },
             weights=np.array([[0.2]]),
-            metadata={"foo" : "hello"},
+            metadata={"foo": "hello"},
         )
 
         wepy_h5.extend_cycle_resampling_records(
@@ -518,7 +655,7 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
                     walker_idx=1,
                     step_idx=0,
                 ),
-            ]
+            ],
         )
 
         wepy_h5.extend_cycle_progress_records(
@@ -527,12 +664,13 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
             [
                 # only a single record for the cycle
                 {
-                    "ensemble_average" : 1.2,
-                    "walker_distances" : [
-                        1., 1.,
+                    "ensemble_average": 1.2,
+                    "walker_distances": [
+                        1.0,
+                        1.0,
                     ],
                 },
-            ]
+            ],
         )
 
         # extend run 1
@@ -541,22 +679,52 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
             0,
             weights=np.array([[0.2]]),
             data={
-                "positions" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
-                "box_vectors" : np.array([[
-                            [1., 0., 0.],
-                            [0., 1., 0.],
-                            [0., 0., 1.],
-                        ]]),
-                "kinetic_energy" : np.array([
-                    [4.87],
-                ]),
-                "velocities" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
+                "positions": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
+                "box_vectors": np.array(
+                    [
+                        [
+                            [1.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0],
+                            [0.0, 0.0, 1.0],
+                        ]
+                    ]
+                ),
+                "kinetic_energy": np.array(
+                    [
+                        [4.87],
+                    ]
+                ),
+                "velocities": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
             },
         )
 
@@ -565,22 +733,52 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
             1,
             weights=np.array([[0.2]]),
             data={
-                "positions" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
-                "box_vectors" : np.array([[
-                            [1., 0., 0.],
-                            [0., 1., 0.],
-                            [0., 0., 1.],
-                        ]]),
-                "kinetic_energy" : np.array([
-                    [4.87],
-                ]),
-                "velocities" : np.array([[
-                    [2., 2., 2.,],
-                    [1., 1., 1.,],
-                ]]),
+                "positions": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
+                "box_vectors": np.array(
+                    [
+                        [
+                            [1.0, 0.0, 0.0],
+                            [0.0, 1.0, 0.0],
+                            [0.0, 0.0, 1.0],
+                        ]
+                    ]
+                ),
+                "kinetic_energy": np.array(
+                    [
+                        [4.87],
+                    ]
+                ),
+                "velocities": np.array(
+                    [
+                        [
+                            [
+                                2.0,
+                                2.0,
+                                2.0,
+                            ],
+                            [
+                                1.0,
+                                1.0,
+                                1.0,
+                            ],
+                        ]
+                    ]
+                ),
             },
         )
 
@@ -603,7 +801,7 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
                     walker_idx=1,
                     step_idx=0,
                 ),
-            ]
+            ],
         )
 
         wepy_h5.extend_cycle_progress_records(
@@ -612,16 +810,17 @@ def _wepy_h5_full_init(_wepy_h5_traj_init, tmp_path_factory) -> Path:
             [
                 # only a single record for the cycle
                 {
-                    "ensemble_average" : 1.2,
-                    "walker_distances" : [
-                        1., 1.,
+                    "ensemble_average": 1.2,
+                    "walker_distances": [
+                        1.0,
+                        1.0,
                     ],
                 },
-            ]
+            ],
         )
-        
-        
+
     return path
+
 
 @pytest.fixture(scope="function")
 def wepy_h5_full_init(_wepy_h5_full_init, tmpdir) -> Path:

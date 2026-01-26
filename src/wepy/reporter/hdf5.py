@@ -1,33 +1,32 @@
 # Standard Library
-from pathlib import Path
 import builtins
 import logging
-from typing import Self, TypedDict, Literal, Generic, TypeVar, Any
-
-# Standard Library
+from pathlib import Path
+from typing import Generic, Literal, Self, TypeVar
 
 # Third Party Library
 import numpy as np
 import openmm.unit
 
 # First Party Library
+from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.hdf5 import WepyHDF5
 from wepy.reporter.base import (
-    SimComponentArgs,
     CycleReportDict,
+    SimComponentArgs,
 )
+from wepy.reporter.file import FileMode, FileReporterABC
+from wepy.resampling.resamplers.resampler import Resampler
+from wepy.runners.openmm import OPENMM_DEFAULT_UNITS
 from wepy.storage.protocol import (
-    RecordFieldShapeSpec,
+    Record,
     RecordFieldDtype,
+    RecordFieldShapeSpec,
+    ResamplingRecord,
 )
-from wepy.reporter.file import FileReporterABC, FileMode
+from wepy.typing import IdxArray, Idxs
 from wepy.util.json_top import json_top_atom_count
 from wepy.walker import Walker, WalkerState, WalkerStateBox
-from wepy.resampling.resamplers.resampler import Resampler
-from wepy.boundary_conditions.boundary import BoundaryConditions
-from wepy.typing import Shape, Idxs, IdxArray
-from wepy.storage.protocol import Record, ResamplingRecord
-from wepy.runners.openmm import OPENMM_DEFAULT_UNITS
 
 logger = logging.getLogger(__name__)
 
@@ -39,22 +38,25 @@ WarpingRecord_ = TypeVar("WarpingRecord_", bound=Record)
 BCRecord_ = TypeVar("BCRecord_", bound=Record)
 ProgressRecord_ = TypeVar("ProgressRecord_", bound=Record)
 
+
 class UnitError(Exception):
     pass
+
 
 # TODO: support for pint
 Quantity = openmm.unit.Quantity
 
+
 class WepyHDF5Reporter(
-        FileReporterABC,
-        Generic[
-            WalkerState_,
-            ResamplingRecord_,
-            ResamplerRecord_,
-            WarpingRecord_,
-            BCRecord_,
-            ProgressRecord_,
-        ],
+    FileReporterABC,
+    Generic[
+        WalkerState_,
+        ResamplingRecord_,
+        ResamplerRecord_,
+        WarpingRecord_,
+        BCRecord_,
+        ProgressRecord_,
+    ],
 ):
     """Reporter for generating an HDF5 format (WepyHDF5) data file from
     simulations.
@@ -112,7 +114,7 @@ class WepyHDF5Reporter(
     # stateful attributes
     wepy_h5: WepyHDF5 | None
     wepy_run_idx: int | None
-    
+
     _tmp_topology: str | None
 
     def __init__(
@@ -155,7 +157,6 @@ class WepyHDF5Reporter(
 
         Parameters
         ----------
-        
         save_fields : A selection of fields from the walker states to
            be stored. Allows for the ignoring of some states. If None
            all fields from states will attempted to be saved. To not
@@ -280,11 +281,10 @@ class WepyHDF5Reporter(
                 raise ValueError(
                     f"The sparse fields were requested ({set(sparse_fields.keys())}) but no save fields requested."
                 )
-                
+
             _missing_save_fields = set(
                 sparse_key
-                for sparse_key
-                in sparse_fields.keys()
+                for sparse_key in sparse_fields.keys()
                 if sparse_key not in self.save_fields
             )
 
@@ -302,7 +302,6 @@ class WepyHDF5Reporter(
         self._feature_shapes = feature_shapes
         self._feature_dtypes = feature_dtypes
         self._n_dims = n_dims
-
 
         # required resampling fields
         self.resampling_fields = resampling_fields
@@ -325,7 +324,9 @@ class WepyHDF5Reporter(
 
         # the atom indices of the whole system that will be saved as
         # the main positions representation
-        self.main_rep_idxs = np.array(main_rep_idxs) if main_rep_idxs is not None else None
+        self.main_rep_idxs = (
+            np.array(main_rep_idxs) if main_rep_idxs is not None else None
+        )
 
         # the idxs for alternate representations of the system
         # positions
@@ -334,9 +335,7 @@ class WepyHDF5Reporter(
         self.alt_reps_to_save = []
         if alt_reps is not None:
             self.alt_reps_idxs = {
-                key: np.array(idxs)
-                for key, (idxs, _)
-                in alt_reps.items()
+                key: np.array(idxs) for key, (idxs, _) in alt_reps.items()
             }
 
             # add the frequencies for these alt_reps to the
@@ -344,10 +343,7 @@ class WepyHDF5Reporter(
             for key, (idxs, freq) in alt_reps.items():
 
                 if len(idxs) == 0:
-                    raise ValueError(
-                        f"No indices given for sparse field: {key}"
-                    )
-
+                    raise ValueError(f"No indices given for sparse field: {key}")
 
                 alt_rep_key = "alt_reps/{}".format(key)
 
@@ -434,7 +430,6 @@ class WepyHDF5Reporter(
 
         Parameters
         ----------
-
         resampler : Resampler object, optional but recommended
             The resampler being used for the simulation. Is used as a
             convenient container for a variety of constants needed for
@@ -469,7 +464,6 @@ class WepyHDF5Reporter(
             bc_records = None
             warping_records = None
             progress_records = None
-        
 
         return WepyHDF5Reporter(
             file_path=file_path,
@@ -488,9 +482,9 @@ class WepyHDF5Reporter(
             # components
             resampling_fields=resampler_class.resampling_fields(),
             decision_enum_dict=resampler_class.DECISION.enum_dict_by_name(),
-            resampler_fields = resampler_class.resampler_fields(),
-            resampling_records = resampler_class.resampling_record_field_names(),
-            resampler_records = resampler_class.resampler_record_field_names(),
+            resampler_fields=resampler_class.resampler_fields(),
+            resampling_records=resampler_class.resampling_record_field_names(),
+            resampler_records=resampler_class.resampler_record_field_names(),
             warping_fields=warping_fields,
             progress_fields=progress_fields,
             bc_fields=bc_fields,
@@ -527,7 +521,9 @@ class WepyHDF5Reporter(
         """Initialize the WepyHDF5 data structures."""
 
         if wepy_h5.mode != "r+":
-            raise IOError(f"wepy_h5 must be in non-creation read-write mode (r+), in '{wepy_h5.mode}'")
+            raise IOError(
+                f"wepy_h5 must be in non-creation read-write mode (r+), in '{wepy_h5.mode}'"
+            )
 
         if not wepy_h5.closed:
             raise IOError("WepyHDF5 is already open, must be closed.")
@@ -562,12 +558,18 @@ class WepyHDF5Reporter(
                 )
             # set the fields that are records for tables etc. unless
             # they are already set
-            if resampling_records is not None and  "resampling" not in wepy_h5.record_fields:
+            if (
+                resampling_records is not None
+                and "resampling" not in wepy_h5.record_fields
+            ):
                 wepy_h5.init_record_fields(
                     "resampling",
                     resampling_records,
                 )
-            if resampler_records is not None and "resampler" not in wepy_h5.record_fields:
+            if (
+                resampler_records is not None
+                and "resampler" not in wepy_h5.record_fields
+            ):
                 wepy_h5.init_record_fields(
                     "resampler",
                     resampler_records,
@@ -592,9 +594,7 @@ class WepyHDF5Reporter(
                 if "warping" not in wepy_h5.record_fields:
                     wepy_h5.init_record_fields("warping", warping_records)
                 if "boundary_conditions" not in wepy_h5.record_fields:
-                    wepy_h5.init_record_fields(
-                        "boundary_conditions", bc_records
-                    )
+                    wepy_h5.init_record_fields("boundary_conditions", bc_records)
                 if "progress" not in wepy_h5.record_fields:
                     wepy_h5.init_record_fields("progress", progress_records)
 
@@ -602,8 +602,8 @@ class WepyHDF5Reporter(
 
     @staticmethod
     def _resolve_state_units(
-            units: dict[str, openmm.unit.Unit],
-            state: WalkerStateBox,
+        units: dict[str, openmm.unit.Unit],
+        state: WalkerStateBox,
     ) -> tuple[WalkerStateBox, dict[str, openmm.unit.Unit]]:
         """For walker states convert all quantity field values to plain values.
 
@@ -633,18 +633,19 @@ class WepyHDF5Reporter(
                 # If there is no unit for it, just get the
                 # magnitude in the current units
                 else:
-                    new_walker_fields[field_key] = field_value.value_in_unit(field_value.unit)
+                    new_walker_fields[field_key] = field_value.value_in_unit(
+                        field_value.unit
+                    )
 
                     units_used[field_key] = field_value.unit
 
         return WalkerStateBox(**new_walker_fields), units_used
-        
-    
+
     def init(self, **kwargs: SimComponentArgs) -> None:
 
         # TODO: remove dynamic configuration. Instead replace with
         # static configuration from the Runner for good defaults.
-        
+
         ## Do checks on the inputs and figure out runtime field metadata
 
         # if we specify save fields only save these for the initial walkers
@@ -658,8 +659,9 @@ class WepyHDF5Reporter(
                 logger.info(
                     f"Accepting and saving all fields found in init_walkers: {state_fields}"
                 )
-                logger.warning("To ensure all required data is in a simulation these fields should be explicit.")
-                
+                logger.warning(
+                    "To ensure all required data is in a simulation these fields should be explicit."
+                )
 
             case (None, None):
                 _save_fields = state_fields
@@ -683,23 +685,21 @@ class WepyHDF5Reporter(
                     f"Initial walker fields being saved determined from 'init_walker_save_fields': {_save_fields}"
                 )
 
-
         if _save_fields == state_fields:
             filtered_init_walkers = kwargs["init_walkers"]
 
         elif not all(
-                [
-                    True if save_field in state_fields else False
-                        for save_field
-                        in _save_fields
-                ]
+            [
+                True if save_field in state_fields else False
+                for save_field in _save_fields
+            ]
         ):
 
-                # make sure all the save_fields are present in the state
-                raise ValueError(
-                    f"init_walkers should have all fields as required: {_save_fields}. "
-                    f"Found: {state_fields}"
-                )
+            # make sure all the save_fields are present in the state
+            raise ValueError(
+                f"init_walkers should have all fields as required: {_save_fields}. "
+                f"Found: {state_fields}"
+            )
 
         else:
 
@@ -707,9 +707,7 @@ class WepyHDF5Reporter(
             for walker in kwargs["init_walkers"]:
                 # make a new state by filtering the attributes of the old ones
                 state_d = {
-                    k: v
-                    for k, v in walker.state.dict().items()
-                    if k in _save_fields
+                    k: v for k, v in walker.state.dict().items() if k in _save_fields
                 }
 
                 # and saving alternate representations as we would
@@ -748,7 +746,9 @@ class WepyHDF5Reporter(
         # plain values.
         converted_filtered_init_walkers = []
         for walker_idx, init_walker in enumerate(filtered_init_walkers):
-            _state, units_used = self._resolve_state_units(self.units, init_walker.state)
+            _state, units_used = self._resolve_state_units(
+                self.units, init_walker.state
+            )
 
             # If no self.units were given, use the first
             # init walker to determine the units for a field overall, set
@@ -763,13 +763,8 @@ class WepyHDF5Reporter(
                 Walker(state=_state, weight=init_walker.weight)
             )
 
-
         # convert units to strings
-        _str_units = {
-            key : str(unit)
-            for key, unit
-            in self.units.items()
-        }
+        _str_units = {key: str(unit) for key, unit in self.units.items()}
         logger.info(f"Serialized units: {_str_units}")
 
         # Run the constructor intialization
@@ -798,7 +793,7 @@ class WepyHDF5Reporter(
         # read-write non-create mode
         self.wepy_h5 = WepyHDF5(
             self.file_path,
-            mode='r+',
+            mode="r+",
         )
 
         self.wepy_run_idx = self._initialize_h5_run(
@@ -907,7 +902,6 @@ class WepyHDF5Reporter(
                         self.main_rep_idxs
                     ]
 
-
                 # for all of these fields we wrap them in additional
                 # dimensions to make them feature vectors
                 for field_path in list(walker_data.keys()):
@@ -960,7 +954,6 @@ class WepyHDF5Reporter(
 
             self._report_resampler(kwargs["cycle_idx"], kwargs["resampler_data"])
 
-
     def cleanup(self, **kwargs: SimComponentArgs) -> None:
         # # it should be already closed at this point but just in case
         # if not self.wepy_h5.closed:
@@ -969,9 +962,10 @@ class WepyHDF5Reporter(
         # remove reference to the WepyHDF5 file so we can serialize this object
         del self.wepy_h5
 
-        
     # sporadic
-    def _report_warping(self, cycle_idx: int, warping_data: list[WarpingRecord_]) -> None:
+    def _report_warping(
+        self, cycle_idx: int, warping_data: list[WarpingRecord_]
+    ) -> None:
         """Method to write warping specific information.
 
         Parameters
@@ -1006,9 +1000,9 @@ class WepyHDF5Reporter(
             self.wepy_h5.extend_cycle_bc_records(self.wepy_run_idx, cycle_idx, bc_data)
 
     def _report_resampler(
-            self,
-            cycle_idx: int,
-            resampler_data: list[ResamplerRecord_],
+        self,
+        cycle_idx: int,
+        resampler_data: list[ResamplerRecord_],
     ) -> None:
         """Method to write resampler update specific information.
 
@@ -1032,9 +1026,9 @@ class WepyHDF5Reporter(
     # the resampling records are provided every cycle but they need to
     # be saved as sporadic because of the variable number of walkers
     def _report_resampling(
-            self,
-            cycle_idx: int,
-            resampling_records: list[ResamplingRecord_],
+        self,
+        cycle_idx: int,
+        resampling_records: list[ResamplingRecord_],
     ) -> None:
         """Method to write resampling specific information.
 

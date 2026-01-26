@@ -5,9 +5,9 @@ import pytest
 # First Party Library
 from wepy.resampling.decisions.clone_merge import (
     CloneMergeDecisionEnum,
+    CloneMergeDecisionError,
     CloneMergeDecisionRecord,
     MultiCloneMergeDecision,
-    CloneMergeDecisionError,
 )
 from wepy.runners.mock import MockState
 from wepy.walker import Walker
@@ -34,7 +34,7 @@ class Test_CloneMergeDecisionRecord:
         # clone
         CloneMergeDecisionRecord(
             decision_id=2,
-            target_idxs=(0,1),
+            target_idxs=(0, 1),
         )
 
         with pytest.raises(ValueError):
@@ -58,18 +58,27 @@ class Test_CloneMergeDecisionRecord:
         with pytest.raises(CloneMergeDecisionError):
             CloneMergeDecisionRecord(
                 decision_id=1,
-                target_idxs=(0,1,),
+                target_idxs=(
+                    0,
+                    1,
+                ),
             )
 
         with pytest.raises(CloneMergeDecisionError):
             CloneMergeDecisionRecord(
                 decision_id=3,
-                target_idxs=(0,1,),
+                target_idxs=(
+                    0,
+                    1,
+                ),
             )
         with pytest.raises(CloneMergeDecisionError):
             CloneMergeDecisionRecord(
                 decision_id=4,
-                target_idxs=(0,1,),
+                target_idxs=(
+                    0,
+                    1,
+                ),
             )
 
         with pytest.raises(CloneMergeDecisionError):
@@ -80,13 +89,11 @@ class Test_CloneMergeDecisionRecord:
 
     def test_to_dict(self):
 
-        assert CloneMergeDecisionRecord(
-            decision_id=1,
-            target_idxs=(0,)
-        ).to_dict() == {
-            "decision_id" : 1,
-            "target_idxs" : (0,),
+        assert CloneMergeDecisionRecord(decision_id=1, target_idxs=(0,)).to_dict() == {
+            "decision_id": 1,
+            "target_idxs": (0,),
         }
+
 
 class TestMultiCloneMergeDecision:
 

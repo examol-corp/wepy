@@ -1,10 +1,10 @@
 # Standard Library
-from typing import Generic, TypeVar, Annotated
+from typing import Annotated, Generic, TypeVar
 
 # Third Party Library
+import attrs
 import numpy as np
 from numpy.typing import NDArray
-import attrs
 
 # First Party Library
 from wepy.resampling.decisions.clone_merge import (
@@ -15,11 +15,11 @@ from wepy.resampling.resamplers.resampler import (
     ResamplerABC,
     ResamplerError,
 )
-from wepy.walker import Walker, WalkerState
-from wepy.util.attrs import AttrsMappingMixin
-from wepy.typing import Shape
-
 from wepy.storage.protocol import ResamplingRecord
+from wepy.typing import Shape
+from wepy.util.attrs import AttrsMappingMixin
+from wepy.walker import Walker, WalkerState
+
 
 @attrs.define
 class CloneMergeResamplingRecord(AttrsMappingMixin, ResamplingRecord):
@@ -43,7 +43,9 @@ class CloneMergeResamplingRecord(AttrsMappingMixin, ResamplingRecord):
         Shape((1,)),
     ]
 
+
 WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+
 
 class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
     """Abstract base class for resamplers using the clone-merge decision
@@ -296,7 +298,9 @@ class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
                 # make a record for this clone
                 walker_actions[walker_idx] = self.decision().record(
                     self.decision().ENUM.CLONE.value,
-                    target_idxs=tuple(clone_targets,)
+                    target_idxs=tuple(
+                        clone_targets,
+                    ),
                 )
 
         return walker_actions

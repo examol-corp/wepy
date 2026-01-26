@@ -57,18 +57,18 @@ ParentForest : Class that imposes the forest (tree) structure over the
 """
 
 # Standard Library
-import itertools as it
 import copy
+import itertools as it
 
 # Third Party Library
 import networkx as nx
 
-from wepy.resampling.decisions.decision import BaseDecisionABC
+# First Party Library
 from wepy.boundary_conditions.boundary import BoundaryConditions
-
+from wepy.resampling.decisions.decision import BaseDecisionABC
 from wepy.storage.protocol import (
-    ResamplingRecordUnstruct,
     DecisionRecordUnstruct,
+    ResamplingRecordUnstruct,
 )
 
 DISCONTINUITY_VALUE = -1
@@ -86,9 +86,10 @@ ParentTable = list[list[int]]
 # (traj_idx, cycle_idx)
 Trace = list[tuple[int, int]]
 
+
 def resampling_panel(
-        resampling_records: list[ResamplingRecordUnstruct],
-        is_sorted: bool = False,
+    resampling_records: list[ResamplingRecordUnstruct],
+    is_sorted: bool = False,
 ) -> DecisionPanel:
     """Converts an unordered collection of resampling records into a
     structured array (lists) corresponding to cycles and resampling
@@ -118,9 +119,7 @@ def resampling_panel(
     res_panel = []
 
     _resampling_records = [
-            (run_record.cycle_idx, run_record.record)
-            for run_record
-            in resampling_records
+        (run_record.cycle_idx, run_record.record) for run_record in resampling_records
     ]
     # if the records are not sorted this must be done:
     if not is_sorted:
@@ -220,10 +219,12 @@ def resampling_panel(
                             target_idxs = walker_rec["target_idxs"]
 
                             # set the resampling record for the walker in the step records
-                            step_row[walker_idx] = DecisionRecordUnstruct({
-                                "decision_id" : decision_id,
-                                "target_idxs" : target_idxs,
-                            })
+                            step_row[walker_idx] = DecisionRecordUnstruct(
+                                {
+                                    "decision_id": decision_id,
+                                    "target_idxs": target_idxs,
+                                }
+                            )
 
                         # add the records for this step to the cycle table
                         cycle_table.append(step_row)
@@ -235,8 +236,8 @@ def resampling_panel(
 
 
 def parent_panel(
-        decision_class: type[BaseDecisionABC],
-        resampling_panel: DecisionPanel,
+    decision_class: type[BaseDecisionABC],
+    resampling_panel: DecisionPanel,
 ) -> ParentPanel:
     """Using the parental interpretation of resampling records given by
     the decision_class, convert resampling records in a resampling
@@ -268,9 +269,7 @@ def parent_panel(
 
             # cast the unstructured record to decision records
             decision_recs = [
-                decision_class.DECISION_RECORD(**step_rec)
-                for step_rec
-                in step_recs
+                decision_class.DECISION_RECORD(**step_rec) for step_rec in step_recs
             ]
             # get the parents idxs for the children of this step
             step_parents = decision_class.parents(decision_recs)
@@ -386,8 +385,8 @@ def parent_table_discontinuities(
 
 
 def parent_cycle_discontinuities(
-        parent_idxs: list[int],
-        discontinuities: list[bool],
+    parent_idxs: list[int],
+    discontinuities: list[bool],
 ) -> list[int]:
     parent_row = copy.copy(parent_idxs)
     for walker_idx, disc in enumerate(discontinuities):
@@ -405,10 +404,10 @@ def parent_cycle_discontinuities(
 
 
 def ancestors(
-        parent_table: ParentTable,
-        cycle_idx: int,
-        walker_idx: int,
-        ancestor_cycle: int = 0,
+    parent_table: ParentTable,
+    cycle_idx: int,
+    walker_idx: int,
+    ancestor_cycle: int = 0,
 ) -> Trace:
     """Returns the lineage of ancestors as walker indices leading up to
     the given walker.
@@ -453,8 +452,8 @@ def ancestors(
 
 
 def sliding_window(
-        parent_table: ParentTable,
-        window_length: int,
+    parent_table: ParentTable,
+    window_length: int,
 ) -> list[Trace]:
     """Return contig walker traces of sliding windows of given length over
     the parent forest imposed over the contig given by the parent table.

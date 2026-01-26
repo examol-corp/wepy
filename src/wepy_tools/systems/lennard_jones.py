@@ -1,5 +1,6 @@
 # Third Party Library
 import attrs
+import mdtraj
 import numpy as np
 import numpy.typing
 import openmm
@@ -10,8 +11,6 @@ from scipy.spatial.distance import euclidean
 # First Party Library
 from wepy.resampling.distances.base import Distance
 from wepy.runners.openmm import OpenMMState
-
-import mdtraj
 from wepy.util.mdtraj import mdtraj_to_json_topology
 
 

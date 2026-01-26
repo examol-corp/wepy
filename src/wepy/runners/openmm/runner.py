@@ -537,7 +537,7 @@ class OpenMMRunnerFactory:
     @classmethod
     def type(cls) -> type[OpenMMRunner]:
         return OpenMMRunner
-    
+
     def __call__(self) -> OpenMMRunner:
 
         return OpenMMRunner(

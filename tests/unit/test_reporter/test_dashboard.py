@@ -1,23 +1,19 @@
+# Standard Library
 import logging
-from wepy.walker import Walker
-from wepy.runners.mock import MockRunner, MockState
-from wepy.resampling.resamplers.noresampler import NoResampler
-from wepy.work_mapper.serial import SerialMapper
 
+# First Party Library
 from wepy.reporter.dashboard import (
-    WalkersSummaryReport,
-    WorkerRecord,
-    GenSimSectionReport,
-    PerformanceSectionReport,
-    ResamplerFieldReport,
-    ResamplerDashboardSection,
-    RunnerDashboardSection,
-    BCDashboardSection,
     DashboardReporter,
 )
+from wepy.resampling.resamplers.noresampler import NoResampler
+from wepy.runners.mock import MockRunner, MockState
+from wepy.walker import Walker
+from wepy.work_mapper.serial import SerialMapper
+
 
 class Test_ResamplerDashboardReporter:
     pass
+
 
 _LOGGER = logging.getLogger("tests")
 
@@ -41,8 +37,8 @@ SIM_COMPONENTS = {
 }
 
 CYCLE_REPORT_DICT = {
-    "cycle_idx" : 1,
-    "new_walkers" : [
+    "cycle_idx": 1,
+    "new_walkers": [
         Walker(
             MockState(1),
             weight=0.2,
@@ -52,24 +48,18 @@ CYCLE_REPORT_DICT = {
             weight=0.1,
         ),
     ],
-    "warp_data" : [],
-    "bc_data" : [],
-    "progress_data" : {},
-    "resampling_data" : [
+    "warp_data": [],
+    "bc_data": [],
+    "progress_data": {},
+    "resampling_data": [
         [
-            {
-                "decision_id" : 1,
-                "target_idxs" : (0,)
-            },
-            {
-                "decision_id" : 2,
-                "target_idxs" : (1, 2)
-            },
+            {"decision_id": 1, "target_idxs": (0,)},
+            {"decision_id": 2, "target_idxs": (1, 2)},
         ]
     ],
-    "resampler_data" : [{}],
+    "resampler_data": [{}],
     "n_segment_steps": 100,
-    "resampled_walkers" : [
+    "resampled_walkers": [
         Walker(
             MockState(1),
             weight=0.1,
@@ -83,21 +73,21 @@ CYCLE_REPORT_DICT = {
             weight=0.1,
         ),
     ],
-    "runner_precycle_time" : 0.12312,
-    "runner_postcycle_time" : 0.234234,
-    "sim_manager_segment_overhead_time" : 0.89346,
-    "runner_splits_time" : {
-        "a" : .234235,
-        "b" : .46,
+    "runner_precycle_time": 0.12312,
+    "runner_postcycle_time": 0.234234,
+    "sim_manager_segment_overhead_time": 0.89346,
+    "runner_splits_time": {
+        "a": 0.234235,
+        "b": 0.46,
     },
-    "worker_segment_times" : {
-        0 : [10.213],
-        1 : [22.34],
+    "worker_segment_times": {
+        0: [10.213],
+        1: [22.34],
     },
-    "cycle_sim_manager_segment_time" : 40.234,
-    "cycle_runner_time" : 33.45,
-    "cycle_bc_time" : 1.2,
-    "cycle_resampling_time" : 6.234,
+    "cycle_sim_manager_segment_time": 40.234,
+    "cycle_runner_time": 33.45,
+    "cycle_bc_time": 1.2,
+    "cycle_resampling_time": 6.234,
 }
 
 
@@ -113,7 +103,6 @@ class Test_DashboardReporter:
         assert reporter.modes == ["x"]
 
     def test_init(self, tmp_path_factory):
-
 
         d0 = tmp_path_factory.mktemp("0")
         dash_path = d0 / "main.wepy_dash.org"
@@ -149,7 +138,7 @@ class Test_DashboardReporter:
         reporter.init(**SIM_COMPONENTS)
 
         reporter.update_performance_values(**CYCLE_REPORT_DICT)
-        
+
     def test_update_values(self, tmp_path_factory):
 
         d0 = tmp_path_factory.mktemp("0")
@@ -203,7 +192,7 @@ class Test_DashboardReporter:
         section = reporter.gen_performance_section(**CYCLE_REPORT_DICT)
 
         _LOGGER.info("\n" + section)
-        
+
     def test_report(self, tmp_path_factory):
 
         d0 = tmp_path_factory.mktemp("0")

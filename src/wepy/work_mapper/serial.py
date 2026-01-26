@@ -10,9 +10,9 @@ from typing import (
 )
 
 # First Party Library
+from wepy.factory import Factory
 from wepy.runners.runner import RunSegmentData
 from wepy.walker import WalkerState
-from wepy.factory import Factory
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,7 @@ class SerialMapper(
         self._worker_segment_times[0] = segment_times
 
         return results
+
 
 class SerialMapperFactory(Factory[SerialMapper]):
 

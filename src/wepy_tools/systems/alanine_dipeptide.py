@@ -99,7 +99,7 @@ class AlanineDipeptideRamachandranDistance(Distance):
         angles_b = np.concatenate((image_b.phis, image_b.psis))
 
         # TODO: which one to use?
-        
+
         # compute the circular difference
         deltas = np.arctan2(
             np.sin(angles_a - angles_b),
@@ -110,5 +110,5 @@ class AlanineDipeptideRamachandranDistance(Distance):
         #     np.sin(angles_a - angles_b),
         #     np.cos(angles_a - angles_b),
         # )
-        
+
         return np.sqrt(np.sum(deltas**2))

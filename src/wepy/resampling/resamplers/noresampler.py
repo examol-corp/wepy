@@ -1,21 +1,18 @@
 # Standard Library
-from typing import TypedDict, Annotated
 
-import numpy as np
-from numpy.typing import NDArray
+# Third Party Library
 import attrs
 
 # First Party Library
-from wepy.typing import Shape
 from wepy.resampling.decisions.no_decision import (
     NoDecision,
     NothingDecisionEnum,
 )
-from wepy.resampling.resamplers.resampler import Resampler, ResamplerABC
-from wepy.walker import Walker
-from wepy.util.attrs import AttrsMappingMixin
-from wepy.resampling.decisions.no_decision import NoDecisionRecord
+from wepy.resampling.resamplers.resampler import ResamplerABC
 from wepy.storage.protocol import ResamplingRecord
+from wepy.util.attrs import AttrsMappingMixin
+from wepy.walker import Walker
+
 
 @attrs.define
 class NoResamplerResamplingRecord(AttrsMappingMixin, ResamplingRecord):

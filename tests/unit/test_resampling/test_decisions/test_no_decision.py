@@ -1,4 +1,6 @@
+# Third Party Library
 import pytest
+
 # First Party Library
 from wepy.resampling.decisions.no_decision import (
     NoDecision,
@@ -7,6 +9,7 @@ from wepy.resampling.decisions.no_decision import (
 )
 from wepy.runners.mock import MockState
 from wepy.walker import Walker
+
 
 class Test_NoDecisionRecord:
 
@@ -31,13 +34,11 @@ class Test_NoDecisionRecord:
 
     def test_to_dict(self):
 
-        assert NoDecisionRecord(
-            decision_id=0,
-            target_idxs=(0,)
-        ).to_dict() == {
-            "decision_id" : 0,
-            "target_idxs" : (0,),
+        assert NoDecisionRecord(decision_id=0, target_idxs=(0,)).to_dict() == {
+            "decision_id": 0,
+            "target_idxs": (0,),
         }
+
 
 class Test_NoDecision:
 

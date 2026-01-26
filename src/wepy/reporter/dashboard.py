@@ -3,12 +3,12 @@ information on the progress of a simulation.
 """
 
 # Standard Library
+import datetime
 import logging
-from pathlib import Path
 import textwrap
 import time
 from copy import copy
-import datetime
+from pathlib import Path
 from typing import TypedDict
 
 # Third Party Library
@@ -18,21 +18,24 @@ from jinja2 import Template
 from tabulate import tabulate
 
 # First Party Library
-from wepy.reporter.file import ProgressiveFileReporterABC, FileMode
-from wepy.reporter.base import SimComponentArgs, CycleReportDict
+from wepy.reporter.base import CycleReportDict, SimComponentArgs
+from wepy.reporter.file import FileMode, ProgressiveFileReporterABC
 
 logger = logging.getLogger(__name__)
+
 
 class WalkersSummaryReport(TypedDict):
     total: float
     min: float
     max: float
 
+
 class WorkerRecord(TypedDict):
     cycle_idx: int
     n_steps: int
     worker_idx: int
     segment_time: int
+
 
 class GenSimSectionReport(TypedDict):
 
@@ -43,6 +46,7 @@ class GenSimSectionReport(TypedDict):
     n_cycles: int
     walker_cycle_summary_table: str
 
+
 class PerformanceSectionReport(TypedDict):
     avg_cycle_time: int
     worker_avg_segment_time: int
@@ -52,11 +56,14 @@ class PerformanceSectionReport(TypedDict):
     avg_bc_time: int | None
     avg_resampler_time: int | None
 
+
 class ResamplerFieldReport(TypedDict):
     name: str
 
+
 class RunnerFieldReport(TypedDict):
     name: str
+
 
 class BCFieldReport(TypedDict):
     name: str
@@ -66,12 +73,14 @@ class BCFieldReport(TypedDict):
     progress_summary_table: str
     warping_log: str
 
+
 class ResamplerDashboardSection:
     RESAMPLER_SECTION_TEMPLATE = textwrap.dedent(
         """
         Resampler: {{ name }}
         """
     )
+
     def __init__(self, resampler=None, name=None, **kwargs):
         if resampler is not None:
             self.resampler_name = type(resampler).__name__
@@ -86,9 +95,11 @@ class ResamplerDashboardSection:
         pass
 
     def gen_fields(self, **kwargs) -> ResamplerFieldReport:
-        fields = ResamplerFieldReport({
-            "name": self.resampler_name,
-        })
+        fields = ResamplerFieldReport(
+            {
+                "name": self.resampler_name,
+            }
+        )
 
         return fields
 
@@ -106,7 +117,8 @@ class RunnerDashboardSection:
         Runner: {{ name }}
         """
     )
-    def __init__(self, runner_factory = None, name=None):
+
+    def __init__(self, runner_factory=None, name=None):
         if runner_factory is not None:
             self.runner_name = runner_factory.type().__name__
 
@@ -362,7 +374,6 @@ class DashboardReporter(ProgressiveFileReporterABC):
     runner_dash: RunnerDashboardSection | None
     bc_dash: BCDashboardSection | None
 
-    
     n_cycles: int
     init_date_time: datetime.datetime | None
     init_sys_time: int | None
@@ -379,15 +390,13 @@ class DashboardReporter(ProgressiveFileReporterABC):
     avg_bc_time: int | None
     avg_resampling_time: int | None
     avg_cycle_time: int | None
-    
-    
 
     def __init__(
-            self,
-            path: Path,
-            resampler_dash: ResamplerDashboardSection | None = None,
-            runner_dash: RunnerDashboardSection | None = None,
-            bc_dash: BCDashboardSection | None = None,
+        self,
+        path: Path,
+        resampler_dash: ResamplerDashboardSection | None = None,
+        runner_dash: RunnerDashboardSection | None = None,
+        bc_dash: BCDashboardSection | None = None,
     ) -> None:
 
         super().__init__(file_paths=[path])
@@ -448,20 +457,24 @@ class DashboardReporter(ProgressiveFileReporterABC):
     def calc_walker_summary(self, **kwargs: CycleReportDict) -> WalkersSummaryReport:
         walker_weights = [walker.weight for walker in kwargs["new_walkers"]]
 
-        summary = WalkersSummaryReport({
-            "total": np.sum(walker_weights),
-            "min": np.min(walker_weights),
-            "max": np.max(walker_weights),
-        })
+        summary = WalkersSummaryReport(
+            {
+                "total": np.sum(walker_weights),
+                "min": np.min(walker_weights),
+                "max": np.max(walker_weights),
+            }
+        )
 
         return summary
-
 
     def update_performance_values(self, **kwargs: CycleReportDict) -> None:
         ## worker specific performance
 
         # only do this part if there were any workers
-        if kwargs["worker_segment_times"] is not None and len(kwargs["worker_segment_times"]) > 0:
+        if (
+            kwargs["worker_segment_times"] is not None
+            and len(kwargs["worker_segment_times"]) > 0
+        ):
             # log of segment times for workers
             for worker_idx, segment_times in kwargs["worker_segment_times"].items():
                 for segment_time in segment_times:
@@ -521,9 +534,7 @@ class DashboardReporter(ProgressiveFileReporterABC):
         ### simulation
 
         self.n_cycles += 1
-        self.walker_prob_summaries.append(
-            self.calc_walker_summary(**kwargs)
-        )
+        self.walker_prob_summaries.append(self.calc_walker_summary(**kwargs))
 
         self.update_performance_values(**kwargs)
 
@@ -534,7 +545,7 @@ class DashboardReporter(ProgressiveFileReporterABC):
             self.runner_dash.update_values(**kwargs)
         if self.bc_dash is not None:
             self.bc_dash.update_values(**kwargs)
-            
+
     def write_dashboard(self, report_str: str) -> None:
         """Write the dashboard to the file."""
 
@@ -549,14 +560,16 @@ class DashboardReporter(ProgressiveFileReporterABC):
         )
 
         # render the simulation section
-        sim_section_d = GenSimSectionReport({
-            "init_date_time": self.init_date_time,
-            "curr_date_time": datetime.datetime.today().isoformat(),
-            "total_run_time": time.time() - self.init_sys_time,
-            "last_cycle_idx": kwargs["cycle_idx"],
-            "n_cycles": self.n_cycles,
-            "walker_cycle_summary_table": walker_summary_tbl_str,
-        })
+        sim_section_d = GenSimSectionReport(
+            {
+                "init_date_time": self.init_date_time,
+                "curr_date_time": datetime.datetime.today().isoformat(),
+                "total_run_time": time.time() - self.init_sys_time,
+                "last_cycle_idx": kwargs["cycle_idx"],
+                "n_cycles": self.n_cycles,
+                "walker_cycle_summary_table": walker_summary_tbl_str,
+            }
+        )
 
         sim_section_str = Template(self.SIMULATION_SECTION_TEMPLATE).render(
             **sim_section_d
@@ -584,7 +597,9 @@ class DashboardReporter(ProgressiveFileReporterABC):
         )
 
         cycle_table_str = tabulate(
-            cycle_table_df, headers=cycle_table_df.columns, tablefmt="orgtbl",
+            cycle_table_df,
+            headers=cycle_table_df.columns,
+            tablefmt="orgtbl",
         )
 
         # log of workers performance
@@ -612,16 +627,18 @@ class DashboardReporter(ProgressiveFileReporterABC):
             tablefmt="orgtbl",
         )
 
-        performance_section_d = PerformanceSectionReport({
-            "avg_cycle_time": self.avg_cycle_time,
-            "worker_avg_segment_time": worker_agg_table_str,
-            "cycle_log": cycle_table_str,
-            "performance_log": worker_table_str,
-            # optionals
-            "avg_runner_time": self.avg_runner_time,
-            "avg_bc_time": self.avg_bc_time,
-            "avg_resampling_time": self.avg_resampling_time,
-        })
+        performance_section_d = PerformanceSectionReport(
+            {
+                "avg_cycle_time": self.avg_cycle_time,
+                "worker_avg_segment_time": worker_agg_table_str,
+                "cycle_log": cycle_table_str,
+                "performance_log": worker_table_str,
+                # optionals
+                "avg_runner_time": self.avg_runner_time,
+                "avg_bc_time": self.avg_bc_time,
+                "avg_resampling_time": self.avg_resampling_time,
+            }
+        )
 
         performance_section_str = Template(self.PERFORMANCE_SECTION_TEMPLATE).render(
             **performance_section_d
@@ -671,5 +688,3 @@ class DashboardReporter(ProgressiveFileReporterABC):
         # write the thing
         logger.info(f"Writing dashboard at: {self.file_path}")
         self.write_dashboard(report_str)
-
-

@@ -7,16 +7,16 @@ Configurable platforms.
 """
 
 # Standard Library
-import logging
 import copy
+import logging
 
 # Third Party Library
+import mdtraj
 import openmm
 import psutil
 import pytest
 
 # First Party Library
-import mdtraj
 import wepy
 from wepy.runners.openmm.runner import (
     _DEFAULT_HEARTBEAT_INTERVAL,
@@ -118,7 +118,7 @@ def test_lennard_jones_revo_procpool(tmp_path_factory):
         # only require these fields for the initial walkers
         init_walker_save_fields=("positions",),
         sparse_fields={
-            "velocities" : 2,
+            "velocities": 2,
         },
     )
 
@@ -224,15 +224,18 @@ def test_alanine_dipeptide_revo_procpool(tmp_path_factory):
         resampler_class=wepy.REVOResampler,
         save_fields=DEFAULT_SAVE_FIELDS + ("velocities",),
         # only require these fields for the initial walkers
-        init_walker_save_fields=("positions", "box_vectors",),
+        init_walker_save_fields=(
+            "positions",
+            "box_vectors",
+        ),
         sparse_fields={
-            "velocities" : 2,
+            "velocities": 2,
         },
         main_rep_idxs=protein_idxs,
         all_atoms_rep_freq=2,
         alt_reps={
-            "water" : (water_idxs, 2),
-        }
+            "water": (water_idxs, 2),
+        },
     )
 
     reporters = [dashboard_reporter, hdf5_reporter]

@@ -20,7 +20,7 @@ See the openmm.py module for an example.
 # Standard Library
 import logging
 from enum import IntEnum
-from typing import Callable, Literal, Protocol, TypeVar
+from typing import Literal, Protocol, TypeVar
 
 # Third Party Library
 import attrs
@@ -185,8 +185,6 @@ class Runner(Protocol[WalkerState_, RunSegmentData_]):
         ...
 
 
-
-
 @attrs.define
 class NoRunner(Runner):
     """Stub Runner that just returns the walkers back with the same state.
@@ -228,6 +226,7 @@ class NoRunner(Runner):
         self.state_machine.send(RunnerEvent.POST_SEGMENT)
         self.state_machine.send(RunnerEvent.POST_CYCLE)
 
+
 @attrs.define
 class NoRunnerFactory:
 
@@ -237,4 +236,3 @@ class NoRunnerFactory:
 
     def __call__(self) -> NoRunner:
         return NoRunner()
-    

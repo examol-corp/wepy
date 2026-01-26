@@ -1,8 +1,9 @@
 # Standard Library
 import logging
-from typing import Any, Protocol, TypedDict, Literal, Union
+from typing import Any, Protocol, TypedDict
 
-import numpy as np
+# Third Party Library
+
 # First Party Library
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.resampling.resamplers.resampler import Resampler
@@ -47,6 +48,7 @@ class CycleReportDict(TypedDict):
     cycle_runner_time: float
     cycle_bc_time: float
     cycle_resampling_time: float
+
 
 class Reporter(Protocol):
     """Abstract base class for wepy reporters.

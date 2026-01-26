@@ -3,8 +3,9 @@ resampling parent trees.
 """
 
 # Standard Library
-from collections import namedtuple
 import warnings
+from collections import namedtuple
+
 # Third Party Library
 import networkx as nx
 import numpy as np

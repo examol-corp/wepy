@@ -27,18 +27,17 @@ magic method for the accessor syntax, i.e. walker.state['positions'].
 """
 
 # Standard Library
+import copy
 import logging
 import math
 import random as rand
 from typing import Any, Generic, Protocol, TypeVar
-import copy
 
 # Third Party Library
 import attrs
 
+# First Party Library
 from wepy.util.attrs import AttrsMappingMixin
-
-from wepy.missing import MISSING
 
 logger = logging.getLogger(__name__)
 
@@ -53,17 +52,21 @@ class WalkerState(Protocol[T]):
 
     def dict(self) -> dict[str, T]: ...
 
+
 # TODO: merge with the AttrsMappingMixin
 class AttrsWalkerStateMixin(AttrsMappingMixin):
     """A convenient mixin for implementing the WalkerState interface
-    for attrs classes."""
+    for attrs classes.
+    """
 
     def dict(self) -> dict[str, Any]:
         return attrs.asdict(self)
 
+
 class WalkerStateBox:
     """A type black box walker state, useful in reporting when you
-    need polymorphism in communicating walker data."""
+    need polymorphism in communicating walker data.
+    """
 
     def __init__(self, **kwargs: dict[str, Any]) -> None:
         """Constructor for WalkerState.
@@ -87,6 +90,7 @@ class WalkerStateBox:
             return False
         else:
             return self.dict() == other.dict()
+
 
 WalkerState_ = TypeVar("WalkerState_")
 

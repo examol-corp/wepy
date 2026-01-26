@@ -16,9 +16,11 @@ class NothingDecisionEnum(IntEnum):
     NOTHING = 0
     """Do nothing with the walker."""
 
+
 class NoDecisionRecordDict(TypedDict):
     decision_id: int
     target_idx: tuple[int, ...]
+
 
 @attrs.define
 class NoDecisionRecord(BaseDecisionRecord):
@@ -29,22 +31,21 @@ class NoDecisionRecord(BaseDecisionRecord):
     def _check_decision_id(self, attribute, value) -> None:
 
         if value != NothingDecisionEnum.NOTHING.value:
-            raise ValueError(f"Invalid decision_id ({value}) must be {NothingDecisionEnum.NOTHING.value}")
+            raise ValueError(
+                f"Invalid decision_id ({value}) must be {NothingDecisionEnum.NOTHING.value}"
+            )
 
     @target_idxs.validator
     def _check_target_idxs(self, attribute, value) -> None:
 
         if len(value) < 1:
-            raise ValueError(
-                f"'target_idxs' must have at least one entry."
-            )
+            raise ValueError("'target_idxs' must have at least one entry.")
 
         if any(idx < 0 for idx in value):
 
             raise ValueError(
                 f"'target_idxs' values must be non-negative, received: {value}"
             )
-        
 
     def to_dict(self) -> NoDecisionRecordDict:
         return attrs.asdict(self)
@@ -81,7 +82,7 @@ class NoDecision(BaseDecisionABC):
                 if decision_record.decision_id == cls.ENUM.NOTHING.value:
 
                     target_idx = decision_record.target_idxs[0]
-                    
+
                     # check to make sure a walker doesn't already exist
                     # where you are going to put it
                     if mod_walkers[target_idx] is not None:

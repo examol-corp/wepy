@@ -1,14 +1,15 @@
-import pytest
-
+# Third Party Library
 import openmm
 import openmm.app
+import pytest
 
+# First Party Library
 from wepy.reporter.openmm import OpenMMRunnerDashboardSection
 from wepy.runners.openmm import OpenMMRunnerFactory
-
 from wepy_tools.systems.lennard_jones import LennardJonesPair
 
 STEP_SIZE = 2 * openmm.unit.femtoseconds
+
 
 @pytest.fixture
 def runner_components() -> (
@@ -21,12 +22,13 @@ def runner_components() -> (
 
     return lj_sys.system, lj_sys.topology, integrator
 
+
 class Test_OpenMMRunnerDashboardSection:
 
     def test___init__(self, runner_components):
 
         system, topology, integrator = runner_components
-        
+
         section = OpenMMRunnerDashboardSection(
             runner_factory=OpenMMRunnerFactory(
                 system=system,

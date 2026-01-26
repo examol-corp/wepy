@@ -16,7 +16,7 @@ from wepy.runners.runner import (
     RunnerStatus,
     RunSegmentData,
 )
-from wepy.walker import WalkerState, AttrsWalkerStateMixin
+from wepy.walker import AttrsWalkerStateMixin, WalkerState
 
 logger = logging.getLogger(__name__)
 

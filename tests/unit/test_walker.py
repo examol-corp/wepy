@@ -7,9 +7,9 @@ import attrs
 # First Party Library
 from wepy.missing import MISSING
 from wepy.walker import (
+    AttrsWalkerStateMixin,
     Walker,
     WalkerState,
-    AttrsWalkerStateMixin,    
     WalkerStateBox,
     clone,
     keep_merge,
@@ -22,6 +22,7 @@ from wepy.walker import (
 
 MockKeys = Literal["a", "b"]
 MockDataValue = int | str
+
 
 # Example of writing a state from scratch
 class MockData(TypedDict):
@@ -42,6 +43,7 @@ class MockWalkerState(WalkerState):
 
     def dict(self) -> MockData:
         return attrs.asdict(self)
+
 
 # example of using the Attrs mixin to write those methods for you
 @attrs.define
@@ -72,6 +74,7 @@ class Test_WalkerState:
             "b": "hello",
         }
 
+
 class Test_AttrsWalkerStateMixin:
 
     def test___init__(self):
@@ -85,8 +88,12 @@ class Test_AttrsWalkerStateMixin:
 
     def test___eq__(self):
 
-        assert MockWalkerStateMixin(a=1, b="hello") == MockWalkerStateMixin(a=1, b="hello")
-        assert MockWalkerStateMixin(a=1, b="hello") != MockWalkerStateMixin(a=100, b="hello")
+        assert MockWalkerStateMixin(a=1, b="hello") == MockWalkerStateMixin(
+            a=1, b="hello"
+        )
+        assert MockWalkerStateMixin(a=1, b="hello") != MockWalkerStateMixin(
+            a=100, b="hello"
+        )
 
     def test_dict(self):
         assert MockWalkerStateMixin(a=1, b="hello").dict() == {
@@ -94,19 +101,20 @@ class Test_AttrsWalkerStateMixin:
             "b": "hello",
         }
 
+
 class Test_WalkerStateBox:
 
     def test___init__(self):
 
-        assert WalkerStateBox(a=1)._data == {"a" : 1}
+        assert WalkerStateBox(a=1)._data == {"a": 1}
 
     def test___getitem__(self):
 
         assert WalkerStateBox(a=1)["a"] == 1
 
     def test_dict(self):
-        
-        assert WalkerStateBox(a=1).dict() == {"a" : 1}
+
+        assert WalkerStateBox(a=1).dict() == {"a": 1}
 
     def test___eq__(self):
 
@@ -114,7 +122,8 @@ class Test_WalkerStateBox:
         assert s == s
 
         assert WalkerStateBox(a=1) == WalkerStateBox(a=1)
-        
+
+
 class TestWalker:
 
     def test___init__(self):

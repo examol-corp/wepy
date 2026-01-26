@@ -1,15 +1,15 @@
+# Standard Library
+import copy
+import logging
 from pathlib import Path
 
-import cyclopts
-import logging
-import copy
-
 # Third Party Library
+import cyclopts
+import mdtraj
 import openmm
 import psutil
 
 # First Party Library
-import mdtraj
 import wepy
 from wepy_tools.systems.alanine_dipeptide import (
     AlanineDipeptideExplicitSystem,
@@ -32,12 +32,13 @@ DEFAULT_SAVE_FIELDS = (
 
 app = cyclopts.App()
 
+
 @app.command
 def realistic_hdf5_dialanine_explicit(out_path: Path):
 
     STEP_SIZE = 2.0 * openmm.unit.femtosecond
     TEMPERATURE = 300.0 * openmm.unit.kelvin
-    
+
     ala_sys = AlanineDipeptideExplicitSystem()
 
     integrator = openmm.LangevinIntegrator(TEMPERATURE, 0.1, STEP_SIZE)
@@ -98,15 +99,18 @@ def realistic_hdf5_dialanine_explicit(out_path: Path):
         resampler_class=wepy.REVOResampler,
         save_fields=DEFAULT_SAVE_FIELDS + ("velocities",),
         # only require these fields for the initial walkers
-        init_walker_save_fields=("positions", "box_vectors",),
+        init_walker_save_fields=(
+            "positions",
+            "box_vectors",
+        ),
         sparse_fields={
-            "velocities" : 2,
+            "velocities": 2,
         },
         main_rep_idxs=protein_idxs,
         all_atoms_rep_freq=2,
         alt_reps={
-            "water" : (water_idxs, 2),
-        }
+            "water": (water_idxs, 2),
+        },
     )
 
     sim_manager = wepy.Manager(
@@ -129,6 +133,7 @@ def realistic_hdf5_dialanine_explicit(out_path: Path):
         n_cycles=3,
         segment_lengths=cycle_steps,
     )
+
 
 if __name__ == "__main__":
     app()

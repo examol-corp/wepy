@@ -13,8 +13,10 @@ from wepy.walker import Walker, keep_merge, split
 
 logger = logging.getLogger(__name__)
 
+
 class CloneMergeDecisionError(Exception):
     pass
+
 
 # the possible types of decisions that can be made enumerated for
 # storage, these each correspond to specific instruction type
@@ -42,12 +44,15 @@ class CloneMergeDecisionEnum(IntEnum):
     """Do nothing with the sample value (state) but squashed walkers will
     donate their weight to it."""
 
+
 # TODO: get this automatically
 CLONE_MERGE_DECISION_ENUM_VALUES = {1, 2, 3, 4}
+
 
 class CloneMergeDecisionRecordDict(TypedDict):
     decision_id: int
     target_idxs: tuple[int, ...]
+
 
 @attrs.define
 class CloneMergeDecisionRecord(BaseDecisionRecord):
@@ -58,7 +63,9 @@ class CloneMergeDecisionRecord(BaseDecisionRecord):
     @decision_id.validator
     def _check_decision_id(self, attribute, value) -> None:
         if value not in CLONE_MERGE_DECISION_ENUM_VALUES:
-            raise ValueError(f"Invalid decision_id ({value}) must be one of {CLONE_MERGE_DECISION_ENUM_VALUES}")
+            raise ValueError(
+                f"Invalid decision_id ({value}) must be one of {CLONE_MERGE_DECISION_ENUM_VALUES}"
+            )
 
     @target_idxs.validator
     def _check_decision_id(self, attribute, value) -> None:

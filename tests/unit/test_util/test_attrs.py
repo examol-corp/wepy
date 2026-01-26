@@ -1,10 +1,15 @@
+# Third Party Library
 import attrs
+
+# First Party Library
 from wepy.util.attrs import AttrsMappingMixin
+
 
 @attrs.define
 class Thing(AttrsMappingMixin):
     a: int
     b: str
+
 
 class Test_AttrsMappingMixin:
 
@@ -43,16 +48,13 @@ class Test_AttrsMappingMixin:
         _vs.add(next(t_it))
         assert _vs == {"a", "b"}
 
-
     def test_keys(self):
         t = Thing(a=1, b="hello")
         assert set(t.keys()) == {"a", "b"}
 
-
     def test_values(self):
         t = Thing(a=1, b="hello")
         assert set(t.values()) == {1, "hello"}
-
 
     def test_items(self):
         t = Thing(a=1, b="hello")

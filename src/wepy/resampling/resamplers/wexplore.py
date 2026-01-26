@@ -1,21 +1,21 @@
 # Standard Library
 import itertools as it
 import logging
-from typing import Generic, TypeVar
 import math
 import random as rand
 from collections import defaultdict
 from copy import copy, deepcopy
+from typing import Generic, TypeVar
 
 # Third Party Library
+import attrs
 import networkx as nx
 import numpy as np
-import attrs
 
 # First Party Library
+from wepy.resampling.distances.base import Distance
 from wepy.resampling.resamplers.clone_merge import CloneMergeResampler
 from wepy.resampling.resamplers.resampler import ResamplerError
-from wepy.resampling.distances.base import Distance
 from wepy.walker import WalkerState
 
 logger = logging.getLogger(__name__)
@@ -2084,8 +2084,8 @@ class RegionTree(nx.DiGraph):
 
 
 class WExploreResampler(
-        CloneMergeResampler,
-        Generic[DistanceMetric_, WalkerState_],
+    CloneMergeResampler,
+    Generic[DistanceMetric_, WalkerState_],
 ):
     """Resampler implementing the WExplore algorithm.
 
@@ -2658,6 +2658,7 @@ class WExploreResampler(
 
         return resampled_walkers, resampling_data, resampler_data
 
+
 @attrs.define
 class WExploreResamplerFactory(Generic[DistanceMetric_, WalkerState_]):
 
@@ -2682,7 +2683,7 @@ class WExploreResamplerFactory(Generic[DistanceMetric_, WalkerState_]):
     @classmethod
     def type(cls) -> type[WExploreResampler]:
         return WExploreResampler
-    
+
     def __call__(
         self,
         num_cores: int | None = None,
@@ -2697,4 +2698,3 @@ class WExploreResamplerFactory(Generic[DistanceMetric_, WalkerState_]):
             pmax=self.pmax,
             seed=self.seed,
         )
-    

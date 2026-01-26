@@ -1,16 +1,15 @@
 """Special OpenMM mappers."""
 
 # Standard Library
-import itertools
 import logging
 import multiprocessing as mp
 from typing import Callable
 
 # Third Party Library
 import attrs
+import more_itertools
 
 # First Party Library
-import more_itertools
 from wepy.runners.openmm import (
     GPU_PLATFORMS,
     OpenMMPlatformName,
@@ -248,7 +247,6 @@ class OpenMMProcPoolWorkMapperFactory:
     @classmethod
     def type(cls) -> type[OpenMMProcPoolWorkMapper]:
         return OpenMMProcPoolWorkMapper
-        
 
     def __call__(self) -> OpenMMProcPoolWorkMapper:
 

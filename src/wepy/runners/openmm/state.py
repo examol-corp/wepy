@@ -1,6 +1,6 @@
 # Standard Library
 import logging
-from collections.abc import Collection, Mapping
+from collections.abc import Collection
 from typing import (
     Any,
     ClassVar,

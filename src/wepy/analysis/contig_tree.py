@@ -31,12 +31,11 @@ import pandas as pd
 from geomm.free_energy import free_energy as calc_free_energy
 
 # First Party Library
-from wepy.storage.protocol import ContigWalkerTrace, RunTrace, ContigTrace
 from wepy.analysis.network_layouts.layout_graph import LayoutGraph
 from wepy.analysis.network_layouts.tree import ResamplingTreeLayout
 from wepy.analysis.parents import (
-    ParentTable,
     ParentForest,
+    ParentTable,
     ancestors,
     net_parent_table,
     parent_cycle_discontinuities,
@@ -45,8 +44,9 @@ from wepy.analysis.parents import (
 )
 from wepy.boundary_conditions.boundary import BoundaryConditions
 from wepy.hdf5 import WepyHDF5
-from wepy.resampling.decisions.decision import BaseDecisionABC
 from wepy.reporter.file import FileMode
+from wepy.resampling.decisions.decision import BaseDecisionABC
+from wepy.storage.protocol import ContigTrace, ContigWalkerTrace, RunTrace
 
 # the groups of run records
 RESAMPLING: Final = "resampling"
@@ -332,9 +332,9 @@ class BaseContigTree:
             ]
 
     def _set_discontinuities(
-            self,
-            wepy_h5: WepyHDF5,
-            boundary_conditions_class: type[BoundaryConditions],
+        self,
+        wepy_h5: WepyHDF5,
+        boundary_conditions_class: type[BoundaryConditions],
     ) -> None:
         """Given the boundary condition class sets node attributes for where
         there are discontinuities in the parental lineages.
@@ -421,8 +421,8 @@ class BaseContigTree:
 
     @staticmethod
     def contig_trace_to_run_trace(
-            contig_trace: ContigTrace,
-            contig_walker_trace: ContigWalkerTrace,
+        contig_trace: ContigTrace,
+        contig_walker_trace: ContigWalkerTrace,
     ) -> RunTrace:
         """Combine a contig trace and a walker trace to get the equivalent run trace.
 
@@ -456,7 +456,6 @@ class BaseContigTree:
             trace.append(frame)
 
         return trace
-
 
     def run_trace_to_contig_trace(self, run_trace: RunTrace) -> ContigWalkerTrace:
         """Assumes that the run trace goes along a valid contig.
@@ -506,10 +505,10 @@ class BaseContigTree:
         return len(contig_trace) - 1
 
     def get_branch_trace(
-            self,
-            run_idx: int,
-            cycle_idx: int,
-            start_contig_idx: int = 0,
+        self,
+        run_idx: int,
+        cycle_idx: int,
+        start_contig_idx: int = 0,
     ) -> ContigTrace:
         """Get a contig trace for a branch of the contig tree from an end
         point back to a set point (defaults to root of contig tree).
@@ -565,9 +564,9 @@ class BaseContigTree:
         return contig_trace
 
     def trace_parent_table(
-            self,
-            contig_trace: ContigTrace,
-            discontinuities: bool = True,
+        self,
+        contig_trace: ContigTrace,
+        discontinuities: bool = True,
     ) -> ParentTable:
         """Given a contig trace returns a parent table for that contig.
 
@@ -806,7 +805,7 @@ class BaseContigTree:
         subtrees = self.subtrees()
 
         # TODO: This is ambiguous if it is in multiple subtrees...
-        
+
         # see which tree the node is in
         for subtree in subtrees:
             # if the node is in it this is the subtree it is in so
@@ -815,9 +814,9 @@ class BaseContigTree:
                 return subtree
 
     def contig_sliding_windows(
-            self,
-            contig_trace: ContigTrace,
-            window_length: int,
+        self,
+        contig_trace: ContigTrace,
+        window_length: int,
     ) -> list[ContigWalkerTrace]:
         """Given a contig trace get the sliding windows of length
         'window_length' as contig walker traces.
@@ -875,9 +874,9 @@ class BaseContigTree:
         return contig_windows
 
     def _subtree_sliding_contig_windows(
-            self,
-            subtree_root: NodeId,
-            window_length: int,
+        self,
+        subtree_root: NodeId,
+        window_length: int,
     ) -> list[ContigTrace]:
         """Get all the sliding windows of length 'window_length' from the
         subtree defined by the subtree root as run traces.
@@ -1208,7 +1207,9 @@ class BaseContigTree:
         return contig_runs
 
     @classmethod
-    def _contig_runs_to_continuations(cls, contig_runs: list[int]) -> ContinuationsTable:
+    def _contig_runs_to_continuations(
+        cls, contig_runs: list[int]
+    ) -> ContinuationsTable:
         """Helper function to convert a list of run indices defining a contig
         to continuations.
 
@@ -1229,7 +1230,9 @@ class BaseContigTree:
         return continuations
 
     @classmethod
-    def _continuations_to_contig_runs(cls, continuations: ContinuationsTable) -> list[int]:
+    def _continuations_to_contig_runs(
+        cls, continuations: ContinuationsTable
+    ) -> list[int]:
         """Helper function that converts a list of continuations to a list of
         the runs in the order of the contigs defined by the continuations.
 
@@ -1585,15 +1588,14 @@ class Contig(ContigTree):
     _contig_trace: ContigTrace
     _contig_run_idxs: list[int]
 
-    
     def __init__(
-            self,
-            wepy_h5: WepyHDF5,
-            base_contigtree: BaseContigTree | None = None,
-            continuations: type(Ellipsis) | ContinuationsTable = Ellipsis,
-            runs: type(Ellipsis) | list[int] = Ellipsis,
-            boundary_condition_class: type[BoundaryConditions] | None = None,
-            decision_class: type[BaseDecisionABC] | None = None,
+        self,
+        wepy_h5: WepyHDF5,
+        base_contigtree: BaseContigTree | None = None,
+        continuations: type(Ellipsis) | ContinuationsTable = Ellipsis,
+        runs: type(Ellipsis) | list[int] = Ellipsis,
+        boundary_condition_class: type[BoundaryConditions] | None = None,
+        decision_class: type[BaseDecisionABC] | None = None,
     ):
         # uses superclass docstring exactly, this constructor just
         # generates some extra attributes
@@ -1679,7 +1681,9 @@ class Contig(ContigTree):
         """
         return len(self.contig_trace)
 
-    def walker_trace_to_run_trace(self, contig_walker_trace: ContigWalkerTrace) -> RunTrace:
+    def walker_trace_to_run_trace(
+        self, contig_walker_trace: ContigWalkerTrace
+    ) -> RunTrace:
         """Combine a walker trace to get the equivalent run trace for this contig.
 
         The contig_walker_trace cycle_idxs must be a subset of the
@@ -1701,7 +1705,6 @@ class Contig(ContigTree):
         """
 
         return self.contig_trace_to_run_trace(self.contig_trace, contig_walker_trace)
-    
 
     # TODO: may need to be implemented without using the wepy_h5 in the BaseContigTree
     def num_walkers(self, cycle_idx: int) -> int:
@@ -1909,9 +1912,9 @@ class Contig(ContigTree):
         )
 
     def lineages_contig(
-            self,
-            contig_trace: ContigTrace,
-            discontinuities: bool = True,
+        self,
+        contig_trace: ContigTrace,
+        discontinuities: bool = True,
     ):
         # get the parent table for this contig
         parent_table = self.parent_table(discontinuities=discontinuities)

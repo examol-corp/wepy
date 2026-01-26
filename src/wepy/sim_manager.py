@@ -47,7 +47,7 @@ import copy
 import enum
 import logging
 import time
-from typing import Callable, Final, Generic, Literal, TypeVar
+from typing import Final, Generic, Literal, TypeVar
 
 # Third Party Library
 import attrs
@@ -55,8 +55,8 @@ import psutil
 from immutables import Map as frozenmap
 
 # First Party Library
-from wepy.factory import Factory
 from wepy.boundary_conditions.boundary import BoundaryConditions
+from wepy.factory import Factory
 from wepy.monitor import Monitor
 from wepy.reporter.base import CycleReportDict, Reporter
 from wepy.resampling.resamplers.resampler import Resampler

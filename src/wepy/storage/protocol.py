@@ -5,20 +5,26 @@ components (resamplers, runner, boundary conditions, sim_manager) and
 the reporting and storage backends should utilize.
 
 """
-from collections.abc import Mapping
-from numpy.typing import NDArray
-from typing import Union, Literal, TypedDict, Required
 
-import numpy as np
+# Standard Library
+from collections.abc import Mapping
+from typing import Literal, Required, TypedDict, Union
+
+# Third Party Library
 import attrs
+import numpy as np
+from numpy.typing import NDArray
 
 RecordValueDtype = int | float | NDArray
 
 Record = Mapping[str, RecordValueDtype]
+
+
 @attrs.define
 class RunRecord:
     cycle_idx: Required[int]
     record: Record
+
 
 # Numpy-style shapes of all fields produced in records.
 #
@@ -44,7 +50,6 @@ RecordFieldShapeSpec = Union[
 ]
 
 
-
 # There should be the same number of elements as there are in the
 # corresponding 'FIELDS' class constant.
 #
@@ -64,34 +69,40 @@ RecordFieldDtype = Union[
     np.float32,
     np.float64,
     bool,
-] 
+]
 
 
 RecordFieldSpec = tuple[
-    str, # name
-    RecordFieldShapeSpec, # shape
-    RecordFieldDtype, # dtype
+    str,  # name
+    RecordFieldShapeSpec,  # shape
+    RecordFieldDtype,  # dtype
 ]
 
 
 # Specific record types guaranteed
 
-DECISION_RECORD_FIELDS = frozenset({
-    "decision_id",
-    "target_idxs",
-})
+DECISION_RECORD_FIELDS = frozenset(
+    {
+        "decision_id",
+        "target_idxs",
+    }
+)
+
 
 class DecisionRecordUnstruct(TypedDict, total=False):
     decision_id: Required[int]
     target_idxs: Required[tuple[int, ...]]
-    
 
-RESAMPLING_RECORD_FIELDS = frozenset({
-    "step_idx",
-    "walker_idx",
-    "decision_id",
-    "target_idxs",
-})
+
+RESAMPLING_RECORD_FIELDS = frozenset(
+    {
+        "step_idx",
+        "walker_idx",
+        "decision_id",
+        "target_idxs",
+    }
+)
+
 
 @attrs.define
 class ResamplingRecord:
@@ -100,17 +111,22 @@ class ResamplingRecord:
     decision_id: int
     target_idxs: tuple[int, ...]
 
+
 class ResamplingRecordUnstruct(TypedDict, total=False):
     step_idx: Required[int]
     walker_idx: Required[int]
     decision_id: Required[int]
     target_idxs: Required[tuple[int, ...]]
 
-WARPING_RECORD_FIELDS = frozenset({
-    "walker_idx",
-    "target_idx",
-    "weight",
-})
+
+WARPING_RECORD_FIELDS = frozenset(
+    {
+        "walker_idx",
+        "target_idx",
+        "weight",
+    }
+)
+
 
 @attrs.define
 class WarpRecord:
@@ -118,11 +134,11 @@ class WarpRecord:
     target_idx: int
     weight: float
 
+
 class WarpRecordUnstruct(TypedDict, total=False):
     walker_idx: Required[int]
     target_idx: Required[int]
     weight: Required[float]
-
 
 
 # Trace types used in data access
@@ -134,4 +150,3 @@ RunTrace = list[tuple[int, int, int], ...]
 
 # (run_idx, cycle_idx)
 ContigTrace = list[tuple[int, int], ...]
-

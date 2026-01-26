@@ -1,13 +1,18 @@
-from typing import Any, Iterator
+# Standard Library
 from collections.abc import Mapping
+from typing import Any, Iterator
 
+# Third Party Library
 import attrs
 
+# First Party Library
 from wepy.missing import MISSING
+
 
 class AttrsMappingMixin(Mapping[str, object]):
     """A convenient mixin for implementing the WalkerState interface
-    for attrs classes."""
+    for attrs classes.
+    """
 
     def __len__(self) -> int:
 

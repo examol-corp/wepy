@@ -8,7 +8,9 @@ import numpy.typing
 import openmm
 
 
-def array3d_to_vec3(array: numpy.typing.ArrayLike) -> Generator[openmm.Vec3, None, None]:
+def array3d_to_vec3(
+    array: numpy.typing.ArrayLike,
+) -> Generator[openmm.Vec3, None, None]:
 
     for row in array:
         yield openmm.Vec3(*row.tolist())

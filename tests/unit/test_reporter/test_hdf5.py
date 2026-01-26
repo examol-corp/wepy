@@ -1,42 +1,66 @@
-import pytest
+# Third Party Library
 import numpy as np
 import openmm.unit
-from wepy.reporter.hdf5 import WepyHDF5Reporter
-from wepy_tools.systems.lennard_jones import LennardJonesPair
-from wepy.resampling.resamplers.noresampler import NoResampler
-from wepy.walker import Walker, WalkerStateBox
-from wepy.runners.mock import MockState, MockRunner
-from wepy.runners.openmm import OpenMMState, OPENMM_DEFAULT_UNITS
-from wepy.work_mapper.serial import SerialMapper
+import pytest
+
+# First Party Library
 from wepy.hdf5 import WepyHDF5
+from wepy.reporter.hdf5 import WepyHDF5Reporter
 from wepy.resampling.decisions.no_decision import (
     NoDecision,
-    NothingDecisionEnum,
 )
+from wepy.resampling.resamplers.noresampler import NoResampler
+from wepy.runners.mock import MockRunner, MockState
+from wepy.runners.openmm import OPENMM_DEFAULT_UNITS, OpenMMState
+from wepy.walker import Walker, WalkerStateBox
+from wepy.work_mapper.serial import SerialMapper
+from wepy_tools.systems.lennard_jones import LennardJonesPair
 
 LJ_OPENMM_SIM_COMPONENTS = {
     "init_walkers": [
-                Walker(
-                    OpenMMState.from_dwim(
-                        positions=np.array([
-                            [0., 0., 0.,],
-                            [0., 0., 0.,],
-                        ]) * openmm.unit.nanometer,
-                        time=(1.3 * openmm.unit.nanosecond),
-                    ),
-                    0.5,
-                ),
-                Walker(
-                    OpenMMState.from_dwim(
-                        positions=np.array([
-                            [0., 0., 0.,],
-                            [0., 0., 0.,],
-                        ]) * openmm.unit.nanometer,
-                        time=(1.3 * openmm.unit.nanosecond),
-                    ),
-                    0.5,
-                ),
-            ],
+        Walker(
+            OpenMMState.from_dwim(
+                positions=np.array(
+                    [
+                        [
+                            0.0,
+                            0.0,
+                            0.0,
+                        ],
+                        [
+                            0.0,
+                            0.0,
+                            0.0,
+                        ],
+                    ]
+                )
+                * openmm.unit.nanometer,
+                time=(1.3 * openmm.unit.nanosecond),
+            ),
+            0.5,
+        ),
+        Walker(
+            OpenMMState.from_dwim(
+                positions=np.array(
+                    [
+                        [
+                            0.0,
+                            0.0,
+                            0.0,
+                        ],
+                        [
+                            0.0,
+                            0.0,
+                            0.0,
+                        ],
+                    ]
+                )
+                * openmm.unit.nanometer,
+                time=(1.3 * openmm.unit.nanosecond),
+            ),
+            0.5,
+        ),
+    ],
     "runner": MockRunner(),
     "resampler": NoResampler(),
     "boundary_conditions": None,
@@ -46,28 +70,29 @@ LJ_OPENMM_SIM_COMPONENTS = {
 }
 
 RESAMPLER_REPORTER_ARGS = {
-    "resampling_fields" : NoResampler.resampling_fields(),
-    "decision_enum_dict" : NoDecision.enum_dict_by_name(),
+    "resampling_fields": NoResampler.resampling_fields(),
+    "decision_enum_dict": NoDecision.enum_dict_by_name(),
 }
 
 CYCLE_REPORT_DICT_COMMON = {
-            "runner_precycle_time" : 1.,
-            "runner_postcycle_time" : 1.,
-            "sim_manager_segment_overhead_time" : 1.,
-            "cycle_sim_manager_segment_time" : 1.,
-            "cycle_runner_time" : 1.,
-            "cycle_bc_time" : 1.,
-            "cycle_resampling_time" : 1.,
+    "runner_precycle_time": 1.0,
+    "runner_postcycle_time": 1.0,
+    "sim_manager_segment_overhead_time": 1.0,
+    "cycle_sim_manager_segment_time": 1.0,
+    "cycle_runner_time": 1.0,
+    "cycle_bc_time": 1.0,
+    "cycle_resampling_time": 1.0,
 }
 
 CYCLE_REPORT_DICT_EMPTY_OPTIONALS = {
-            "warp_data" : [],
-            "bc_data" : [],
-            "progress_data" : [],
-            "resampler_data" : [],
-            "runner_splits_time" : None,
-            "worker_segment_times" : None,
+    "warp_data": [],
+    "bc_data": [],
+    "progress_data": [],
+    "resampler_data": [],
+    "runner_splits_time": None,
+    "worker_segment_times": None,
 }
+
 
 class Test_WepyHDF5Reporter:
 
@@ -112,32 +137,37 @@ class Test_WepyHDF5Reporter:
             file_path=h5_path,
             topology=test_sys.json_top,
             **RESAMPLER_REPORTER_ARGS,
-            save_fields=("positions", "box_vectors",)
+            save_fields=(
+                "positions",
+                "box_vectors",
+            ),
         )
 
-        assert reporter.save_fields == ("positions", "box_vectors",)
+        assert reporter.save_fields == (
+            "positions",
+            "box_vectors",
+        )
 
         reporter = WepyHDF5Reporter(
             file_path=h5_path,
             topology=test_sys.json_top,
             **RESAMPLER_REPORTER_ARGS,
             units={
-                "positions" : openmm.unit.angstrom,
-            }
+                "positions": openmm.unit.angstrom,
+            },
         )
 
-        assert reporter.units == dict(OPENMM_DEFAULT_UNITS) | {"positions" : openmm.unit.angstrom}
+        assert reporter.units == dict(OPENMM_DEFAULT_UNITS) | {
+            "positions": openmm.unit.angstrom
+        }
 
         reporter = WepyHDF5Reporter(
             file_path=h5_path,
             topology=test_sys.json_top,
             **RESAMPLER_REPORTER_ARGS,
-            main_rep_idxs=[0,1,2,3],
+            main_rep_idxs=[0, 1, 2, 3],
         )
-        assert np.array_equal(
-            reporter.main_rep_idxs,
-            np.array([0,1,2,3])
-        )
+        assert np.array_equal(reporter.main_rep_idxs, np.array([0, 1, 2, 3]))
         assert set(reporter.alt_reps_idxs.keys()) == {"all_atoms"}
         assert "alt_reps/all_atoms" not in reporter.alt_reps_to_save
         assert "alt_reps/all_atoms" not in reporter._sparse_fields
@@ -150,17 +180,18 @@ class Test_WepyHDF5Reporter:
         )
         assert set(reporter.alt_reps_idxs.keys()) == {"all_atoms"}
         assert "all_atoms" in reporter.alt_reps_to_save
-        assert reporter._sparse_fields == {
-            "alt_reps/all_atoms" : 5
-        }
+        assert reporter._sparse_fields == {"alt_reps/all_atoms": 5}
 
         reporter = WepyHDF5Reporter(
             file_path=h5_path,
             topology=test_sys.json_top,
             **RESAMPLER_REPORTER_ARGS,
-            save_fields=("positions", "velocities",),
+            save_fields=(
+                "positions",
+                "velocities",
+            ),
             sparse_fields={
-                "velocities" : 5,
+                "velocities": 5,
             },
         )
 
@@ -174,7 +205,7 @@ class Test_WepyHDF5Reporter:
                 **RESAMPLER_REPORTER_ARGS,
                 save_fields=("positions",),
                 sparse_fields={
-                    "velocities" : 5,
+                    "velocities": 5,
                 },
             )
 
@@ -185,7 +216,7 @@ class Test_WepyHDF5Reporter:
                 **RESAMPLER_REPORTER_ARGS,
                 save_fields=None,
                 sparse_fields={
-                    "velocities" : 5,
+                    "velocities": 5,
                 },
             )
 
@@ -195,18 +226,18 @@ class Test_WepyHDF5Reporter:
             **RESAMPLER_REPORTER_ARGS,
             save_fields=("positions",),
             alt_reps={
-                "a" : (
-                    [0,1,2,3],
+                "a": (
+                    [0, 1, 2, 3],
                     5,
                 ),
-            }
+            },
         )
 
         assert "a" in reporter.alt_reps_to_save
         assert "a" in reporter.alt_reps_idxs
         assert np.array_equal(
             reporter.alt_reps_idxs["a"],
-            np.array([0,1,2,3]),
+            np.array([0, 1, 2, 3]),
         )
         assert "alt_reps/a" in reporter._sparse_fields
         assert reporter._sparse_fields["alt_reps/a"] == 5
@@ -218,11 +249,11 @@ class Test_WepyHDF5Reporter:
                 **RESAMPLER_REPORTER_ARGS,
                 save_fields=("positions",),
                 alt_reps={
-                    "a" : (
+                    "a": (
                         [],
                         5,
                     ),
-                }
+                },
             )
 
         with pytest.raises(ValueError):
@@ -232,24 +263,24 @@ class Test_WepyHDF5Reporter:
                 **RESAMPLER_REPORTER_ARGS,
                 save_fields=("positions",),
                 alt_reps={
-                    "a" : (
-                        [0,1,2,3],
+                    "a": (
+                        [0, 1, 2, 3],
                         -1,
                     ),
-                }
+                },
             )
-            
+
         reporter = WepyHDF5Reporter(
             file_path=h5_path,
             topology=test_sys.json_top,
             **RESAMPLER_REPORTER_ARGS,
             save_fields=("positions",),
             alt_reps={
-                "a" : (
-                    [0,1,2,3],
+                "a": (
+                    [0, 1, 2, 3],
                     1,
                 ),
-            }
+            },
         )
         assert "a" in reporter.alt_reps_to_save
         assert "a" in reporter.alt_reps_idxs
@@ -261,11 +292,11 @@ class Test_WepyHDF5Reporter:
             **RESAMPLER_REPORTER_ARGS,
             save_fields=("positions",),
             alt_reps={
-                "a" : (
-                    [0,1,2,3],
+                "a": (
+                    [0, 1, 2, 3],
                     Ellipsis,
                 ),
-            }
+            },
         )
         assert "a" in reporter.alt_reps_to_save
         assert "a" in reporter.alt_reps_idxs
@@ -343,7 +374,7 @@ class Test_WepyHDF5Reporter:
             "decision",
             "init_walkers",
             "resampling",
-            "trajectories"
+            "trajectories",
         }
 
         # decision
@@ -364,9 +395,9 @@ class Test_WepyHDF5Reporter:
 
         # resampling records
         assert wepy_h5_ro.h5["runs/0/resampling/_cycle_idxs"].shape == (0,)
-        assert wepy_h5_ro.h5["runs/0/resampling/decision_id"].shape == (0,1)
-        assert wepy_h5_ro.h5["runs/0/resampling/step_idx"].shape == (0,1)
-        assert wepy_h5_ro.h5["runs/0/resampling/walker_idx"].shape == (0,1)
+        assert wepy_h5_ro.h5["runs/0/resampling/decision_id"].shape == (0, 1)
+        assert wepy_h5_ro.h5["runs/0/resampling/step_idx"].shape == (0, 1)
+        assert wepy_h5_ro.h5["runs/0/resampling/walker_idx"].shape == (0, 1)
 
         # init walkers
         assert len(wepy_h5_ro.h5["runs/0/init_walkers"]) == 2
@@ -377,21 +408,17 @@ class Test_WepyHDF5Reporter:
         # but I think there was something about this. Perhaps instead
         # the 'a' field should be nested this way
         assert np.array_equal(
-            wepy_h5_ro.h5["runs/0/init_walkers/0/a"][:],
-            np.array([1])
+            wepy_h5_ro.h5["runs/0/init_walkers/0/a"][:], np.array([1])
         )
         assert np.array_equal(
-            wepy_h5_ro.h5["runs/0/init_walkers/1/a"][:],
-            np.array([2])
+            wepy_h5_ro.h5["runs/0/init_walkers/1/a"][:], np.array([2])
         )
 
         assert np.array_equal(
-            wepy_h5_ro.h5["runs/0/init_walkers/0/weights"][:],
-            np.array([[0.1]])
+            wepy_h5_ro.h5["runs/0/init_walkers/0/weights"][:], np.array([[0.1]])
         )
         assert np.array_equal(
-            wepy_h5_ro.h5["runs/0/init_walkers/1/weights"][:],
-            np.array([[0.2]])
+            wepy_h5_ro.h5["runs/0/init_walkers/1/weights"][:], np.array([[0.2]])
         )
 
         wepy_h5_ro.close()
@@ -420,51 +447,79 @@ class Test_WepyHDF5Reporter:
         assert "1" in wepy_h5_ro.h5["runs"]
         assert wepy_h5_ro.h5["_settings/continuations"].shape == (1, 2)
         assert np.array_equal(
-            wepy_h5_ro.h5["_settings/continuations"][:],
-            np.array([
-                [1, 0]
-            ])
+            wepy_h5_ro.h5["_settings/continuations"][:], np.array([[1, 0]])
         )
 
     def test__resolve_state_units(self):
 
         state_nm = WalkerStateBox(
-            positions=np.array([
-                [1., 1., 1.,],
-                [1., 1., 1.,],
-            ]) * openmm.unit.nanometer
+            positions=np.array(
+                [
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                    ],
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                    ],
+                ]
+            )
+            * openmm.unit.nanometer
         )
 
         state_nm_mags, units_used = WepyHDF5Reporter._resolve_state_units(
             units={
-                "positions" : openmm.unit.nanometer,
+                "positions": openmm.unit.nanometer,
             },
             state=state_nm,
         )
-        assert units_used == {"positions" : openmm.unit.nanometer}
+        assert units_used == {"positions": openmm.unit.nanometer}
         assert isinstance(state_nm_mags["positions"], np.ndarray)
         assert np.array_equal(
             state_nm_mags["positions"],
-            np.array([
-                [1., 1., 1.,],
-                [1., 1., 1.,],
-            ]),
+            np.array(
+                [
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                    ],
+                    [
+                        1.0,
+                        1.0,
+                        1.0,
+                    ],
+                ]
+            ),
         )
 
         state_nm_mags, units_used = WepyHDF5Reporter._resolve_state_units(
             units={
-                "positions" : openmm.unit.angstrom,
+                "positions": openmm.unit.angstrom,
             },
             state=state_nm,
         )
-        assert units_used == {"positions" : openmm.unit.angstrom}
+        assert units_used == {"positions": openmm.unit.angstrom}
         assert isinstance(state_nm_mags["positions"], np.ndarray)
         assert np.array_equal(
             state_nm_mags["positions"],
-            np.array([
-                [10., 10., 10.,],
-                [10., 10., 10.,],
-            ]),
+            np.array(
+                [
+                    [
+                        10.0,
+                        10.0,
+                        10.0,
+                    ],
+                    [
+                        10.0,
+                        10.0,
+                        10.0,
+                    ],
+                ]
+            ),
         )
 
         # if no units specified the ones from the state
@@ -472,8 +527,8 @@ class Test_WepyHDF5Reporter:
             units={},
             state=state_nm,
         )
-        assert units_used == {"positions" : openmm.unit.nanometer}
-        
+        assert units_used == {"positions": openmm.unit.nanometer}
+
     def test_init(self, tmp_path_factory):
 
         test_sys = LennardJonesPair()
@@ -531,8 +586,8 @@ class Test_WepyHDF5Reporter:
             units={
                 # provide explicit units for all the encountered
                 # fields. These should be the reporter units
-                "box_vectors" : openmm.unit.angstrom,
-                "time" : openmm.unit.nanosecond,
+                "box_vectors": openmm.unit.angstrom,
+                "time": openmm.unit.nanosecond,
             },
             **RESAMPLER_REPORTER_ARGS,
         )
@@ -540,27 +595,24 @@ class Test_WepyHDF5Reporter:
         reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
 
         assert {
-            unit_name : unit
-            for unit_name, unit
-            in reporter.units.items()
+            unit_name: unit
+            for unit_name, unit in reporter.units.items()
             if unit_name in {"box_vectors", "time"}
         } == {
-            "box_vectors" : openmm.unit.angstrom,
-            "time" : openmm.unit.nanosecond,
+            "box_vectors": openmm.unit.angstrom,
+            "time": openmm.unit.nanosecond,
         }
 
         assert {
-            unit_name : unit
-            for unit_name, unit
-            in reporter.units.items()
+            unit_name: unit
+            for unit_name, unit in reporter.units.items()
             if unit_name not in {"box_vectors", "time"}
         } == {
-            unit_name : unit
-            for unit_name, unit
-            in OPENMM_DEFAULT_UNITS.items()
+            unit_name: unit
+            for unit_name, unit in OPENMM_DEFAULT_UNITS.items()
             if unit_name not in {"box_vectors", "time"}
         }
-        
+
         with reporter.wepy_h5 as wepy_h5:
             # the overridden ones
             assert wepy_h5.h5["units/box_vectors"][()].decode() == "angstrom"
@@ -575,7 +627,7 @@ class Test_WepyHDF5Reporter:
                 nanometer_bvs * 10,
                 angstrom_bvs,
             )
-        
+
         # test the init_walker_save_fields behavior
         d2 = tmp_path_factory.mktemp("2")
         h5_path = d2 / "main.wepy.h5"
@@ -599,10 +651,9 @@ class Test_WepyHDF5Reporter:
             assert "positions" in wepy_h5.h5["runs/0/init_walkers/0"]
 
             # the remainder of the fields that were in the state should not be saved
-            assert not "box_vectors" in wepy_h5.h5["runs/0/init_walkers/0"]
-            assert not "box_volume" in wepy_h5.h5["runs/0/init_walkers/0"]
-            assert not "time" in wepy_h5.h5["runs/0/init_walkers/0"]
-            
+            assert "box_vectors" not in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "box_volume" not in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "time" not in wepy_h5.h5["runs/0/init_walkers/0"]
 
         ## Test the save fields family of arguments
         d3 = tmp_path_factory.mktemp("3")
@@ -621,9 +672,9 @@ class Test_WepyHDF5Reporter:
 
         with reporter.wepy_h5 as wepy_h5:
             assert "positions" in wepy_h5.h5["runs/0/init_walkers/0"]
-            assert not "box_vectors" in wepy_h5.h5["runs/0/init_walkers/0"]
-            assert not "box_volume" in wepy_h5.h5["runs/0/init_walkers/0"]
-            assert not "time" in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "box_vectors" not in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "box_volume" not in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "time" not in wepy_h5.h5["runs/0/init_walkers/0"]
 
         # special cases for the init walkers, save all fields that
         # were given to it
@@ -657,9 +708,16 @@ class Test_WepyHDF5Reporter:
             topology=test_sys.json_top,
             units=None,
             **RESAMPLER_REPORTER_ARGS,
-            save_fields=("positions", "box_vectors", "time",),
+            save_fields=(
+                "positions",
+                "box_vectors",
+                "time",
+            ),
             # only take positions and box_vectors
-            init_walker_save_fields=("positions", "box_vectors",),
+            init_walker_save_fields=(
+                "positions",
+                "box_vectors",
+            ),
         )
 
         reporter.init(**LJ_OPENMM_SIM_COMPONENTS)
@@ -667,9 +725,9 @@ class Test_WepyHDF5Reporter:
         with reporter.wepy_h5 as wepy_h5:
             assert "positions" in wepy_h5.h5["runs/0/init_walkers/0"]
             assert "box_vectors" in wepy_h5.h5["runs/0/init_walkers/0"]
-            assert not "box_volume" in wepy_h5.h5["runs/0/init_walkers/0"]
-            assert not "time" in wepy_h5.h5["runs/0/init_walkers/0"]
-            
+            assert "box_volume" not in wepy_h5.h5["runs/0/init_walkers/0"]
+            assert "time" not in wepy_h5.h5["runs/0/init_walkers/0"]
+
     def test_report(self, tmp_path_factory):
 
         # TODO: using the OpenMM Runner OpenMMState here because the
@@ -691,66 +749,110 @@ class Test_WepyHDF5Reporter:
 
         reporter.report(
             **{
-                "cycle_idx" : 0,
-                "new_walkers" : [
+                "cycle_idx": 0,
+                "new_walkers": [
                     Walker(
                         OpenMMState.from_dwim(
-                            positions=np.array([
-                                [0., 0., 0.,],
-                                [1., 1., 1.,],
-                            ]) * openmm.unit.nanometer,
+                            positions=np.array(
+                                [
+                                    [
+                                        0.0,
+                                        0.0,
+                                        0.0,
+                                    ],
+                                    [
+                                        1.0,
+                                        1.0,
+                                        1.0,
+                                    ],
+                                ]
+                            )
+                            * openmm.unit.nanometer,
                             time=(1.0 * openmm.unit.picosecond),
                         ),
                         0.5,
                     ),
                     Walker(
                         OpenMMState.from_dwim(
-                            positions=np.array([
-                                [1., 1., 1.,],
-                                [0., 0., 0.,],
-                            ]) * openmm.unit.nanometer,
+                            positions=np.array(
+                                [
+                                    [
+                                        1.0,
+                                        1.0,
+                                        1.0,
+                                    ],
+                                    [
+                                        0.0,
+                                        0.0,
+                                        0.0,
+                                    ],
+                                ]
+                            )
+                            * openmm.unit.nanometer,
                             time=(1.0 * openmm.unit.picosecond),
                         ),
                         0.5,
                     ),
                 ],
-                "n_segment_steps" : 100,
+                "n_segment_steps": 100,
                 # Instead of cloning and merging we just swap their
                 # positions to add a little more reality to the test
-                "resampled_walkers" : [
+                "resampled_walkers": [
                     Walker(
                         OpenMMState.from_dwim(
-                            positions=np.array([
-                                [1., 1., 1.,],
-                                [0., 0., 0.,],
-                            ]) * openmm.unit.nanometer,
+                            positions=np.array(
+                                [
+                                    [
+                                        1.0,
+                                        1.0,
+                                        1.0,
+                                    ],
+                                    [
+                                        0.0,
+                                        0.0,
+                                        0.0,
+                                    ],
+                                ]
+                            )
+                            * openmm.unit.nanometer,
                             time=(1.0 * openmm.unit.picosecond),
                         ),
                         0.5,
                     ),
                     Walker(
                         OpenMMState.from_dwim(
-                            positions=np.array([
-                                [0., 0., 0.,],
-                                [1., 1., 1.,],
-                            ]) * openmm.unit.nanometer,
+                            positions=np.array(
+                                [
+                                    [
+                                        0.0,
+                                        0.0,
+                                        0.0,
+                                    ],
+                                    [
+                                        1.0,
+                                        1.0,
+                                        1.0,
+                                    ],
+                                ]
+                            )
+                            * openmm.unit.nanometer,
                             time=(1.0 * openmm.unit.picosecond),
                         ),
                         0.5,
                     ),
                 ],
-                "resampling_data" : [
+                "resampling_data": [
                     {
-                        "decision_id" : np.array([0]),
-                        "target_idxs" : np.array([[1]]),
-                        "step_idx" : np.array([0]),
-                        "walker_idx" : np.array([0]),
+                        "decision_id": np.array([0]),
+                        "target_idxs": np.array([[1]]),
+                        "step_idx": np.array([0]),
+                        "walker_idx": np.array([0]),
                     },
                     {
-                        "decision_id" : np.array([0]),
-                        "target_idxs" : np.array([[0]]),
-                        "step_idx" : np.array([0]),
-                        "walker_idx" : np.array([1]),
+                        "decision_id": np.array([0]),
+                        "target_idxs": np.array([[0]]),
+                        "step_idx": np.array([0]),
+                        "walker_idx": np.array([1]),
                     },
                 ],
             },
@@ -760,14 +862,14 @@ class Test_WepyHDF5Reporter:
 
         with reporter.wepy_h5 as wepy_h5:
 
-            assert len(wepy_h5.h5['runs/0/trajectories']) == 2
+            assert len(wepy_h5.h5["runs/0/trajectories"]) == 2
 
-            assert "0" in wepy_h5.h5['runs/0/trajectories']
-            assert "1" in wepy_h5.h5['runs/0/trajectories']
+            assert "0" in wepy_h5.h5["runs/0/trajectories"]
+            assert "1" in wepy_h5.h5["runs/0/trajectories"]
 
-            assert "weights" in wepy_h5.h5['runs/0/trajectories/0']
-            assert "positions" in wepy_h5.h5['runs/0/trajectories/0']
-            assert "time" in wepy_h5.h5['runs/0/trajectories/0']
+            assert "weights" in wepy_h5.h5["runs/0/trajectories/0"]
+            assert "positions" in wepy_h5.h5["runs/0/trajectories/0"]
+            assert "time" in wepy_h5.h5["runs/0/trajectories/0"]
 
-            assert wepy_h5.h5['runs/0/trajectories/0/positions'].shape == (1,2,3)
-            assert wepy_h5.h5['runs/0/trajectories/0/time'].shape == (1,1)
+            assert wepy_h5.h5["runs/0/trajectories/0/positions"].shape == (1, 2, 3)
+            assert wepy_h5.h5["runs/0/trajectories/0/time"].shape == (1, 1)

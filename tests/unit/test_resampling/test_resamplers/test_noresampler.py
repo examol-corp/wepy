@@ -1,18 +1,24 @@
-import numpy as np
+# Third Party Library
+
 # First Party Library
 from wepy.resampling.decisions.no_decision import NothingDecisionEnum
-from wepy.resampling.resamplers.noresampler import NoResampler, NoResamplerFactory, NoResamplerResamplingRecord, NoResamplerResamplerRecord
+from wepy.resampling.resamplers.noresampler import (
+    NoResampler,
+    NoResamplerFactory,
+    NoResamplerResamplerRecord,
+    NoResamplerResamplingRecord,
+)
 from wepy.runners.mock import MockState
 from wepy.walker import Walker
+
 
 def test_NoResamplerResamplingRecord():
 
     NoResamplerResamplingRecord(
-        decision_id=0,
-        target_idxs=(1,),
-        walker_idx=1,
-        step_idx=0
+        decision_id=0, target_idxs=(1,), walker_idx=1, step_idx=0
     )
+
+
 class Test_NoResampler:
 
     def test_resample(self):
@@ -38,24 +44,24 @@ class Test_NoResampler:
         assert resampler.resample(walkers) == (
             walkers,
             [
-                    NoResamplerResamplingRecord(
-                        decision_id=NothingDecisionEnum.NOTHING.value,
-                        target_idxs=(0,),
-                        walker_idx=0,
-                        step_idx=0,
-                    ),
-                    NoResamplerResamplingRecord(
-                        decision_id=NothingDecisionEnum.NOTHING.value,
-                        target_idxs=(1,),
-                        walker_idx=1,
-                        step_idx=0,
-                    ),
-                    NoResamplerResamplingRecord(
-                        decision_id=NothingDecisionEnum.NOTHING.value,
-                        target_idxs=(2,),
-                        walker_idx=2,
-                        step_idx=0,
-                    ),
+                NoResamplerResamplingRecord(
+                    decision_id=NothingDecisionEnum.NOTHING.value,
+                    target_idxs=(0,),
+                    walker_idx=0,
+                    step_idx=0,
+                ),
+                NoResamplerResamplingRecord(
+                    decision_id=NothingDecisionEnum.NOTHING.value,
+                    target_idxs=(1,),
+                    walker_idx=1,
+                    step_idx=0,
+                ),
+                NoResamplerResamplingRecord(
+                    decision_id=NothingDecisionEnum.NOTHING.value,
+                    target_idxs=(2,),
+                    walker_idx=2,
+                    step_idx=0,
+                ),
             ],
             [NoResamplerResamplerRecord()],
         )

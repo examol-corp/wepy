@@ -47,8 +47,7 @@ perform them on the collection of walkers.
 
 # Standard Library
 import logging
-from enum import IntEnum
-from typing import Any, Union, Generic, TypeVar, Protocol, TypedDict
+from typing import Any, Generic, Protocol, TypedDict, TypeVar, Union
 
 # Third Party Library
 import attrs
@@ -61,13 +60,16 @@ logger = logging.getLogger(__name__)
 DecisionFieldDtype = Union[int,]
 DecisionFieldShapeSpec = tuple[int | type(Ellipsis), ...]
 
+
 class DecisionRecord(Protocol):
 
     def to_dict(self) -> dict[str, DecisionFieldDtype]: ...
 
+
 class BaseDecisionRecordDict(TypedDict):
     decision_id: int
     target_idxs: tuple[int, ...]
+
 
 @attrs.define
 class BaseDecisionRecord:
@@ -76,6 +78,7 @@ class BaseDecisionRecord:
 
     def to_dict(self) -> BaseDecisionRecordDict:
         return attrs.asdict(self)
+
 
 DecisionEnum_ = TypeVar("DecisionEnum_")
 DecisionRecord_ = TypeVar("DecisionRecord", bound=DecisionRecord)
@@ -93,7 +96,10 @@ class BaseDecisionABC(Generic[DecisionEnum_, DecisionRecord_]):
 
     DECISION_RECORD: DecisionRecord_ = BaseDecisionRecord
 
-    FIELDS: tuple[str, ...] = ("decision_id", "target_idxs",)
+    FIELDS: tuple[str, ...] = (
+        "decision_id",
+        "target_idxs",
+    )
     """The names of the fields that go into the decision record."""
 
     #  An Ellipsis instead of fields indicate there is a variable
@@ -104,10 +110,16 @@ class BaseDecisionABC(Generic[DecisionEnum_, DecisionRecord_]):
     )
     """Field data shapes."""
 
-    DTYPES: tuple[DecisionFieldDtype, ...] = (int, int,)
+    DTYPES: tuple[DecisionFieldDtype, ...] = (
+        int,
+        int,
+    )
     """Field data types."""
 
-    RECORD_FIELDS: tuple[str, ...] = ("decision_id", "target_idxs",)
+    RECORD_FIELDS: tuple[str, ...] = (
+        "decision_id",
+        "target_idxs",
+    )
     """The fields that could be used in a reduced table-like representation."""
 
     ANCESTOR_DECISION_IDS: tuple[int, ...]
@@ -135,11 +147,11 @@ class BaseDecisionABC(Generic[DecisionEnum_, DecisionRecord_]):
 
     @classmethod
     def fields(cls) -> list[
-            tuple[
-                str,
-                DecisionFieldShapeSpec,
-                DecisionFieldDtype,
-            ]
+        tuple[
+            str,
+            DecisionFieldShapeSpec,
+            DecisionFieldDtype,
+        ]
     ]:
         """Specs for each field.
 

@@ -4,7 +4,7 @@ import logging
 import multiprocessing as mp
 import random as rand
 import time
-from typing import Callable, Generic, Literal, TypedDict, TypeVar, Annotated
+from typing import Annotated, Callable, Generic, Literal, TypeVar
 
 # Third Party Library
 import attrs
@@ -12,13 +12,16 @@ import numpy as np
 from numpy.typing import NDArray
 
 # First Party Library
-from wepy.typing import Shape
 from wepy.resampling.decisions.clone_merge import CloneMergeDecisionRecord
 from wepy.resampling.distances.base import Distance
-from wepy.resampling.resamplers.clone_merge import CloneMergeResampler, CloneMergeResamplingRecord
+from wepy.resampling.resamplers.clone_merge import (
+    CloneMergeResampler,
+    CloneMergeResamplingRecord,
+)
+from wepy.typing import Shape
+from wepy.util.attrs import AttrsMappingMixin
 from wepy.util.multiprocessing import proc_pool_worker_setup, queue_listener_context
 from wepy.walker import Walker, WalkerState
-from wepy.util.attrs import AttrsMappingMixin
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +55,17 @@ class _ImageWrapper(Generic[WalkerState_, DistanceImage_]):
         logger.info("Finished image computation")
         return result
 
+
 @attrs.define
 class REVOResamplerResamplerRecord(AttrsMappingMixin):
     distance_matrix: Annotated[
         NDArray[np.float32],
-        Shape((Ellipsis, Ellipsis,))
+        Shape(
+            (
+                Ellipsis,
+                Ellipsis,
+            )
+        ),
     ]
     variation: Annotated[
         NDArray[np.float32],
@@ -164,10 +173,16 @@ class REVOResampler(
 
     RESAMPLING_RECORD_FIELDS = CloneMergeResampler.RESAMPLING_RECORD_FIELDS
 
-    RESAMPLER_FIELDS = CloneMergeResampler.RESAMPLER_FIELDS + ("distance_matrix", "variation",)
+    RESAMPLER_FIELDS = CloneMergeResampler.RESAMPLER_FIELDS + (
+        "distance_matrix",
+        "variation",
+    )
 
     RESAMPLER_SHAPES = CloneMergeResampler.RESAMPLER_SHAPES + (Ellipsis, (1,))
-    RESAMPLER_DTYPES = CloneMergeResampler.RESAMPLER_DTYPES + (float, float,)
+    RESAMPLER_DTYPES = CloneMergeResampler.RESAMPLER_DTYPES + (
+        float,
+        float,
+    )
 
     # fields that can be used for a table like representation
     RESAMPLER_RECORD_FIELDS = CloneMergeResampler.RESAMPLER_RECORD_FIELDS + (
@@ -686,7 +701,9 @@ class REVOResampler(
                     variations.append(new_variation)
 
                     if _log:
-                        logger.info("variance after selection: {}".format(new_variation))
+                        logger.info(
+                            "variance after selection: {}".format(new_variation)
+                        )
 
                 # if not productive
                 else:
@@ -699,7 +716,6 @@ class REVOResampler(
 
         logger.info("Assigning clones")
         decision_records = self.assign_clones(merge_groups, walker_clone_nums)
-
 
         return decision_records, final_variation
 
@@ -870,7 +886,7 @@ class REVOResampler(
                 decision_id=decision_record.decision_id,
                 target_idxs=decision_record.target_idxs,
                 step_idx=0,
-                walker_idx=walker_idx
+                walker_idx=walker_idx,
             )
             resampling_records.append(resampling_record)
 
@@ -902,7 +918,7 @@ class REVOResamplerFactory(Generic[DistanceMetric_]):
     @classmethod
     def type(cls) -> type[REVOResampler]:
         return REVOResampler
-    
+
     def __call__(
         self,
         num_cores: int | None = None,

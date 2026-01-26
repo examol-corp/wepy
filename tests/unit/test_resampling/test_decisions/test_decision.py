@@ -21,13 +21,15 @@ class MockDecision(BaseDecisionABC):
     DEFAULT_DECISION = ENUM.NOTHING
     ANCESTOR_DECISION_IDS = (ENUM.NOTHING.value,)
 
+
 class Test_BaseDecisionRecord:
 
     def test_to_dict(self):
         assert BaseDecisionRecord(decision_id=1, target_idxs=(0,)).to_dict() == {
-            "decision_id" : 1,
-            "target_idxs" : (0,)
+            "decision_id": 1,
+            "target_idxs": (0,),
         }
+
 
 class Test_Decision:
 
@@ -35,7 +37,10 @@ class Test_Decision:
         assert MockDecision.default_decision() == MockDecisionEnum.NOTHING
 
     def test_field_names(self):
-        assert MockDecision.field_names() == ("decision_id", "target_idxs",)
+        assert MockDecision.field_names() == (
+            "decision_id",
+            "target_idxs",
+        )
 
     def test_field_shapes(self):
         assert MockDecision.field_shapes() == ((1,), Ellipsis)
@@ -54,11 +59,14 @@ class Test_Decision:
                 "target_idxs",
                 Ellipsis,
                 int,
-            )
+            ),
         ]
 
     def test_record_field_names(self):
-        assert MockDecision.record_field_names() == ("decision_id", "target_idxs",)
+        assert MockDecision.record_field_names() == (
+            "decision_id",
+            "target_idxs",
+        )
 
     def test_enum_dict_by_name(self):
         assert MockDecision.enum_dict_by_name() == {
@@ -88,8 +96,8 @@ class Test_Decision:
         with pytest.raises(NotImplementedError):
             MockDecision.action(
                 [Walker(MockState(1), 0.1) for _ in range(4)],
-                [BaseDecisionRecord(
-                    decision_id=0,
-                    target_idxs=(idx,)
-                ) for idx in range(4)],
+                [
+                    BaseDecisionRecord(decision_id=0, target_idxs=(idx,))
+                    for idx in range(4)
+                ],
             )
