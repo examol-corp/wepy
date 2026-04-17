@@ -132,7 +132,7 @@ class WepyHDF5Reporter(
         n_dims: int = 3,
         main_rep_idxs: Idxs | None = None,
         all_atoms_rep_freq: int | None = None,
-        alt_reps: dict[str, tuple[Idxs, int]] | None = None,
+        alt_reps: dict[str, tuple[Idxs, int | Literal[Ellipsis]]] | None = None,
         # TOREV: are these feature fields actually needed for the main
         # trajectories? I never used them. If they are useful they
         # should be derived from runner metadata in the common case. I
@@ -194,8 +194,9 @@ class WepyHDF5Reporter(
             named by the keys of this mapping and containing the
             indices in each value list as the first value of the tuple
             and the second value being the frequency at which this
-            field gets saved. Setting `all_atoms_rep_freq` is the
-            equivalent of setting an entry {'all_atoms' : ([...],
+            field gets saved. If frequency is 0, 1, or Ellipsis then
+            all frames will be saved. Setting `all_atoms_rep_freq` is
+            the equivalent of setting an entry {'all_atoms' : ([...],
             `all_atoms_rep_freq`)}.
 
         main_rep_idxs : list of int, optional
