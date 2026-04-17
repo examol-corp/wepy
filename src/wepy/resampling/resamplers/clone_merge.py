@@ -1,12 +1,53 @@
+# Standard Library
+from typing import Annotated, Generic, TypeVar
+
 # Third Party Library
+import attrs
 import numpy as np
+from numpy.typing import NDArray
 
 # First Party Library
-from wepy.resampling.decisions.clone_merge import MultiCloneMergeDecision
-from wepy.resampling.resamplers.resampler import Resampler, ResamplerError
+from wepy.resampling.decisions.clone_merge import (
+    CloneMergeDecisionRecord,
+    MultiCloneMergeDecision,
+)
+from wepy.resampling.resamplers.resampler import (
+    ResamplerABC,
+    ResamplerError,
+)
+from wepy.storage.protocol import ResamplingRecord
+from wepy.typing import Shape
+from wepy.util.attrs import AttrsMappingMixin
+from wepy.walker import Walker, WalkerState
 
 
-class CloneMergeResampler(Resampler):
+@attrs.define
+class CloneMergeResamplingRecord(AttrsMappingMixin, ResamplingRecord):
+    # from the Decision
+    decision_id: Annotated[
+        NDArray[np.int64],
+        Shape((1,)),
+    ]
+    target_idxs: Annotated[
+        NDArray[np.int64],
+        Shape((Ellipsis,)),
+    ]
+
+    # extra for the resampler
+    step_idx: Annotated[
+        NDArray[np.int64],
+        Shape((1,)),
+    ]
+    walker_idx: Annotated[
+        NDArray[np.int64],
+        Shape((1,)),
+    ]
+
+
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+
+
+class CloneMergeResampler(ResamplerABC, Generic[WalkerState_]):
     """Abstract base class for resamplers using the clone-merge decision
     class.
 
@@ -23,11 +64,11 @@ class CloneMergeResampler(Resampler):
 
     DECISION = MultiCloneMergeDecision
 
-    RESAMPLING_FIELDS = DECISION.FIELDS + Resampler.CYCLE_FIELDS
-    RESAMPLING_SHAPES = DECISION.SHAPES + Resampler.CYCLE_SHAPES
-    RESAMPLING_DTYPES = DECISION.DTYPES + Resampler.CYCLE_DTYPES
+    RESAMPLING_FIELDS = DECISION.FIELDS + ResamplerABC.CYCLE_FIELDS
+    RESAMPLING_SHAPES = DECISION.SHAPES + ResamplerABC.CYCLE_SHAPES
+    RESAMPLING_DTYPES = DECISION.DTYPES + ResamplerABC.CYCLE_DTYPES
 
-    RESAMPLING_RECORD_FIELDS = DECISION.RECORD_FIELDS + Resampler.CYCLE_RECORD_FIELDS
+    RESAMPLING_RECORD_FIELDS = DECISION.RECORD_FIELDS + ResamplerABC.CYCLE_RECORD_FIELDS
 
     def __init__(
         self,
@@ -36,12 +77,11 @@ class CloneMergeResampler(Resampler):
         min_num_walkers=Ellipsis,
         max_num_walkers=Ellipsis,
         **kwargs,
-    ):
+    ) -> None:
         """Constructor for CloneMegerResampler class.
 
         Parameters
         ----------
-
         pmin : float
             The minimum probability any walker is allowed to have.
 
@@ -54,30 +94,36 @@ class CloneMergeResampler(Resampler):
             min_num_walkers=min_num_walkers, max_num_walkers=max_num_walkers, **kwargs
         )
 
+        if pmin >= 1.0:
+            raise ResamplerError(f"pmin ({pmin}) must be less 1.0")
+        if pmax >= 1.0:
+            raise ResamplerError(f"pmax ({pmax}) must be less 1.0")
+
+        if pmin > pmax:
+            raise ResamplerError(f"pmin ({pmin}) must be less than pmax ({pmax})")
+
         self._pmin = pmin
         self._pmax = pmax
 
     @property
-    def pmin(self):
+    def pmin(self) -> float:
         return self._pmin
 
     @property
-    def pmax(self):
+    def pmax(self) -> float:
         return self._pmax
 
-    def _init_walker_actions(self, n_walkers):
+    def _init_walker_actions(self, n_walkers: int) -> list[CloneMergeDecisionRecord]:
         """Returns a list of default resampling records for a single
         resampling step.
 
         Parameters
         ----------
-
         n_walkers : int
             The number of walkers to generate records for
 
         Returns
         -------
-
         decision_records : list of dict of str: value
             A list of default decision records for one step of
             resampling.
@@ -86,15 +132,17 @@ class CloneMergeResampler(Resampler):
 
         # determine resampling actions
         walker_actions = [
-            self.decision.record(
-                enum_value=self.decision.default_decision().value, target_idxs=(i,)
+            self.decision().record(
+                enum_value=self.decision().default_decision().value, target_idxs=(i,)
             )
             for i in range(n_walkers)
         ]
 
         return walker_actions
 
-    def _check_resampled_walkers(self, resampled_walkers):
+    def _check_resampled_walkers(
+        self, resampled_walkers: list[Walker[WalkerState_]]
+    ) -> None:
         """Check constraints on resampled walkers.
 
         Raises errors when constraints are violated.
@@ -104,6 +152,8 @@ class CloneMergeResampler(Resampler):
         resampled_walkers : list of Walker objects
 
         """
+
+        # TODO: should we check that the sums are unity here?
 
         walker_weights = np.array([walker.weight for walker in resampled_walkers])
 
@@ -127,7 +177,11 @@ class CloneMergeResampler(Resampler):
                 )
             )
 
-    def assign_clones(self, merge_groups, walker_clone_nums):
+    def assign_clones(
+        self,
+        merge_groups: list[list[int]],
+        walker_clone_nums: list[int],
+    ) -> list[CloneMergeDecisionRecord]:
         """Convert two convenient data structures to a list of almost
         normalized resampling records.
 
@@ -159,13 +213,17 @@ class CloneMergeResampler(Resampler):
 
         Returns
         -------
-
         walker_actions : list of dict of str: values
             List of resampling record like dictionaries. These are not
             completely normalized for consumption by reporters, since
             they don't have the right list-like wrappers.
 
         """
+
+        if len(merge_groups) != len(walker_clone_nums):
+            raise ResamplerError(
+                f"Size of merge_groups ({len(merge_groups)}) and walker_clone_nums ({len(walker_clone_nums)}) must be equal."
+            )
 
         n_walkers = len(walker_clone_nums)
 
@@ -187,20 +245,20 @@ class CloneMergeResampler(Resampler):
                 # for each squashed walker write a record and save it
                 # in the walker actions
                 for squash_idx in merge_group:
-                    walker_actions[squash_idx] = self.decision.record(
-                        self.decision.ENUM.SQUASH.value, target_idxs=(walker_idx,)
+                    walker_actions[squash_idx] = self.decision().record(
+                        self.decision().ENUM.SQUASH.value, target_idxs=(walker_idx,)
                     )
 
                 # make the record for the keep merge walker
-                walker_actions[walker_idx] = self.decision.record(
-                    self.decision.ENUM.KEEP_MERGE.value, target_idxs=(walker_idx,)
+                walker_actions[walker_idx] = self.decision().record(
+                    self.decision().ENUM.KEEP_MERGE.value, target_idxs=(walker_idx,)
                 )
 
         # for each walker, if it is to be cloned assign open slots for it
         for walker_idx, num_clones in enumerate(walker_clone_nums):
             if num_clones > 0 and len(merge_groups[walker_idx]) > 0:
                 raise ResamplerError(
-                    "Error! cloning and merging occuring with the same walker"
+                    f"Cloning and merging occuring with the same walker: {walker_idx}"
                 )
 
             # if this walker is to be cloned do so and consume the free
@@ -217,9 +275,9 @@ class CloneMergeResampler(Resampler):
 
                 # if there are any free slots, then we use those first
                 if len(free_slots) > 0:
-                    clone_targets.extend([
-                        free_slots.pop() for clone in range(num_clones)
-                    ])
+                    clone_targets.extend(
+                        [free_slots.pop() for clone in range(num_clones)]
+                    )
 
                 # if there are more slots needed then we will have to
                 # create them
@@ -238,8 +296,11 @@ class CloneMergeResampler(Resampler):
                     clone_targets.extend(new_slots)
 
                 # make a record for this clone
-                walker_actions[walker_idx] = self.decision.record(
-                    self.decision.ENUM.CLONE.value, target_idxs=tuple(clone_targets)
+                walker_actions[walker_idx] = self.decision().record(
+                    self.decision().ENUM.CLONE.value,
+                    target_idxs=tuple(
+                        clone_targets,
+                    ),
                 )
 
         return walker_actions

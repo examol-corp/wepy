@@ -7,8 +7,11 @@ logger = logging.getLogger(__name__)
 import prometheus_client as prom
 from pympler.asizeof import asizeof
 
+# First Party Library
+from wepy.monitor import Monitor
 
-class SimMonitor:
+
+class SimMonitor(Monitor):
     """A simulation monitor using a prometheus http server"""
 
     DEFAULT_PORT = 9001

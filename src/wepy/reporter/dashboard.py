@@ -3,15 +3,13 @@ information on the progress of a simulation.
 """
 
 # Standard Library
-import itertools as it
+import datetime
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
+import textwrap
 import time
-from collections import defaultdict
 from copy import copy
-from datetime import datetime
+from pathlib import Path
+from typing import TypedDict
 
 # Third Party Library
 import numpy as np
@@ -20,343 +18,68 @@ from jinja2 import Template
 from tabulate import tabulate
 
 # First Party Library
-from wepy.reporter.reporter import ProgressiveFileReporter
+from wepy.reporter.base import CycleReportDict, SimComponentArgs
+from wepy.reporter.file import FileMode, ProgressiveFileReporterABC
 
+logger = logging.getLogger(__name__)
 
-class DashboardReporter(ProgressiveFileReporter):
-    """A text based report of the status of a wepy simulation.
 
-    This serves as a container for different dashboard components to
-    go inside.
+class WalkersSummaryReport(TypedDict):
+    total: float
+    min: float
+    max: float
 
-    """
 
-    FILE_ORDER = ("dashboard_path",)
-    SUGGESTED_EXTENSIONS = ("dash.org",)
+class WorkerRecord(TypedDict):
+    cycle_idx: int
+    n_steps: int
+    worker_idx: int
+    segment_time: int
 
-    # TODO: add in a section for showing the number of walkers in each
-    # cycle. This isn't relevant for our constant walker number
-    # simulations though so I have elided it following YAGNI
 
-    SIMULATION_SECTION_TEMPLATE = """
-Init Datetime: {{ init_date_time }}
-Last write Datetime: {{ curr_date_time }}
-Total Run time: {{ total_run_time }} s
-Last Cycle Index: {{ last_cycle_idx }}
-Number of Cycles: {{ n_cycles }}
+class GenSimSectionReport(TypedDict):
 
-** Walkers Summary
-{{ walker_cycle_summary_table }}
-"""
+    init_date_time: datetime.datetime
+    curr_date_time: datetime.datetime
+    total_run_time: int
+    last_cycle_idx: int
+    n_cycles: int
+    walker_cycle_summary_table: str
 
-    PERFORMANCE_SECTION_TEMPLATE = """
-Average Cycle Time: {{ avg_cycle_time }}
-{% if avg_runner_time %}Average Runner Time: {{ avg_runner_time }}{% else %}{% endif %}
-{% if avg_bc_time %}Average Boundary Conditions Time: {{ avg_bc_time }}{% else %}{% endif %}
-{% if avg_resampling_time %}Average Resampling Time: {{ avg_resampling_time }}{% else %}{% endif %}
 
-** Worker Avg. Segment Times:
-{{ worker_avg_segment_time }}
+class PerformanceSectionReport(TypedDict):
+    avg_cycle_time: int
+    worker_avg_segment_time: int
+    cycle_log: str
+    performance_log: str
+    avg_runner_time: int | None
+    avg_bc_time: int | None
+    avg_resampler_time: int | None
 
-** Cycle Performance Log
-{{ cycle_log }}
 
-** Worker Performance Log
-{{ performance_log }}
-"""
+class ResamplerFieldReport(TypedDict):
+    name: str
 
-    DASHBOARD_TEMPLATE = """* Simulation
-{{ simulation }}
 
+class RunnerFieldReport(TypedDict):
+    name: str
 
-{% if resampler %}* Resampler{% else %}{% endif %}
-{% if resampler %}{{ resampler }}{% else %}{% endif %}
 
-{% if boundary_condition %}* Boundary Condition{% else %}{% endif %}
-{% if boundary_condition %}{{ boundary_condition }}{% else %}{% endif %}
-
-{% if runner %}* Runner{% else %}{% endif %}
-
-{% if runner %}{{ runner }}{% else %}{% endif %}
-
-* Performance
-{{ performance }}
-"""
-
-    def __init__(self, resampler_dash=None, runner_dash=None, bc_dash=None, **kwargs):
-        """
-        Parameters
-        ----------
-        resampler_dash
-        runner_dash
-        bc_dash
-        """
-
-        super().__init__(**kwargs)
-
-        self.resampler_dash = resampler_dash
-        self.runner_dash = runner_dash
-        self.bc_dash = bc_dash
-
-        # recalculated values
-
-        # general simulation
-
-        # total number of cycles run
-        self.n_cycles = 0
-
-        # start date and time
-        self.init_date_time = None
-        self.init_sys_time = None
-
-        # the total run time
-        self.total_run_time = None
-
-        # walker probabilities statistics
-        self.walker_prob_summaries = []
-
-        # performance
-        self.cycle_compute_times = []
-        self.cycle_runner_times = []
-        self.cycle_bc_times = []
-        self.cycle_resampling_times = []
-        self.worker_records = []
-
-    def init(self, **kwargs):
-        super().init(**kwargs)
-
-        self.init_date_time = datetime.today()
-        self.total_run_time = self.init_date_time
-
-        self.init_sys_time = time.time()
-
-    def calc_walker_summary(self, **kwargs):
-        walker_weights = [walker.weight for walker in kwargs["new_walkers"]]
-
-        summary = {
-            "total": np.sum(walker_weights),
-            "min": np.min(walker_weights),
-            "max": np.max(walker_weights),
-        }
-
-        return summary
-
-    def update_values(self, **kwargs):
-        ### simulation
-
-        self.n_cycles += 1
-        self.walker_prob_summaries.append(self.calc_walker_summary(**kwargs))
-
-        self.update_performance_values(**kwargs)
-
-        # update all the sections values
-        if self.resampler_dash is not None:
-            self.resampler_dash.update_values(**kwargs)
-        if self.runner_dash is not None:
-            self.runner_dash.update_values(**kwargs)
-        if self.bc_dash is not None:
-            self.bc_dash.update_values(**kwargs)
-
-    def update_performance_values(self, **kwargs):
-        ## worker specific performance
-
-        # only do this part if there were any workers
-        if len(kwargs["worker_segment_times"]) > 0:
-            # log of segment times for workers
-            for worker_idx, segment_times in kwargs["worker_segment_times"].items():
-                for segment_time in segment_times:
-                    record = (
-                        kwargs["cycle_idx"],
-                        kwargs["n_segment_steps"],
-                        worker_idx,
-                        segment_time,
-                    )
-                    self.worker_records.append(record)
-
-            # make a table out of these and compute the averages for each
-            # worker
-            worker_df = pd.DataFrame(
-                self.worker_records,
-                columns=("cycle_idx", "n_steps", "worker_idx", "segment_time"),
-            )
-            # the aggregated table for the workers
-            self.worker_agg_table = worker_df.groupby("worker_idx")[
-                ["segment_time"]
-            ].aggregate("mean")
-            self.worker_agg_table.rename(
-                columns={"segment_time": "avg_segment_time (s)"}, inplace=True
-            )
-
-        else:
-            self.worker_records = []
-            self.worker_agg_table = pd.DataFrame({"avg_segment_time (s)": []})
-
-        ## cycle times
-
-        # log of the components times
-        self.cycle_runner_times.append(kwargs["cycle_runner_time"])
-        self.cycle_bc_times.append(kwargs["cycle_bc_time"])
-        self.cycle_resampling_times.append(kwargs["cycle_resampling_time"])
-
-        # TODO: produces nan if one of them is not given
-        # add up the three components to get the overall cycle time
-        cycle_time = (
-            kwargs["cycle_runner_time"]
-            + kwargs["cycle_bc_time"]
-            + kwargs["cycle_resampling_time"]
-        )
-
-        # log of cycle times
-        self.cycle_compute_times.append(cycle_time)
-
-        # average of cycle components times
-        self.avg_runner_time = np.mean(self.cycle_runner_times)
-        self.avg_bc_time = np.mean(self.cycle_bc_times)
-        self.avg_resampling_time = np.mean(self.cycle_resampling_times)
-
-        # average cycle time
-        self.avg_cycle_time = np.mean(self.cycle_compute_times)
-
-    def write_dashboard(self, report_str):
-        """Write the dashboard to the file."""
-
-        with open(self.file_path, mode=self.mode) as dashboard_file:
-            dashboard_file.write(report_str)
-
-    def gen_sim_section(self, **kwargs):
-        """"""
-
-        walker_df = pd.DataFrame(self.walker_prob_summaries)
-        walker_summary_tbl_str = tabulate(
-            walker_df, headers=walker_df.columns, tablefmt="orgtbl"
-        )
-
-        # render the simulation section
-        sim_section_d = {
-            "init_date_time": self.init_date_time,
-            "curr_date_time": datetime.today().isoformat(),
-            "total_run_time": time.time() - self.init_sys_time,
-            "last_cycle_idx": kwargs["cycle_idx"],
-            "n_cycles": self.n_cycles,
-            "walker_cycle_summary_table": walker_summary_tbl_str,
-        }
-
-        sim_section_str = Template(self.SIMULATION_SECTION_TEMPLATE).render(
-            **sim_section_d
-        )
-
-        return sim_section_str
-
-    def gen_performance_section(self, **kwargs):
-        # log of cycle times
-        cycle_table_colnames = (
-            "cycle_time (s)",
-            "runner_time (s)",
-            "boundary_conditions_time (s)",
-            "resampling_time (s)",
-        )
-
-        cycle_table_df = pd.DataFrame(
-            {
-                "cycle_times (s)": self.cycle_compute_times,
-                "runner_time (s)": self.cycle_runner_times,
-                "boundary_conditions_time (s)": self.cycle_bc_times,
-                "resampling_time (s)": self.cycle_resampling_times,
-            },
-            columns=cycle_table_colnames,
-        )
-
-        cycle_table_str = tabulate(
-            cycle_table_df, headers=cycle_table_df.columns, tablefmt="orgtbl"
-        )
-
-        # log of workers performance
-        worker_table_colnames = (
-            "cycle_idx",
-            "n_steps",
-            "worker_idx",
-            "segment_time (s)",
-        )
-        worker_table_df = pd.DataFrame(
-            self.worker_records, columns=worker_table_colnames
-        )
-        worker_table_str = tabulate(
-            worker_table_df,
-            headers=worker_table_df.columns,
-            tablefmt="orgtbl",
-            showindex=False,
-        )
-
-        # table for aggregeated worker stats
-        worker_agg_table_str = tabulate(
-            self.worker_agg_table,
-            headers=self.worker_agg_table.columns,
-            tablefmt="orgtbl",
-        )
-
-        performance_section_d = {
-            "avg_cycle_time": self.avg_cycle_time,
-            "worker_avg_segment_time": worker_agg_table_str,
-            "cycle_log": cycle_table_str,
-            "performance_log": worker_table_str,
-            # optionals
-            "avg_runner_time": self.avg_runner_time,
-            "avg_bc_time": self.avg_bc_time,
-            "avg_resampling_time": self.avg_resampling_time,
-        }
-
-        performance_section_str = Template(self.PERFORMANCE_SECTION_TEMPLATE).render(
-            **performance_section_d
-        )
-
-        return performance_section_str
-
-    def report(self, **kwargs):
-        # update the values that update each call to report
-
-        self.update_values(**kwargs)
-
-        # the two sections that are always there
-        sim_section_str = self.gen_sim_section(**kwargs)
-        performance_section_str = self.gen_performance_section(**kwargs)
-
-        # the other optional sections
-
-        # resampler
-        if self.resampler_dash is not None:
-            resampler_section_str = self.resampler_dash.gen_resampler_section(**kwargs)
-        else:
-            resampler_section_str = None
-
-        # runner
-        if self.runner_dash is not None:
-            runner_section_str = self.runner_dash.gen_runner_section(**kwargs)
-        else:
-            runner_section_str = None
-
-        # boundary conditions
-        if self.bc_dash is not None:
-            bc_section_str = self.bc_dash.gen_bc_section(**kwargs)
-        else:
-            bc_section_str = None
-
-        # render the whole template
-        report_str = Template(self.DASHBOARD_TEMPLATE).render(
-            simulation=sim_section_str,
-            resampler=resampler_section_str,
-            boundary_condition=bc_section_str,
-            runner=runner_section_str,
-            performance=performance_section_str,
-        )
-
-        # write the thing
-        self.write_dashboard(report_str)
+class BCFieldReport(TypedDict):
+    name: str
+    total_n_walker_segments: int
+    total_crossings: int
+    total_crossed_weight: float
+    progress_summary_table: str
+    warping_log: str
 
 
 class ResamplerDashboardSection:
-    RESAMPLER_SECTION_TEMPLATE = """
-Resampler: {{ name }}
-"""
+    RESAMPLER_SECTION_TEMPLATE = textwrap.dedent(
+        """
+        Resampler: {{ name }}
+        """
+    )
 
     def __init__(self, resampler=None, name=None, **kwargs):
         if resampler is not None:
@@ -368,15 +91,19 @@ Resampler: {{ name }}
         else:
             self.resampler_name = "Unknown"
 
-    def update_values(self, **kwargs):
+    def update_values(self, **kwargs: CycleReportDict):
         pass
 
-    def gen_fields(self, **kwargs):
-        fields = {"name": self.resampler_name}
+    def gen_fields(self, **kwargs) -> ResamplerFieldReport:
+        fields = ResamplerFieldReport(
+            {
+                "name": self.resampler_name,
+            }
+        )
 
         return fields
 
-    def gen_resampler_section(self, **kwargs):
+    def gen_resampler_section(self, **kwargs: CycleReportDict) -> str:
         section_kwargs = self.gen_fields(**kwargs)
 
         section_str = Template(self.RESAMPLER_SECTION_TEMPLATE).render(**section_kwargs)
@@ -385,13 +112,15 @@ Resampler: {{ name }}
 
 
 class RunnerDashboardSection:
-    RUNNER_SECTION_TEMPLATE = """
-Runner: {{ name }}
-"""
+    RUNNER_SECTION_TEMPLATE = textwrap.dedent(
+        """
+        Runner: {{ name }}
+        """
+    )
 
-    def __init__(self, runner=None, name=None, **kwargs):
-        if runner is not None:
-            self.runner_name = type(runner).__name__
+    def __init__(self, runner_factory=None, name=None):
+        if runner_factory is not None:
+            self.runner_name = runner_factory.type().__name__
 
         elif name is not None:
             self.runner_name = name
@@ -402,12 +131,12 @@ Runner: {{ name }}
     def update_values(self, **kwargs):
         pass
 
-    def gen_fields(self, **kwargs):
+    def gen_fields(self, **kwargs: CycleReportDict) -> RunnerFieldReport:
         fields = {"name": self.runner_name}
 
         return fields
 
-    def gen_runner_section(self, **kwargs):
+    def gen_runner_section(self, **kwargs: CycleReportDict) -> str:
         section_kwargs = self.gen_fields(**kwargs)
 
         section_str = Template(self.RUNNER_SECTION_TEMPLATE).render(**section_kwargs)
@@ -416,27 +145,28 @@ Runner: {{ name }}
 
 
 class BCDashboardSection:
-    BC_SECTION_TEMPLATE = """
+    BC_SECTION_TEMPLATE = textwrap.dedent(
+        """
 
-Boundary Condition: {{ name }}
+        Boundary Condition: {{ name }}
 
-Total Number of Dynamics segments: {{ total_n_walker_segments }}
+        Total Number of Dynamics segments: {{ total_n_walker_segments }}
 
-Total Number of Crossings: {{ total_crossings }}
+        Total Number of Crossings: {{ total_crossings }}
 
-Cumulative Boundary Crossed Weight: {{ total_crossed_weight }}
+        Cumulative Boundary Crossed Weight: {{ total_crossed_weight }}
 
-** Progress Log
+        ** Progress Log
 
-{{ progress_summary_table }}
+        {{ progress_summary_table }}
 
 
-** Warping Log
+        ** Warping Log
 
-{{ warping_log }}
+        {{ warping_log }}
 
-"""
-
+        """
+    )
     WARP_RECORD_COLNAMES = (
         "cycle_idx",
         "walker_idx",
@@ -459,9 +189,9 @@ Cumulative Boundary Crossed Weight: {{ total_crossed_weight }}
             self.bc_discontinuities = copy(bc.DISCONTINUITY_TARGET_IDXS)
 
         else:
-            assert discontinuities is not None, (
-                "If the bc is not given must give parameter: discontinuities"
-            )
+            assert (
+                discontinuities is not None
+            ), "If the bc is not given must give parameter: discontinuities"
             self.bc_discontinuities = discontinuities
 
         self.warp_records = []
@@ -531,7 +261,7 @@ Cumulative Boundary Crossed Weight: {{ total_crossed_weight }}
         self.total_crossings = len(self.warp_records)
         self.total_crossed_weight = np.sum([r[2] for r in self.warp_records])
 
-    def gen_fields(self, **kwargs):
+    def gen_fields(self, **kwargs: CycleReportDict) -> BCFieldReport:
         # make the table for the collected warping records
         warp_table_df = pd.DataFrame(
             self.warp_records, columns=self.WARP_RECORD_COLNAMES
@@ -556,9 +286,405 @@ Cumulative Boundary Crossed Weight: {{ total_crossed_weight }}
 
         return fields
 
-    def gen_bc_section(self, **kwargs):
+    def gen_bc_section(self, **kwargs: CycleReportDict) -> str:
         section_kwargs = self.gen_fields(**kwargs)
 
         section_str = Template(self.BC_SECTION_TEMPLATE).render(**section_kwargs)
 
         return section_str
+
+
+class DashboardReporter(ProgressiveFileReporterABC):
+    """A text based report of the status of a wepy simulation.
+
+    This serves as a container for different dashboard components to
+    go inside.
+
+    """
+
+    FILE_ORDER = ("dashboard_path",)
+    SUGGESTED_EXTENSIONS = ("wepy_dash.org",)
+
+    # TODO: add in a section for showing the number of walkers in each
+    # cycle. This isn't relevant for our constant walker number
+    # simulations though so I have elided it following YAGNI
+
+    SIMULATION_SECTION_TEMPLATE = textwrap.dedent(
+        """
+        Init Datetime: {{ init_date_time }}
+        Last write Datetime: {{ curr_date_time }}
+        Total Run time: {{ total_run_time }} s
+        Last Cycle Index: {{ last_cycle_idx }}
+        Number of Cycles: {{ n_cycles }}
+
+        ** Walkers Summary
+        {{ walker_cycle_summary_table }}
+        """
+    )
+
+    PERFORMANCE_SECTION_TEMPLATE = textwrap.dedent(
+        """
+        Average Cycle Time: {{ avg_cycle_time }}
+        {% if avg_runner_time %}Average Runner Time: {{ avg_runner_time }}{% else %}{% endif %}
+        {% if avg_bc_time %}Average Boundary Conditions Time: {{ avg_bc_time }}{% else %}{% endif %}
+        {% if avg_resampling_time %}Average Resampling Time: {{ avg_resampling_time }}{% else %}{% endif %}
+
+        ** Worker Avg. Segment Times:
+        {{ worker_avg_segment_time }}
+
+        ** Cycle Performance Log
+        {{ cycle_log }}
+
+        ** Worker Performance Log
+        {{ performance_log }}
+        """
+    )
+    DASHBOARD_TEMPLATE = textwrap.dedent(
+        """
+        * Simulation
+        {{ simulation }}
+        {% if resampler -%}
+        
+        * Resampler
+        {{ resampler }}
+        
+        {%- endif %}
+        {% if boundary_condition -%}
+        
+        * Boundary Condition
+        {{ boundary_condition }}
+        
+        {%- endif %}
+        {% if runner -%}
+        
+        * Runner
+        {{ runner }}
+        
+        {%- endif %}
+        * Performance
+
+        {{ performance }}
+        """
+    )
+
+    file_path: Path
+    mode: FileMode
+
+    resampler_dash: ResamplerDashboardSection | None
+    runner_dash: RunnerDashboardSection | None
+    bc_dash: BCDashboardSection | None
+
+    n_cycles: int
+    init_date_time: datetime.datetime | None
+    init_sys_time: int | None
+    total_run_time: int | None
+    walker_prob_summaries: list[WalkersSummaryReport]
+    cycle_compute_times: list[int]
+    cycle_runner_times: list[int]
+    cycle_bc_times: list[int]
+    cycle_resampling_times: list[int]
+    worker_records: list[WorkerRecord]
+    worker_agg_table: pd.DataFrame | None
+
+    avg_runner_time: int | None
+    avg_bc_time: int | None
+    avg_resampling_time: int | None
+    avg_cycle_time: int | None
+
+    def __init__(
+        self,
+        path: Path,
+        resampler_dash: ResamplerDashboardSection | None = None,
+        runner_dash: RunnerDashboardSection | None = None,
+        bc_dash: BCDashboardSection | None = None,
+    ) -> None:
+
+        super().__init__(file_paths=[path])
+
+        self.resampler_dash = resampler_dash
+        self.runner_dash = runner_dash
+        self.bc_dash = bc_dash
+
+        # recalculated values
+
+        # general simulation
+
+        # total number of cycles run
+        self.n_cycles = 0
+
+        # start date and time
+        self.init_date_time = None
+        self.init_sys_time = None
+
+        # the total run time
+        self.total_run_time = None
+
+        # walker probabilities statistics
+        self.walker_prob_summaries = []
+
+        # performance
+        self.cycle_compute_times = []
+        self.cycle_runner_times = []
+        self.cycle_bc_times = []
+        self.cycle_resampling_times = []
+        self.worker_records = []
+        self.worker_agg_table = None
+
+        self.avg_runner_time = None
+        self.avg_bc_time = None
+        self.avg_resampling_time = None
+        self.avg_cycle_time = None
+
+    @property
+    def mode(self) -> FileMode:
+        return self.modes[0]
+
+    @property
+    def file_path(self) -> Path:
+        return self.file_paths[0]
+
+    def init(self, **kwargs: SimComponentArgs) -> None:
+
+        super().init(**kwargs)
+
+        logger.info(f"DashboardReporter will write to: {self.file_path}")
+
+        self.init_date_time = datetime.datetime.today()
+        self.total_run_time = self.init_date_time
+
+        self.init_sys_time = time.time()
+
+    def calc_walker_summary(self, **kwargs: CycleReportDict) -> WalkersSummaryReport:
+        walker_weights = [walker.weight for walker in kwargs["new_walkers"]]
+
+        summary = WalkersSummaryReport(
+            {
+                "total": np.sum(walker_weights),
+                "min": np.min(walker_weights),
+                "max": np.max(walker_weights),
+            }
+        )
+
+        return summary
+
+    def update_performance_values(self, **kwargs: CycleReportDict) -> None:
+        ## worker specific performance
+
+        # only do this part if there were any workers
+        if (
+            kwargs["worker_segment_times"] is not None
+            and len(kwargs["worker_segment_times"]) > 0
+        ):
+            # log of segment times for workers
+            for worker_idx, segment_times in kwargs["worker_segment_times"].items():
+                for segment_time in segment_times:
+                    record = WorkerRecord(
+                        cycle_idx=kwargs["cycle_idx"],
+                        n_steps=kwargs["n_segment_steps"],
+                        worker_idx=worker_idx,
+                        segment_time=segment_time,
+                    )
+                    self.worker_records.append(record)
+
+            # make a table out of these and compute the averages for each
+            # worker
+            worker_df = pd.DataFrame(
+                self.worker_records,
+                columns=("cycle_idx", "n_steps", "worker_idx", "segment_time"),
+            )
+            # the aggregated table for the workers
+            self.worker_agg_table = worker_df.groupby("worker_idx")[
+                ["segment_time"]
+            ].aggregate("mean")
+            self.worker_agg_table.rename(
+                columns={"segment_time": "avg_segment_time (s)"}, inplace=True
+            )
+
+        else:
+            self.worker_records = []
+            self.worker_agg_table = pd.DataFrame({"avg_segment_time (s)": []})
+
+        ## cycle times
+
+        # log of the components times
+        self.cycle_runner_times.append(kwargs["cycle_runner_time"])
+        self.cycle_bc_times.append(kwargs["cycle_bc_time"])
+        self.cycle_resampling_times.append(kwargs["cycle_resampling_time"])
+
+        # TODO: produces nan if one of them is not given
+        # add up the three components to get the overall cycle time
+        cycle_time = (
+            kwargs["cycle_runner_time"]
+            + kwargs["cycle_bc_time"]
+            + kwargs["cycle_resampling_time"]
+        )
+
+        # log of cycle times
+        self.cycle_compute_times.append(cycle_time)
+
+        # average of cycle components times
+        self.avg_runner_time = np.mean(self.cycle_runner_times)
+        self.avg_bc_time = np.mean(self.cycle_bc_times)
+        self.avg_resampling_time = np.mean(self.cycle_resampling_times)
+
+        # average cycle time
+        self.avg_cycle_time = np.mean(self.cycle_compute_times)
+
+    def update_values(self, **kwargs: CycleReportDict) -> None:
+        ### simulation
+
+        self.n_cycles += 1
+        self.walker_prob_summaries.append(self.calc_walker_summary(**kwargs))
+
+        self.update_performance_values(**kwargs)
+
+        # update all the sections values
+        if self.resampler_dash is not None:
+            self.resampler_dash.update_values(**kwargs)
+        if self.runner_dash is not None:
+            self.runner_dash.update_values(**kwargs)
+        if self.bc_dash is not None:
+            self.bc_dash.update_values(**kwargs)
+
+    def write_dashboard(self, report_str: str) -> None:
+        """Write the dashboard to the file."""
+
+        with open(self.file_path, mode=self.mode) as dashboard_file:
+            dashboard_file.write(report_str)
+
+    def gen_sim_section(self, **kwargs: CycleReportDict) -> str:
+
+        walker_df = pd.DataFrame(self.walker_prob_summaries)
+        walker_summary_tbl_str = tabulate(
+            walker_df, headers=walker_df.columns, tablefmt="orgtbl"
+        )
+
+        # render the simulation section
+        sim_section_d = GenSimSectionReport(
+            {
+                "init_date_time": self.init_date_time,
+                "curr_date_time": datetime.datetime.today().isoformat(),
+                "total_run_time": time.time() - self.init_sys_time,
+                "last_cycle_idx": kwargs["cycle_idx"],
+                "n_cycles": self.n_cycles,
+                "walker_cycle_summary_table": walker_summary_tbl_str,
+            }
+        )
+
+        sim_section_str = Template(self.SIMULATION_SECTION_TEMPLATE).render(
+            **sim_section_d
+        )
+
+        return sim_section_str
+
+    def gen_performance_section(self, **kwargs: CycleReportDict) -> str:
+        # log of cycle times
+        cycle_table_colnames = (
+            "cycle_time (s)",
+            "runner_time (s)",
+            "boundary_conditions_time (s)",
+            "resampling_time (s)",
+        )
+
+        cycle_table_df = pd.DataFrame(
+            {
+                "cycle_time (s)": self.cycle_compute_times,
+                "runner_time (s)": self.cycle_runner_times,
+                "boundary_conditions_time (s)": self.cycle_bc_times,
+                "resampling_time (s)": self.cycle_resampling_times,
+            },
+            columns=cycle_table_colnames,
+        )
+
+        cycle_table_str = tabulate(
+            cycle_table_df,
+            headers=cycle_table_df.columns,
+            tablefmt="orgtbl",
+        )
+
+        # log of workers performance
+        worker_table_colnames = (
+            "cycle_idx",
+            "n_steps",
+            "worker_idx",
+            "segment_time",
+        )
+        worker_table_df = pd.DataFrame(
+            self.worker_records,
+            columns=worker_table_colnames,
+        )
+        worker_table_str = tabulate(
+            worker_table_df,
+            headers=worker_table_df.columns,
+            tablefmt="orgtbl",
+            showindex=False,
+        )
+
+        # table for aggregeated worker stats
+        worker_agg_table_str = tabulate(
+            self.worker_agg_table,
+            headers=self.worker_agg_table.columns,
+            tablefmt="orgtbl",
+        )
+
+        performance_section_d = PerformanceSectionReport(
+            {
+                "avg_cycle_time": self.avg_cycle_time,
+                "worker_avg_segment_time": worker_agg_table_str,
+                "cycle_log": cycle_table_str,
+                "performance_log": worker_table_str,
+                # optionals
+                "avg_runner_time": self.avg_runner_time,
+                "avg_bc_time": self.avg_bc_time,
+                "avg_resampling_time": self.avg_resampling_time,
+            }
+        )
+
+        performance_section_str = Template(self.PERFORMANCE_SECTION_TEMPLATE).render(
+            **performance_section_d
+        )
+
+        return performance_section_str
+
+    def report(self, **kwargs: CycleReportDict) -> None:
+        # update the values that update each call to report
+
+        logger.debug("Updating values")
+        self.update_values(**kwargs)
+
+        # the two sections that are always there
+        sim_section_str = self.gen_sim_section(**kwargs)
+        performance_section_str = self.gen_performance_section(**kwargs)
+
+        # the other optional sections
+
+        # resampler
+        if self.resampler_dash is not None:
+            resampler_section_str = self.resampler_dash.gen_resampler_section(**kwargs)
+        else:
+            resampler_section_str = None
+
+        # runner
+        if self.runner_dash is not None:
+            runner_section_str = self.runner_dash.gen_runner_section(**kwargs)
+        else:
+            runner_section_str = None
+
+        # boundary conditions
+        if self.bc_dash is not None:
+            bc_section_str = self.bc_dash.gen_bc_section(**kwargs)
+        else:
+            bc_section_str = None
+
+        # render the whole template
+        report_str = Template(self.DASHBOARD_TEMPLATE).render(
+            simulation=sim_section_str,
+            resampler=resampler_section_str,
+            boundary_condition=bc_section_str,
+            runner=runner_section_str,
+            performance=performance_section_str,
+        )
+
+        # write the thing
+        logger.info(f"Writing dashboard at: {self.file_path}")
+        self.write_dashboard(report_str)

@@ -1,0 +1,2 @@
+class BugError(Exception):
+    pass

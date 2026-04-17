@@ -1,26 +1,16 @@
 """Boundary conditions for random walk."""
 
 # Standard Library
-import itertools as it
 import logging
 
 logger = logging.getLogger(__name__)
 # Standard Library
-import time
-from collections import defaultdict
 
 # Third Party Library
 import numpy as np
-from geomm.centering import center_around
-from geomm.distance import minimum_distance
-from geomm.grouping import group_pair
-from geomm.rmsd import calc_rmsd
-from geomm.superimpose import superimpose
 
 # First Party Library
 from wepy.boundary_conditions.boundary import WarpBC
-from wepy.util.util import box_vectors_to_lengths_angles
-from wepy.walker import WalkerState
 
 
 class RandomWalkBC(WarpBC):
@@ -59,9 +49,8 @@ class RandomWalkBC(WarpBC):
     ):
         """Constructor for RandomWalkBC.
 
-        Arguments
+        Arguments:
         ---------
-
         threshold : int
             The threshold distance for recording a warping event.
 
@@ -81,7 +70,7 @@ class RandomWalkBC(WarpBC):
             The indices of the atom positions in the state considered
             the binding site.
 
-        Raises
+        Raises:
         ------
         AssertionError
             If any of the following kwargs are not given:

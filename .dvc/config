@@ -1,0 +1,4 @@
+[core]
+    remote = idp-dvc-gs
+['remote "idp-dvc-gs"']
+    url = gs://examol-idp-prod-dvc/dvcstore-wepy2

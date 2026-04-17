@@ -1,11 +1,8 @@
 # Third Party Library
-from pint import UnitRegistry
+import openmm.unit
 
 # First Party Library
 from wepy.reporter.dashboard import RunnerDashboardSection
-
-# initialize the unit registry
-units = UnitRegistry()
 
 
 class OpenMMRunnerDashboardSection(RunnerDashboardSection):
@@ -20,38 +17,44 @@ Single Walker Sampling Time: {{ walker_total_sampling_time }}
 Total Sampling Time: {{ total_sampling_time }}
 """
 
-    def __init__(self, runner=None, step_time=None, **kwargs):
-        if "name" not in kwargs:
-            kwargs["name"] = "OpenMMRunner"
+    def __init__(self, runner_factory=None, step_time=None):
 
-        super().__init__(runner=runner, step_time=step_time, **kwargs)
+        super().__init__(
+            runner_factory=runner_factory,
+            name="OpenMMRunner",
+        )
 
-        if runner is None:
-            assert step_time is not None, (
-                "If no complete runner is given must give parameters: step_time"
-            )
+        if runner_factory is None:
+            assert (
+                step_time is not None
+            ), "If no complete runner is given must give parameters: step_time"
 
             # assume it has units
             self.step_time = step_time
 
         else:
-            simtk_step_time = runner.integrator.getStepSize()
-            simtk_val = simtk_step_time.value_in_unit(simtk_step_time.unit)
+            self.step_time = runner_factory.integrator.getStepSize()
 
+            # HACK,TODO: this conversion would likely not work in
+            # general so I'm just removing it and using the plain
+            # openmm on until there is a better conversion system
+            # between them.
+            #
+            # simtk_val = simtk_step_time.value_in_unit(simtk_step_time.unit)
+            #
             # convert to a more general purpose pint unit, which will be
             # used for the dashboards so we don't have the simtk
             # dependency
-            self.step_time = simtk_val * units(simtk_step_time.unit.get_name())
+            # self.step_time = simtk_val * units(simtk_step_time.unit.get_name())
 
         # TODO
-
         # integrator and params
 
         # FF and params
 
         # updatables
-        self.walker_total_sampling_time = 0.0 * units("microsecond")
-        self.total_sampling_time = 0.0 * units("microsecond")
+        self.walker_total_sampling_time = 0.0 * openmm.unit.microsecond
+        self.total_sampling_time = 0.0 * openmm.unit.microsecond
 
     def update_values(self, **kwargs):
         super().update_values(**kwargs)

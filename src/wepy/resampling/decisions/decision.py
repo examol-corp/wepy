@@ -47,75 +47,116 @@ perform them on the collection of walkers.
 
 # Standard Library
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
-from collections import namedtuple
-from enum import Enum
-from string import ascii_lowercase
+from typing import Any, Generic, Protocol, TypedDict, TypeVar, Union
 
 # Third Party Library
-import numpy as np
+import attrs
+
+# First Party Library
+from wepy.walker import Walker
+
+logger = logging.getLogger(__name__)
+
+DecisionFieldDtype = Union[int,]
+DecisionFieldShapeSpec = tuple[int | type(Ellipsis), ...]
+
+
+class DecisionRecord(Protocol):
+
+    def to_dict(self) -> dict[str, DecisionFieldDtype]: ...
+
+
+class BaseDecisionRecordDict(TypedDict):
+    decision_id: int
+    target_idxs: tuple[int, ...]
+
+
+@attrs.define
+class BaseDecisionRecord:
+    decision_id: int
+    target_idxs: tuple[int, ...]
+
+    def to_dict(self) -> BaseDecisionRecordDict:
+        return attrs.asdict(self)
+
+
+DecisionEnum_ = TypeVar("DecisionEnum_")
+DecisionRecord_ = TypeVar("DecisionRecord", bound=DecisionRecord)
 
 
 # ABC for the Decision class
-class Decision:
+class BaseDecisionABC(Generic[DecisionEnum_, DecisionRecord_]):
     """Represents and provides methods for a set of decision values."""
 
-    ENUM = None
+    ENUM: type[DecisionEnum_]
     """The enumeration of the decision types. Maps them to integers."""
 
-    DEFAULT_DECISION = None
+    DEFAULT_DECISION: int
     """The default decision to choose."""
 
-    FIELDS = ("decision_id",)
-    """The names of the fields that go into the decision record."""
+    DECISION_RECORD: DecisionRecord_ = BaseDecisionRecord
 
-    # suggestion for subclassing, FIELDS and others
-    # FIELDS = super().FIELDS + ('target_idxs',)
-    # etc.
+    FIELDS: tuple[str, ...] = (
+        "decision_id",
+        "target_idxs",
+    )
+    """The names of the fields that go into the decision record."""
 
     #  An Ellipsis instead of fields indicate there is a variable
     # number of fields.
-    SHAPES = ((1,),)
+    SHAPES: tuple[DecisionFieldShapeSpec, ...] = (
+        (1,),
+        Ellipsis,
+    )
     """Field data shapes."""
 
-    DTYPES = (int,)
+    DTYPES: tuple[DecisionFieldDtype, ...] = (
+        int,
+        int,
+    )
     """Field data types."""
 
-    RECORD_FIELDS = ("decision_id",)
+    RECORD_FIELDS: tuple[str, ...] = (
+        "decision_id",
+        "target_idxs",
+    )
     """The fields that could be used in a reduced table-like representation."""
 
-    ANCESTOR_DECISION_IDS = None
+    ANCESTOR_DECISION_IDS: tuple[int, ...]
     """Specify the enum values where their walker state sample value is
     passed on in the next generation, i.e. after performing the action."""
 
     @classmethod
-    def default_decision(cls):
+    def default_decision(cls) -> int:
         return cls.DEFAULT_DECISION
 
     @classmethod
-    def field_names(cls):
+    def field_names(cls) -> tuple[str, ...]:
         """Names of the decision record fields."""
         return cls.FIELDS
 
     @classmethod
-    def field_shapes(cls):
+    def field_shapes(cls) -> tuple[DecisionFieldShapeSpec, ...]:
         """Field data shapes."""
         return cls.SHAPES
 
     @classmethod
-    def field_dtypes(cls):
+    def field_dtypes(cls) -> tuple[DecisionFieldDtype, ...]:
         """Field data types."""
         return cls.DTYPES
 
     @classmethod
-    def fields(cls):
+    def fields(cls) -> list[
+        tuple[
+            str,
+            DecisionFieldShapeSpec,
+            DecisionFieldDtype,
+        ]
+    ]:
         """Specs for each field.
 
         Returns
         -------
-
         fields : list of tuples
             Field specs each spec is of the form (name, shape, dtype).
 
@@ -123,12 +164,12 @@ class Decision:
         return list(zip(cls.field_names(), cls.field_shapes(), cls.field_dtypes()))
 
     @classmethod
-    def record_field_names(cls):
+    def record_field_names(cls) -> tuple[str, ...]:
         """The fields that could be used in a reduced table-like representation."""
         return cls.RECORD_FIELDS
 
     @classmethod
-    def enum_dict_by_name(cls):
+    def enum_dict_by_name(cls) -> dict[str, int]:
         """Get the decision enumeration as a dict mapping name to integer."""
         if cls.ENUM is None:
             raise NotImplementedError
@@ -139,7 +180,7 @@ class Decision:
         return d
 
     @classmethod
-    def enum_dict_by_value(cls):
+    def enum_dict_by_value(cls) -> dict[int, DecisionEnum_]:
         """Get the decision enumeration as a dict mapping integer to name."""
 
         if cls.ENUM is None:
@@ -151,7 +192,7 @@ class Decision:
         return d
 
     @classmethod
-    def enum_by_value(cls, enum_value):
+    def enum_by_value(cls, enum_value: int) -> DecisionEnum_:
         """Get the enum name for an enum_value.
 
         Parameters
@@ -167,7 +208,7 @@ class Decision:
         return d[enum_value]
 
     @classmethod
-    def enum_by_name(cls, enum_name):
+    def enum_by_name(cls, enum_name: str) -> DecisionEnum_:
         """Get the enum name for an enum_value.
 
         Parameters
@@ -184,7 +225,7 @@ class Decision:
         return d[enum_name]
 
     @classmethod
-    def record(cls, enum_value, **fields):
+    def record(cls, enum_value: int, **fields: dict[str, Any]) -> DecisionRecord_:
         """Generate a record for the enum_value and the other fields.
 
         Parameters
@@ -207,13 +248,19 @@ class Decision:
             ), "The field {} is not a field for that decision".format(field_key)
             assert field_key != "decision_id", "'decision_id' cannot be an extra field"
 
-        rec = {"decision_id": enum_value}
-        rec.update(fields)
+        rec_d = {"decision_id": enum_value}
+        rec_d.update(fields)
+
+        rec = cls.DECISION_RECORD(**rec_d)
 
         return rec
 
     @classmethod
-    def action(cls, walkers, decisions):
+    def action(
+        cls,
+        walkers: list[Walker],
+        decisions: list[list[DecisionRecord_]],
+    ) -> list[Walker]:
         """Perform the instructions for a set of resampling records on
         walkers.
 
@@ -239,7 +286,6 @@ class Decision:
 
         Returns
         -------
-
         resampled_walkers : list of Walker objects
             The resampled walkers.
 
@@ -249,84 +295,3 @@ class Decision:
 
         """
         raise NotImplementedError
-
-    @classmethod
-    def parents(cls, step):
-        """Given a step of resampling records (for a single resampling step)
-        returns the parents of the children of this step.
-
-        Parameters
-        ----------
-        step : list of decision records
-            The decision records for a step of resampling for each walker.
-
-        Returns
-        -------
-        walker_step_parents : list of int
-            For each element, the index of it in the list corresponds
-            to the child index and the value of the element is the
-            index of it's parent before the decision action.
-
-        """
-
-        # initialize a list for the parents of this stages walkers
-        step_parents = [None for i in range(len(step))]
-
-        # the rest of the stages parents are based on the previous stage
-        for parent_idx, parent_rec in enumerate(step):
-            # if the decision is an ancestor then the instruction
-            # values will be the children
-            if parent_rec[0] in cls.ANCESTOR_DECISION_IDS:
-                # the first value of the parent record is the target
-                # idxs
-                child_idxs = parent_rec[1]
-                for child_idx in child_idxs:
-                    step_parents[child_idx] = parent_idx
-
-        return step_parents
-
-
-class NothingDecisionEnum(Enum):
-    """Enumeration of the decision values for doing nothing."""
-
-    NOTHING = 0
-    """Do nothing with the walker."""
-
-
-class NoDecision(Decision):
-    """Decision for a resampling process that does no resampling."""
-
-    ENUM = NothingDecisionEnum
-    DEFAULT_DECISION = ENUM.NOTHING
-
-    FIELDS = Decision.FIELDS + ("target_idxs",)
-    SHAPES = Decision.SHAPES + (Ellipsis,)
-    DTYPES = Decision.DTYPES + (int,)
-
-    RECORD_FIELDS = Decision.RECORD_FIELDS + ("target_idxs",)
-
-    ANCESTOR_DECISION_IDS = (ENUM.NOTHING.value,)
-
-    @classmethod
-    def action(cls, walkers, decisions):
-        # list for the modified walkers
-        mod_walkers = [None for i in range(len(walkers))]
-        # go through each decision and perform the decision
-        # instructions
-        for walker_idx, decision in enumerate(decisions):
-            decision_value, instruction = decision
-            if decision_value == cls.ENUM.NOTHING.value:
-                # check to make sure a walker doesn't already exist
-                # where you are going to put it
-                if mod_walkers[instruction[0]] is not None:
-                    raise ValueError(
-                        "Multiple walkers assigned to position {}".format(
-                            instruction[0]
-                        )
-                    )
-
-                # put the walker in the position specified by the
-                # instruction
-                mod_walkers[instruction[0]] = walkers[walker_idx]
-
-        return mod_walkers

@@ -1,27 +1,72 @@
 # Standard Library
-import itertools as it
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
-from collections import defaultdict
+from typing import Generic, Protocol, TypeVar
 from warnings import warn
 
 # Third Party Library
-import numpy as np
 
 # First Party Library
-from wepy.resampling.decisions.decision import Decision, NoDecision
+from wepy.resampling.decisions.decision import BaseDecisionABC
+from wepy.storage.protocol import Record, RecordFieldDtype, RecordFieldShapeSpec
+from wepy.walker import Walker, WalkerState
+
+logger = logging.getLogger(__name__)
+
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 
 
 class ResamplerError(Exception):
     """Error raised when some constraint on resampling properties is
-    violated."""
+    violated.
+    """
 
     pass
 
 
-class Resampler:
+ResamplingRecord_ = TypeVar("ResamplingRecord_", bound=Record)
+ResamplerRecord_ = TypeVar("ResamplerRecord_", bound=Record)
+
+
+class Resampler(Protocol, Generic[WalkerState_, ResamplingRecord_, ResamplerRecord_]):
+
+    DECISION: BaseDecisionABC
+    CYCLE_FIELDS: tuple[str, ...]
+    CYCLE_SHAPES: tuple[RecordFieldShapeSpec, ...]
+    CYCLE_DTYPES: tuple[RecordFieldDtype, ...]
+    CYCLE_RECORD_FIELDS: tuple[str, ...] | None
+    RESAMPLING_FIELDS: tuple[str, ...]
+    RESAMPLING_SHAPES: tuple[RecordFieldShapeSpec | None, ...]
+    RESAMPLING_DTYPES: tuple[RecordFieldDtype | None, ...]
+    RESAMPLING_RECORD_FIELDS: None | tuple[str, ...]
+    RESAMPLER_FIELDS: tuple[str, ...]
+    RESAMPLER_SHAPES: tuple[RecordFieldShapeSpec | None, ...]
+
+    RESAMPLER_DTYPES: tuple[RecordFieldDtype | None, ...]
+    RESAMPLER_RECORD_FIELDS: tuple[str, ...] | None
+
+    @classmethod
+    def resampling_fields(cls) -> tuple[
+        tuple[str, ...],
+        tuple[RecordFieldShapeSpec, ...],
+        tuple[RecordFieldDtype, ...],
+    ]: ...
+
+    @classmethod
+    def resampling_record_field_names(cls) -> None | tuple[str, ...]: ...
+
+    @classmethod
+    def resampler_record_field_names(cls) -> None | tuple[str, ...]: ...
+
+    def resample(self, walkers: list[Walker[WalkerState_]]) -> tuple[
+        list[Walker[WalkerState_]],
+        list[ResamplingRecord_],
+        list[ResamplerRecord_],
+    ]: ...
+
+
+class ResamplerABC(
+    Resampler, Generic[WalkerState_, ResamplingRecord_, ResamplerRecord_]
+):
     """Abstract base class for implementing resamplers.
 
     All subclasses of Resampler must implement the 'resample' method.
@@ -42,7 +87,7 @@ class Resampler:
     - RESAMPLER_RECORD_FIELDS
 
     The DECISION constant should be a
-    wepy.resampling.decisions.decision.Decision subclass.
+    wepy.resampling.decisions.decision.BaseDecisionABC subclass.
 
     This base class provides some hidden methods that are useful for
     various purposes.
@@ -82,10 +127,10 @@ class Resampler:
 
     """
 
-    DECISION = Decision
+    DECISION: BaseDecisionABC = BaseDecisionABC
     """The decision class for this resampler."""
 
-    CYCLE_FIELDS = (
+    CYCLE_FIELDS: tuple[str, ...] = (
         "step_idx",
         "walker_idx",
     )
@@ -95,19 +140,19 @@ class Resampler:
     walker index.
     """
 
-    CYCLE_SHAPES = (
+    CYCLE_SHAPES: tuple[tuple[int, ...], ...] = (
         (1,),
         (1,),
     )
     """Data shapes of the cycle fields."""
 
-    CYCLE_DTYPES = (
+    CYCLE_DTYPES: tuple[int | float] = (
         int,
         int,
     )
     """Data types of the cycle fields """
 
-    CYCLE_RECORD_FIELDS = (
+    CYCLE_RECORD_FIELDS: tuple[str, ...] = (
         "step_idx",
         "walker_idx",
     )
@@ -281,16 +326,15 @@ class Resampler:
 
     def __init__(
         self,
-        min_num_walkers=Ellipsis,
-        max_num_walkers=Ellipsis,
-        debug_mode=False,
+        min_num_walkers: int | None | type(Ellipsis) = Ellipsis,
+        max_num_walkers: int | None | type(Ellipsis) = Ellipsis,
+        debug_mode: bool = False,
         **kwargs,
-    ):
+    ) -> None:
         """Constructor for Resampler class
 
         Parameters
         ----------
-
         min_num_walkers : int or None or Ellipsis
             The minimum number of walkers allowed to have. None is
             unbounded, and Ellipsis preserves whatever number of
@@ -307,7 +351,7 @@ class Resampler:
 
         """
 
-        # the min and max number of walkers that can be generated in
+        # The min and max number of walkers that can be generated in
         # resampling.
 
         # Ellipsis means to keep bound it by the number of
@@ -322,10 +366,18 @@ class Resampler:
         # min_num_walkers of None in practice is 1 since there must
         # always be at least 1 walker
 
-        if min_num_walkers not in (Ellipsis, None):
+        if min_num_walkers not in {Ellipsis, None}:
             if min_num_walkers < 1:
                 raise ResamplerError(
                     "The minimum number of walkers should be at least 1"
+                )
+
+            if (
+                max_num_walkers not in {Ellipsis, None}
+                and min_num_walkers > max_num_walkers
+            ):
+                raise ResamplerError(
+                    f"min_num_walkers ({min_num_walkers}) must be less than or equal to max_num_walkers ({max_num_walkers})"
                 )
 
         self._min_num_walkers = min_num_walkers
@@ -341,88 +393,94 @@ class Resampler:
         # set them to the args given
         self.set_debug_mode(debug_mode)
 
-    @property
-    def decision(self):
+    @classmethod
+    def decision(cls) -> BaseDecisionABC:
         """The decision class for this resampler."""
-        return self.DECISION
+        return cls.DECISION
 
-    def resampling_field_names(self):
+    @classmethod
+    def resampling_field_names(cls):
         """Access the class level FIELDS constant for this record group."""
-        return self.RESAMPLING_FIELDS
+        return cls.RESAMPLING_FIELDS
 
-    def resampling_field_shapes(self):
+    @classmethod
+    def resampling_field_shapes(cls):
         """Access the class level SHAPES constant for this record group."""
-        return self.RESAMPLING_SHAPES
+        return cls.RESAMPLING_SHAPES
 
-    def resampling_field_dtypes(self):
+    @classmethod
+    def resampling_field_dtypes(cls):
         """Access the class level DTYPES constant for this record group."""
-        return self.RESAMPLING_DTYPES
+        return cls.RESAMPLING_DTYPES
 
-    def resampling_fields(self):
+    @classmethod
+    def resampling_fields(cls):
         """Returns a list of zipped field specs.
 
         Returns
         -------
-
         record_specs : list of tuple
             A list of the specs for each field, a spec is a tuple of
             type (field_name, shape_spec, dtype_spec)
         """
         return list(
             zip(
-                self.resampling_field_names(),
-                self.resampling_field_shapes(),
-                self.resampling_field_dtypes(),
+                cls.resampling_field_names(),
+                cls.resampling_field_shapes(),
+                cls.resampling_field_dtypes(),
             )
         )
 
-    def resampling_record_field_names(self):
+    @classmethod
+    def resampling_record_field_names(cls):
         """Access the class level RECORD_FIELDS constant for this record group."""
-        return self.RESAMPLING_RECORD_FIELDS
+        return cls.RESAMPLING_RECORD_FIELDS
 
-    def resampler_field_names(self):
+    @classmethod
+    def resampler_field_names(cls):
         """Access the class level FIELDS constant for this record group."""
-        return self.RESAMPLER_FIELDS
+        return cls.RESAMPLER_FIELDS
 
-    def resampler_field_shapes(self):
+    @classmethod
+    def resampler_field_shapes(cls):
         """Access the class level SHAPES constant for this record group."""
-        return self.RESAMPLER_SHAPES
+        return cls.RESAMPLER_SHAPES
 
-    def resampler_field_dtypes(self):
+    @classmethod
+    def resampler_field_dtypes(cls):
         """Access the class level DTYPES constant for this record group."""
-        return self.RESAMPLER_DTYPES
+        return cls.RESAMPLER_DTYPES
 
-    def resampler_fields(self):
+    @classmethod
+    def resampler_fields(cls):
         """Returns a list of zipped field specs.
 
         Returns
         -------
-
         record_specs : list of tuple
             A list of the specs for each field, a spec is a tuple of
             type (field_name, shape_spec, dtype_spec)
         """
         return list(
             zip(
-                self.resampler_field_names(),
-                self.resampler_field_shapes(),
-                self.resampler_field_dtypes(),
+                cls.resampler_field_names(),
+                cls.resampler_field_shapes(),
+                cls.resampler_field_dtypes(),
             )
         )
 
-    def resampler_record_field_names(self):
+    @classmethod
+    def resampler_record_field_names(cls):
         """Access the class level RECORD_FIELDS constant for this record group."""
-        return self.RESAMPLER_RECORD_FIELDS
+        return cls.RESAMPLER_RECORD_FIELDS
 
     @property
-    def is_debug_on(self):
+    def is_debug_on(self) -> bool:
         """ """
         return self._debug_mode
 
-    def set_debug_mode(self, mode):
-        """
-
-        Parameters
+    def set_debug_mode(self, mode: bool) -> None:
+        """Parameters
         ----------
         mode
 
@@ -446,14 +504,14 @@ class Resampler:
                     "You must have ipdb installed to use the debug feature"
                 )
 
-    def debug_on(self):
+    def debug_on(self) -> None:
         """ """
         if self.is_debug_on:
             warn("Debug mode is already on")
 
         self.set_debug_mode(True)
 
-    def debug_off(self):
+    def debug_off(self) -> None:
         """ """
         if not self.is_debug_on:
             warn("Debug mode is already off")
@@ -461,16 +519,16 @@ class Resampler:
         self.set_debug_mode(False)
 
     @property
-    def max_num_walkers_setting(self):
+    def max_num_walkers_setting(self) -> int:
         """The specification for the maximum number of walkers for the resampler."""
         return self._max_num_walkers
 
     @property
-    def min_num_walkers_setting(self):
+    def min_num_walkers_setting(self) -> int:
         """The specification for the minimum number of walkers for the resampler."""
         return self._min_num_walkers
 
-    def max_num_walkers(self):
+    def max_num_walkers(self) -> int | None:
         """ " Get the max number of walkers allowed currently"""
 
         # first check to make sure that a resampling is occuring and
@@ -499,7 +557,7 @@ class Resampler:
             else:
                 return self.max_num_walkers_setting
 
-    def min_num_walkers(self):
+    def min_num_walkers(self) -> int | None:
         """ " Get the min number of walkers allowed currently"""
 
         # first check to make sure that a resampling is occuring and
@@ -528,7 +586,7 @@ class Resampler:
             else:
                 return self.min_num_walkers_setting
 
-    def _set_resampling_num_walkers(self, num_walkers):
+    def _set_resampling_num_walkers(self, num_walkers: int) -> None:
         """Sets the concrete number of walkers constraints given a number of
         walkers and the settings for max and min.
 
@@ -560,10 +618,13 @@ class Resampler:
                 "The number of walkers given to resample is less than the maximum"
             )
 
-    def _unset_resampling_num_walkers(self):
+    def _unset_resampling_num_walkers(self) -> None:
         self._resampling_num_walkers = None
 
-    def _resample_init(self, walkers, **kwargs):
+    def _resample_init(
+        self,
+        walkers: list[Walker[WalkerState_]],
+    ) -> None:
         """Common initialization stuff for resamplers.
 
         Sets the number of walkers in this round of resampling.
@@ -577,7 +638,7 @@ class Resampler:
         # first set how many walkers there are in this resampling
         self._set_resampling_num_walkers(len(walkers))
 
-    def _resample_cleanup(self, **kwargs):
+    def _resample_cleanup(self, **kwargs) -> None:
         """Common cleanup stuff for resamplers.
 
         Unsets the number of walkers for this round of resampling.
@@ -587,7 +648,15 @@ class Resampler:
         # unset the number of walkers for this resampling
         self._unset_resampling_num_walkers()
 
-    def resample(self, walkers, debug_mode=False):
+    def resample(
+        self,
+        walkers: list[Walker[WalkerState_]],
+        debug_mode: bool = False,
+    ) -> tuple[
+        list[Walker[WalkerState_]],
+        list[ResamplingRecord_],
+        list[ResamplerRecord_],
+    ]:
         """Perform resampling on the set of walkers.
 
         Parameters
@@ -601,7 +670,6 @@ class Resampler:
 
         Returns
         -------
-
         resampled_walkers : list of Walker objects
             The set of resampled walkers
 
@@ -615,83 +683,4 @@ class Resampler:
 
         """
 
-        raise NotImplemented
-
-        self._resample_init(walkers, debug_mode=debug_mode)
-
-
-class NoResampler(Resampler):
-    """The resampler which does nothing."""
-
-    DECISION = NoDecision
-
-    # must reset these when you change the decision
-    RESAMPLING_FIELDS = DECISION.FIELDS + Resampler.CYCLE_FIELDS
-    RESAMPLING_SHAPES = DECISION.SHAPES + Resampler.CYCLE_SHAPES
-    RESAMPLING_DTYPES = DECISION.DTYPES + Resampler.CYCLE_DTYPES
-
-    RESAMPLING_RECORD_FIELDS = DECISION.RECORD_FIELDS + Resampler.CYCLE_RECORD_FIELDS
-
-    def resample(self, walkers, **kwargs):
-        self._resample_init(walkers=walkers)
-
-        n_walkers = len(walkers)
-
-        # the walker actions are all nothings with the same walker
-        # index which is the default initialization
-        resampling_data = self._init_walker_actions(n_walkers)
-
-        # normally decide is only for a single step and so does not
-        # include the step_idx, so we add this to the records, and
-        # convert the target idxs and decision_id to feature vector
-        # arrays
-        for walker_idx, walker_record in enumerate(resampling_data):
-            walker_record["walker_idx"] = np.array([walker_idx])
-            walker_record["step_idx"] = np.array([0])
-            walker_record["walker_idx"] = np.array([walker_record["walker_idx"]])
-            walker_record["decision_id"] = np.array([walker_record["decision_id"]])
-            walker_record["target_idxs"] = np.array([walker_record["walker_idx"]])
-
-        # we only have one step so our resampling_records are just the
-        # single list of walker actions
-        resampling_data = resampling_data
-
-        # there is no change in state in the resampler so there are no
-        # resampler records
-        resampler_data = [{}]
-
-        # the resampled walkers are just the walkers
-
-        self._resample_cleanup(
-            resampling_data=resampling_data,
-            resampler_data=resampler_data,
-            walkers=walkers,
-        )
-
-        return walkers, resampling_data, resampler_data
-
-    def _init_walker_actions(self, n_walkers):
-        """Returns a list of default resampling records for a single
-        resampling step.
-
-        Parameters
-        ----------
-
-        n_walkers : int
-            The number of walkers to generate records for
-
-        Returns
-        -------
-
-        decision_records : list of dict of str: value
-            A list of default decision records for one step of
-            resampling.
-
-        """
-        # determine resampling actions
-        walker_actions = [
-            self.decision.record(enum_value=self.decision.default_decision().value)
-            for i in range(n_walkers)
-        ]
-
-        return walker_actions
+        raise NotImplementedError

@@ -1,22 +1,19 @@
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
 
 [project]
 name = "wepy"
 description = "Weighted Ensemble Framework"
-readme = { "file" = "README.org", "content-type" = "text/plain" }
+readme = { "file" = "README.md", "content-type" = "text/plain" }
 license = "MIT"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.15"
 
 authors = [
-  { name = "Samuel Lotz", email = "salotz@salotz.info" },
+  { name = "Samuel Lotz", email = "samuel.lotz@salotz.info" },
   { name = "Alex Dickson", email = "alexrd@msu.edu" },
   { name = "Tom Dixon" },
   { name = "Robert Hall" },
   { name = "Nicole Roussey" },
 ]
-dynamic = ["version"]
+version = "2.0.0b0"
 
 classifiers = [
   "Topic :: Utilities",
@@ -25,18 +22,19 @@ classifiers = [
 ]
 
 dependencies = [
+  "attrs",
+  "immutables",
   "numpy",
   "h5py>=3",
   "networkx",
   "pandas",
-  "dill",
   "click",
   "scipy",
   "geomm",
   "tabulate",
   "jinja2",
   "pint",
-  "multiprocessing_logging",
+  "more-itertools",
 ]
 
 [project.optional-dependencies]
@@ -47,10 +45,8 @@ md = [
   # NOTE: you should just install this yourself to get it the compute
   # runtime you need.
   "openmm",
-]
-
-distributed = [
-  "dask[bag]",
+  # for dealing with openmm serialized objects
+  "lxml",
 ]
 
 prometheus = [
@@ -72,20 +68,93 @@ Documentation = "https://adicksonlab.github.io/wepy/index.html"
 Source = "https://github.com/ADicksonLab/wepy"
 Issues = "https://github.com/ADicksonLab/wepy/issues"
 
-[project.scripts]
+[build-system]
+requires = ["uv_build>=0.9.11,<0.10.0"]
+build-backend = "uv_build"
 
-wepy = "wepy.__main__:cli"
+[tool.uv.build-backend]
+module-name = [
+  "wepy",
+  "wepy_tools",
+]
 
-# NOTE: currently disabled since it requires OpenMM currently to work which is
-# not ideal for unit testing
+[dependency-groups]
 
-# [project.entry-points.pytest11]
-# pytest-wepy = "pytest_wepy"
+dev = [
+  # for ad hoc executables like for data generation
+  "cyclopts",
+  # testing
+  "pytest",
+  "coverage",
+  "pytest-cov",
+  # for documentation testing
+  "pytest-shutil",
+  "pytest-check",
+  "pytest-datadir @ git+https://github.com/salotz/pytest-datadir-extras.git@41e9a1e94ba27efe28ce9d0019b1e0a73be34400",
+  "pytest-print",
+  "pytest-timeout",
+  "pytest-rerunfailures",
+  "pytest-flakefinder",
+  # for testing openmm wrappers
+  "lxml",
+  "psutil",
+  # qa
+  "black",
+  "isort",
+  "ruff",
+  "interrogate",
+  # typechecking
+  "mypy",
+  # interactive
+  "ipython",
+  "pdbpp",
+  # docs
+  "sphinx",
+  "sphinxcontrib-napoleon",
+  "sphinxcontrib-newsfeed",
+  "sphinxcontrib-bibtex",
+  "sphinxcontrib-newsfeed",
+  "nbsphinx",
+  "notebook",
+]
 
 [tool.interrogate]
 
 fail-under = 100
 verbose = 2
 
-[tool.hatch.version]
-path = "src/wepy/__about__.py"
+[tool.pytest]
+
+minversion = "9.0"
+strict = true
+
+addopts = [
+    "--import-mode=importlib",
+    "--timeout_method=thread",
+    # Global timeout just in case something goes wrong. You should set
+    # specific timeouts for known problematic tests
+    "--timeout=300",
+]
+
+python_classes = ["Test*", "Test_*"]
+python_functions = ["test_*"]
+python_files = ["test_*.py"]
+
+markers = [
+   "ray", # mark a test as running ray
+]
+
+log_level = "INFO"
+
+[tool.mypy]
+
+pretty = true
+color_output= true
+
+[[tool.mypy.overrides]]
+module = "mdtraj.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "openmm.*"
+ignore_missing_imports = true

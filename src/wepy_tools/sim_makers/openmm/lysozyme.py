@@ -1,5 +1,4 @@
 # Standard Library
-from copy import copy
 
 # Third Party Library
 import numpy as np
@@ -15,8 +14,10 @@ from wepy.util.json_top import (
     json_top_atom_df,
     json_top_residue_df,
 )
-from .sim_maker import OpenMMToolsTestSysSimMaker
 from wepy_tools.systems import receptor as receptor_tools
+
+# Local Modules
+from .sim_maker import OpenMMToolsTestSysSimMaker
 
 
 class LysozymeImplicitOpenMMSimMaker(OpenMMToolsTestSysSimMaker):
@@ -166,7 +167,6 @@ class LysozymeImplicitOpenMMSimMaker(OpenMMToolsTestSysSimMaker):
 
         Parameters
         ----------
-
         cutoff : Quantity
 
         """

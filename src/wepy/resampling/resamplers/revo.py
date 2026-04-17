@@ -1,22 +1,82 @@
 # Standard Library
 import itertools as it
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
-import multiprocessing as mulproc
+import multiprocessing as mp
 import random as rand
+import time
+from typing import Annotated, Callable, Generic, Literal, TypeVar
 
 # Third Party Library
+import attrs
 import numpy as np
+from numpy.typing import NDArray
 
 # First Party Library
-from wepy.resampling.decisions.clone_merge import MultiCloneMergeDecision
-from wepy.resampling.resamplers.clone_merge import CloneMergeResampler
-from wepy.resampling.resamplers.resampler import Resampler
+from wepy.resampling.decisions.clone_merge import CloneMergeDecisionRecord
+from wepy.resampling.distances.base import Distance
+from wepy.resampling.resamplers.clone_merge import (
+    CloneMergeResampler,
+    CloneMergeResamplingRecord,
+)
+from wepy.typing import Shape
+from wepy.util.attrs import AttrsMappingMixin
+from wepy.util.multiprocessing import proc_pool_worker_setup, queue_listener_context
+from wepy.walker import Walker, WalkerState
+
+logger = logging.getLogger(__name__)
+
+DistanceMetric_ = TypeVar("DistanceMetric_", bound=Distance)
+DistanceImage_ = TypeVar("DistanceImage_")
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
+
+MergeAlgorithm = Literal["pairs", "greedy"]
 
 
-class REVOResampler(CloneMergeResampler):
+class REVOResamplerError(Exception):
+    pass
+
+
+class _ImageWrapper(Generic[WalkerState_, DistanceImage_]):
+    """Wrapper callable to inject a few log messages to image
+    computation.
+
+    Useful for if the image function does not log anything and this
+    will guarantee some logs are generated which is useful for
+    troubleshooting process pool problem.
+
+    """
+
+    def __init__(self, image_func: Callable[[WalkerState_], DistanceImage_]) -> None:
+        self.image_func = image_func
+
+    def __call__(self, state: WalkerState_) -> DistanceImage_:
+        logger.info("Starting image computation")
+        result = self.image_func(state)
+        logger.info("Finished image computation")
+        return result
+
+
+@attrs.define
+class REVOResamplerResamplerRecord(AttrsMappingMixin):
+    distance_matrix: Annotated[
+        NDArray[np.float32],
+        Shape(
+            (
+                Ellipsis,
+                Ellipsis,
+            )
+        ),
+    ]
+    variation: Annotated[
+        NDArray[np.float32],
+        Shape((1,)),
+    ]
+
+
+class REVOResampler(
+    CloneMergeResampler,
+    Generic[DistanceMetric_, DistanceImage_, WalkerState_],
+):
     r"""Resampler implementing the REVO algorithm.
 
     You can find more detailed information in the paper "REVO:
@@ -95,27 +155,31 @@ class REVOResampler(CloneMergeResampler):
 
     """
 
-    # fields for resampler data
-    RESAMPLING_FIELDS = CloneMergeResampler.RESAMPLING_FIELDS
-    RESAMPLING_SHAPES = CloneMergeResampler.RESAMPLING_SHAPES  # + (Ellipsis,)
-    RESAMPLING_DTYPES = CloneMergeResampler.RESAMPLING_DTYPES  # + (np.int,)
+    distance_metric: DistanceMetric_
+    merge_dist: float
+    char_dist: float
+    dist_exponent: int
+    weights: bool
+    merge_alg: MergeAlgorithm
+    pmin: float
+    pmax: float
+    seed: int | None
+    num_proc: int
+    lpmin: float
 
-    # fields that can be used for a table like representation
+    RESAMPLING_FIELDS = CloneMergeResampler.RESAMPLING_FIELDS
+    RESAMPLING_SHAPES = CloneMergeResampler.RESAMPLING_SHAPES
+    RESAMPLING_DTYPES = CloneMergeResampler.RESAMPLING_DTYPES
+
     RESAMPLING_RECORD_FIELDS = CloneMergeResampler.RESAMPLING_RECORD_FIELDS
 
-    # fields for resampling data
     RESAMPLER_FIELDS = CloneMergeResampler.RESAMPLER_FIELDS + (
-        "num_walkers",
         "distance_matrix",
         "variation",
     )
-    RESAMPLER_SHAPES = CloneMergeResampler.RESAMPLER_SHAPES + (
-        (1,),
-        Ellipsis,
-        (1,),
-    )
+
+    RESAMPLER_SHAPES = CloneMergeResampler.RESAMPLER_SHAPES + (Ellipsis, (1,))
     RESAMPLER_DTYPES = CloneMergeResampler.RESAMPLER_DTYPES + (
-        int,
         float,
         float,
     )
@@ -127,24 +191,21 @@ class REVOResampler(CloneMergeResampler):
 
     def __init__(
         self,
-        merge_dist=None,
-        char_dist=None,
-        distance=None,
-        init_state=None,
-        weights=True,
-        merge_alg="pairs",
-        pmin=1e-12,
-        pmax=0.1,
-        dist_exponent=4,
-        seed=None,
-        num_proc=1,
-        **kwargs,
-    ):
+        merge_dist: float,
+        char_dist: float,
+        distance: DistanceMetric_,
+        weights: bool,
+        merge_alg: MergeAlgorithm,
+        pmin: float,
+        pmax: float,
+        dist_exponent: int,
+        seed: int | None,
+        num_proc: int = 1,
+    ) -> None:
         """Constructor for the REVO Resampler.
 
         Parameters
         ----------
-
         dist_exponent : int
           The distance exponent that modifies distance and weight novelty
           relative to each other in the variation equation.
@@ -198,13 +259,7 @@ class REVOResampler(CloneMergeResampler):
             pmax=pmax,
             min_num_walkers=Ellipsis,
             max_num_walkers=Ellipsis,
-            **kwargs,
         )
-
-        assert merge_dist is not None, "Merge distance must be given."
-        assert distance is not None, "Distance object must be given."
-        assert char_dist is not None, "Characteristic distance value (d0) must be given"
-        assert init_state is not None, "An initial state must be given."
 
         # ln(probability_min)
         self.lpmin = np.log(self.pmin / 100)
@@ -230,12 +285,11 @@ class REVOResampler(CloneMergeResampler):
         # setting the number of processors
         self.num_proc = num_proc
 
-    def _novelty(self, walker_weight, num_walker_copy):
+    def _novelty(self, walker_weight: float, num_walker_copy: int) -> float:
         """Calculates the novelty function value.
 
         Parameters
         ----------
-
         walker_weight : float
             The weight of the walker.
 
@@ -249,30 +303,34 @@ class REVOResampler(CloneMergeResampler):
 
         """
 
-        novelty = 0
+        novelty = 0.0
         if walker_weight > 0 and num_walker_copy > 0:
             if self.weights:
                 novelty = np.log(walker_weight / num_walker_copy) - self.lpmin
             else:
-                novelty = 1
+                novelty = 1.0
 
         if novelty < 0:
-            novelty = 0
+            novelty = 0.0
 
         return novelty
 
-    def _calc_variation(self, walker_weights, num_walker_copies, distance_matrix):
+    def _calc_variation(
+        self,
+        walker_weights: list[float],
+        num_walker_copies: list[int],
+        distance_matrix: list[list[float]],
+    ) -> tuple[float, list[float]]:
         """Calculates the variation value.
 
         Parameters
         ----------
-
         walker_weights : list of float
             The weights of all walkers. The sum of all weights should be 1.0.
 
         num_walker_copies : list of int
             The number of copies of each walker.
-            0 means the walker is not exists anymore.
+            0 means the walker does not exist anymore.
             1 means there is one of the this walker.
             >1 means it should be cloned to this number of walkers.
 
@@ -291,13 +349,15 @@ class REVOResampler(CloneMergeResampler):
         num_walkers = len(walker_weights)
 
         # set the novelty values
-        walker_novelties = np.array([
-            self._novelty(walker_weights[i], num_walker_copies[i])
-            for i in range(num_walkers)
-        ])
+        walker_novelties = np.array(
+            [
+                self._novelty(walker_weights[i], num_walker_copies[i])
+                for i in range(num_walkers)
+            ]
+        )
 
         # the value to be optimized
-        variation = 0
+        variation: float = 0.0
 
         # the walker variation values (Vi values)
         walker_variations = np.zeros(num_walkers)
@@ -326,12 +386,16 @@ class REVOResampler(CloneMergeResampler):
 
         return variation, walker_variations
 
-    def _calc_variation_loss(self, walker_variation, weights, eligible_pairs):
+    def _calc_variation_loss(
+        self,
+        walker_variation: list[float],
+        weights: list[float],
+        eligible_pairs: list[tuple[int, int]],
+    ) -> tuple[int, int] | None:
         """Calculates the loss to variation through merging of eligible walkers.
 
         Parameters
         ----------
-
         walker_variations : arraylike of shape (num_walkers)
            The Vi value of each walker.
 
@@ -343,15 +407,14 @@ class REVOResampler(CloneMergeResampler):
 
         Returns
         -------
-
-        variation_loss_list : tuple
+        variation_loss_list : tuple or None
             A tuple of the walker merge pair indicies that meet the criteria
-            for merging and minimize variation loss.
+            for merging and minimize variation loss. If none is found returns None
         """
 
         v_loss_min = np.inf
 
-        min_loss_pair = ()
+        min_loss_pair: tuple[int, int] | None = None
 
         for pair in eligible_pairs:
             walker_i = pair[0]
@@ -373,29 +436,33 @@ class REVOResampler(CloneMergeResampler):
         return min_loss_pair
 
     def _find_eligible_merge_pairs(
-        self, weights, distance_matrix, max_var_idx, num_walker_copies
-    ):
+        self,
+        weights: list[float],
+        distance_matrix: list[list[float]],
+        max_var_idx: int,
+        num_walker_copies: list[int],
+    ) -> list[tuple[int, int]]:
         """Find pairs of walkers that are eligible to be merged.
 
         Parameters
         ----------
-
         weights : list of float
             The weights of all walkers. The sum of all weights should be 1.0.
 
         distance_matrix : list of arraylike of shape (num_walkers)
             The distance between every walker according to the distance metric.
 
-        max_var_idx : float
+        max_var_idx : int
             The index of the walker that had the highest walker variance
             and is a candidate for cloning.
 
-        num_walker_copies : list of int                                                                                                                                                                                 The number of copies of each walker.
-             0 means the walker is not exists anymore.
-             1 means there is one of the this walker.                                                                                                                                                                   >1 means it should be cloned to this number of walkers.
+        num_walker_copies : list of int
+             0 means the walker does not exist anymore.
+             1 means there is one of the this walker.
+             >1 means it should be cloned to this number of walkers.
+
         Returns
         -------
-
         eligible_pairs : list of tuples
             Pairs of walker indexes that meet the criteria for merging.
 
@@ -413,12 +480,19 @@ class REVOResampler(CloneMergeResampler):
 
         return eligible_pairs
 
-    def decide(self, walker_weights, num_walker_copies, distance_matrix):
+    def decide(
+        self,
+        walker_weights: list[float],
+        num_walker_copies: list[int],
+        distance_matrix: list[list[float]],
+    ) -> tuple[
+        list[CloneMergeDecisionRecord],
+        float,
+    ]:
         """Optimize the trajectory variation by making decisions for resampling.
 
         Parameters
         ----------
-
         walker_weights : list of float
             The weights of all walkers. The sum of all weights should be 1.0.
 
@@ -432,11 +506,10 @@ class REVOResampler(CloneMergeResampler):
 
         Returns
         -------
-        variation : float
-            The optimized value of the trajectory variation.
-
         resampling_data : list of dict of str: value
             The resampling records resulting from the decisions.
+        variation : float
+            The optimized value of the trajectory variation.
 
         """
         num_walkers = len(walker_weights)
@@ -456,10 +529,16 @@ class REVOResampler(CloneMergeResampler):
         variations.append(variation)
 
         # maximize the variance through cloning and merging
-        logger.info("Starting variance optimization: {}".format(variation))
+        logger.info(f"Starting variance optimization: {variation}")
 
+        _count = 1
         productive = True
         while productive:
+            _log = False
+            if _count == 1 or _count % 10 == 0:
+                _log = True
+                logger.info(f"Optimization iteration: {_count}")
+            _count += 1
             productive = False
             # find min and max walker_variationss, alter new_amp
 
@@ -489,12 +568,12 @@ class REVOResampler(CloneMergeResampler):
             if len(max_tups) > 0:
                 max_value, max_idx = max(max_tups)
 
-            merge_pair = []
+            maybe_merge_pair: tuple[int, int] | None = None
             if self.merge_alg == "pairs":
                 pot_merge_pairs = self._find_eligible_merge_pairs(
                     new_walker_weights, distance_matrix, max_idx, new_num_walker_copies
                 )
-                merge_pair = self._calc_variation_loss(
+                maybe_merge_pair = self._calc_variation_loss(
                     walker_variations, new_walker_weights, pot_merge_pairs
                 )
             elif self.merge_alg == "greedy":
@@ -543,15 +622,15 @@ class REVOResampler(CloneMergeResampler):
                     # if any were found set this as the closewalk
                     if len(closewalks_dists) > 0:
                         closedist, closewalk = min(closewalks_dists)
-                        merge_pair = [min_idx, closewalk]
+                        maybe_merge_pair = (min_idx, closewalk)
 
             else:
-                raise ValueError("Unrecognized value for merge_alg in REVO")
+                raise ValueError(f"Unrecognized value for merge_alg: {self.merge_alg}")
 
             # did we find a suitable pair to merge?
-            if len(merge_pair) != 0:
-                min_idx = merge_pair[0]
-                closewalk = merge_pair[1]
+            if maybe_merge_pair is not None:
+                min_idx = maybe_merge_pair[0]
+                closewalk = maybe_merge_pair[1]
 
                 # change new_amp
                 tempsum = new_walker_weights[min_idx] + new_walker_weights[closewalk]
@@ -569,7 +648,8 @@ class REVOResampler(CloneMergeResampler):
                 if new_variation > variation:
                     variations.append(new_variation)
 
-                    logger.info("Variance move to {} accepted".format(new_variation))
+                    if _log:
+                        logger.info(f"Variance move to {new_variation} accepted")
 
                     productive = True
                     variation = new_variation
@@ -620,7 +700,10 @@ class REVOResampler(CloneMergeResampler):
                     )
                     variations.append(new_variation)
 
-                    logger.info("variance after selection: {}".format(new_variation))
+                    if _log:
+                        logger.info(
+                            "variance after selection: {}".format(new_variation)
+                        )
 
                 # if not productive
                 else:
@@ -628,21 +711,21 @@ class REVOResampler(CloneMergeResampler):
                     new_num_walker_copies[closewalk] = 1
                     new_num_walker_copies[max_idx] -= 1
 
-        # given we know what we want to clone to specific slots
-        # (squashing other walkers) we need to determine where these
-        # squashed walkers will be merged
-        walker_actions = self.assign_clones(merge_groups, walker_clone_nums)
+        final_variation = variations[-1]
+        logger.info(f"Finished optimization: {final_variation}")
 
-        # because there is only one step in resampling here we just
-        # add another field for the step as 0 and add the walker index
-        # to its record as well
-        for walker_idx, walker_record in enumerate(walker_actions):
-            walker_record["step_idx"] = np.array([0])
-            walker_record["walker_idx"] = np.array([walker_idx])
+        logger.info("Assigning clones")
+        decision_records = self.assign_clones(merge_groups, walker_clone_nums)
 
-        return walker_actions, variations[-1]
+        return decision_records, final_variation
 
-    def _all_to_all_distance(self, walkers):
+    def _all_to_all_distance(
+        self,
+        walkers: list[Walker[WalkerState_]],
+    ) -> tuple[
+        list[list[float]],
+        list[DistanceImage_],
+    ]:
         """Calculate the pairwise all-to-all distances between walkers.
 
         Parameters
@@ -658,17 +741,64 @@ class REVOResampler(CloneMergeResampler):
 
         """
         # initialize an all-to-all matrix, with 0.0 for self distances
-        dist_mat = np.zeros((len(walkers), len(walkers)))
+        dist_mat = [[0.0 for _ in range(len(walkers))] for _ in range(len(walkers))]
+
+        logger.info("Starting calculation of walker images")
+        start_time = time.time()
 
         # make images for all the walker states for us to compute distances on
         if self.num_proc > 1:
-            with mulproc.Pool(self.num_proc) as pool:
-                images = pool.map(self.distance.image, [walker.state for walker in walkers])
+            logger.info(
+                f"Multiple processes requested ({self.num_proc}) will run in Pool."
+            )
+
+            _distance_image = _ImageWrapper(self.distance.image)
+
+            # NOTE: Must use spawn here, otherwise there are problems
+            # with deadlocking in the sub-processes
+            mp_ctx = mp.get_context(method="spawn")
+
+            # TODO: This should be part of some setup phase
+            logger.info("Starting multiprocessing.Pool")
+            with (
+                queue_listener_context(mp_ctx) as log_queue,
+                mp_ctx.Pool(
+                    self.num_proc,
+                    initializer=proc_pool_worker_setup,
+                    initargs=(log_queue,),
+                    # Set some upper bound so that it gets cleaned up
+                    # in case of leaks
+                    maxtasksperchild=4,
+                ) as pool,
+            ):
+
+                logger.info(
+                    f"Running parallel map calculation on {len(walkers)} walkers"
+                )
+                images = pool.map(
+                    _distance_image,
+                    [walker.state for walker in walkers],
+                )
+                logger.info("Finished running parallel map calculation")
+                logger.info("Shutting down Pool")
+
+            logger.info("Pool shutdown complete")
+
         else:
+            logger.info("Calculating images without parallelism")
             images = []
             for walker in walkers:
                 image = self.distance.image(walker.state)
                 images.append(image)
+
+        end_time = time.time()
+
+        _image_time = end_time - start_time
+
+        logger.info(f"Calculating walker state images took: {_image_time} s")
+
+        logger.info("Calculating image distances")
+        start_time = time.time()
 
         # get the combinations of indices for all walker pairs
         for i, j in it.combinations(range(len(images)), 2):
@@ -679,9 +809,22 @@ class REVOResampler(CloneMergeResampler):
             dist_mat[i][j] = dist
             dist_mat[j][i] = dist
 
-        return [walker_dists for walker_dists in dist_mat], images
+        end_time = time.time()
 
-    def resample(self, walkers):
+        _dist_time = end_time - start_time
+
+        logger.info(f"Calculating image distances took: {_dist_time} s")
+
+        return dist_mat, images
+
+    def resample(
+        self,
+        walkers: list[Walker[WalkerState_]],
+    ) -> tuple[
+        list[Walker[WalkerState_]],
+        list[CloneMergeResamplingRecord],
+        list[REVOResamplerResamplerRecord],
+    ]:
         """Resamples walkers based on REVO algorithm
 
         Parameters
@@ -709,33 +852,87 @@ class REVOResampler(CloneMergeResampler):
         num_walker_copies = np.ones(num_walkers)
 
         # calculate distance matrix
+        logger.info("Calculating walker distances")
         distance_matrix, images = self._all_to_all_distance(walkers)
+        logger.info("Finished calculating distances")
 
-        logger.info("distance_matrix")
+        logger.info("Distance_matrix: ")
         logger.info("\n{}".format(str(np.array(distance_matrix))))
 
         # determine cloning and merging actions to be performed, by
         # maximizing the variation, i.e. the Decider
-        resampling_data, variation = self.decide(
+        logger.info("Making resampling decisions")
+        decision_records, variation = self.decide(
             walker_weights, num_walker_copies, distance_matrix
         )
-
-        # convert the target idxs and decision_id to feature vector arrays
-        for record in resampling_data:
-            record["target_idxs"] = np.array(record["target_idxs"])
-            record["decision_id"] = np.array([record["decision_id"]])
+        logger.info("Finished resampling decisions")
 
         # actually do the cloning and merging of the walkers
-        resampled_walkers = self.DECISION.action(walkers, [resampling_data])
+        resampled_walkers = self.DECISION.action(walkers, [decision_records])
+
+        ## Generate the full resampling records
+
+        # because there is only one step in resampling here we just
+        # add another field for the step as 0 and add the walker index
+        # to its record as well
+        resampling_records = []
+        for walker_idx, decision_record in enumerate(decision_records):
+            # UGLY: we need to wrap the field data into the shape
+            # declared in the CloneMergeResampler, see other notes on
+            # why
+            resampling_record = CloneMergeResamplingRecord(
+                # The decision record fields are simple, so we wrap
+                # them here as well
+                decision_id=decision_record.decision_id,
+                target_idxs=decision_record.target_idxs,
+                step_idx=0,
+                walker_idx=walker_idx,
+            )
+            resampling_records.append(resampling_record)
 
         # flatten the distance matrix and give the number of walkers
         # as well for the resampler data, there is just one per cycle
-        resampler_data = [
-            {
-                "distance_matrix": np.ravel(np.array(distance_matrix)),
-                "num_walkers": np.array([len(walkers)]),
-                "variation": np.array([variation]),
-            }
+        resampler_records = [
+            REVOResamplerResamplerRecord(
+                distance_matrix=np.ravel(np.array(distance_matrix)),
+                variation=variation,
+            )
         ]
 
-        return resampled_walkers, resampling_data, resampler_data
+        return resampled_walkers, resampling_records, resampler_records
+
+
+@attrs.define
+class REVOResamplerFactory(Generic[DistanceMetric_]):
+
+    distance_metric: DistanceMetric_
+    merge_dist: float
+    char_dist: float
+    dist_exponent: int = 4
+    weights: bool = True
+    merge_alg: MergeAlgorithm = "pairs"
+    pmin: float = 1e-12
+    pmax: float = 0.1
+    seed: int | None = None
+
+    @classmethod
+    def type(cls) -> type[REVOResampler]:
+        return REVOResampler
+
+    def __call__(
+        self,
+        num_cores: int | None = None,
+    ) -> REVOResampler:
+
+        return REVOResampler(
+            distance=self.distance_metric,
+            merge_dist=self.merge_dist,
+            char_dist=self.char_dist,
+            dist_exponent=self.dist_exponent,
+            weights=self.weights,
+            merge_alg=self.merge_alg,
+            pmin=self.pmin,
+            pmax=self.pmax,
+            seed=self.seed,
+            num_proc=num_cores,
+        )

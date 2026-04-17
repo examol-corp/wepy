@@ -1,22 +1,26 @@
 # Standard Library
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
-from collections import defaultdict, namedtuple
-from enum import Enum
+from collections import defaultdict
+from enum import IntEnum
+from typing import TypedDict
 
 # Third Party Library
-import numpy as np
+import attrs
 
 # First Party Library
-from wepy.resampling.decisions.decision import Decision
-from wepy.walker import keep_merge, split
+from wepy.resampling.decisions.decision import BaseDecisionABC, BaseDecisionRecord
+from wepy.walker import Walker, keep_merge, split
+
+logger = logging.getLogger(__name__)
+
+
+class CloneMergeDecisionError(Exception):
+    pass
 
 
 # the possible types of decisions that can be made enumerated for
 # storage, these each correspond to specific instruction type
-class CloneMergeDecisionEnum(Enum):
+class CloneMergeDecisionEnum(IntEnum):
     """Enum definition for cloning and merging decision values."
 
     - NOTHING : 1
@@ -41,7 +45,58 @@ class CloneMergeDecisionEnum(Enum):
     donate their weight to it."""
 
 
-class MultiCloneMergeDecision(Decision):
+# TODO: get this automatically
+CLONE_MERGE_DECISION_ENUM_VALUES = {1, 2, 3, 4}
+
+
+class CloneMergeDecisionRecordDict(TypedDict):
+    decision_id: int
+    target_idxs: tuple[int, ...]
+
+
+@attrs.define
+class CloneMergeDecisionRecord(BaseDecisionRecord):
+    # TODO: get types correct
+    decision_id: int = attrs.field()
+    target_idxs: tuple[int, ...] = attrs.field()
+
+    @decision_id.validator
+    def _check_decision_id(self, attribute, value) -> None:
+        if value not in CLONE_MERGE_DECISION_ENUM_VALUES:
+            raise ValueError(
+                f"Invalid decision_id ({value}) must be one of {CLONE_MERGE_DECISION_ENUM_VALUES}"
+            )
+
+    @target_idxs.validator
+    def _check_decision_id(self, attribute, value) -> None:
+
+        if len(value) == 0:
+            raise ValueError("Must provide at least one target index in target_idxs.")
+
+        if any(idx < 0 for idx in value):
+            raise ValueError("All target_idx values must be >= 0")
+
+    def __attrs_post_init__(self) -> None:
+
+        if self.decision_id in {1, 3, 4}:
+            if len(self.target_idxs) != 1:
+                raise CloneMergeDecisionError(
+                    f"For decision_id ({CloneMergeDecisionEnum(self.decision_id).name}:{self.decision_id}) "
+                    f"only a single target_idx is allowed."
+                )
+
+        else:
+            if len(self.target_idxs) < 2:
+                raise CloneMergeDecisionError(
+                    f"For decision_id ({CloneMergeDecisionEnum(self.decision_id).name}:{self.decision_id}) "
+                    f"more than one target_idx must be given."
+                )
+
+    def to_dict(self) -> CloneMergeDecisionRecordDict:
+        return attrs.asdict(self)
+
+
+class MultiCloneMergeDecision(BaseDecisionABC):
     """Decision encoding cloning and merging decisions for weighted ensemble.
 
     The decision records have in addition to the 'decision_id' a field
@@ -66,11 +121,13 @@ class MultiCloneMergeDecision(Decision):
 
     DEFAULT_DECISION = ENUM.NOTHING
 
-    FIELDS = Decision.FIELDS + ("target_idxs",)
-    SHAPES = Decision.SHAPES + (Ellipsis,)
-    DTYPES = Decision.DTYPES + (int,)
+    DECISION_RECORD = CloneMergeDecisionRecord
 
-    RECORD_FIELDS = Decision.RECORD_FIELDS + ("target_idxs",)
+    FIELDS = BaseDecisionABC.FIELDS
+    SHAPES = BaseDecisionABC.SHAPES
+    DTYPES = BaseDecisionABC.DTYPES
+
+    RECORD_FIELDS = BaseDecisionABC.RECORD_FIELDS
 
     # the decision types that pass on their state
     ANCESTOR_DECISION_IDS = (
@@ -79,16 +136,12 @@ class MultiCloneMergeDecision(Decision):
         ENUM.CLONE.value,
     )
 
-    # TODO deprecate in favor of Decision implementation
     @classmethod
-    def record(cls, enum_value, target_idxs):
-        record = super().record(enum_value)
-        record["target_idxs"] = target_idxs
-
-        return record
-
-    @classmethod
-    def action(cls, walkers, decisions):
+    def action(
+        cls,
+        walkers: list[Walker],
+        decisions: list[list[CloneMergeDecisionRecord]],
+    ) -> list[Walker]:
         # list for the modified walkers
         mod_walkers = [None for i in range(len(walkers))]
 
@@ -101,8 +154,8 @@ class MultiCloneMergeDecision(Decision):
             # go through each decision and perform the decision
             # instructions
             for walker_idx, walker_rec in enumerate(step_recs):
-                decision_value = walker_rec["decision_id"]
-                instruction = walker_rec["target_idxs"]
+                decision_value = walker_rec.decision_id
+                instruction = walker_rec.target_idxs
 
                 if decision_value == cls.ENUM.NOTHING.value:
                     # check to make sure a walker doesn't already exist
@@ -183,3 +236,38 @@ class MultiCloneMergeDecision(Decision):
             raise ValueError("Some walkers were not created")
 
         return mod_walkers
+
+    @classmethod
+    def parents(cls, step: list[CloneMergeDecisionRecord]) -> list[int]:
+        """Given a step of resampling records (for a single resampling step)
+        returns the parents of the children of this step.
+
+        Parameters
+        ----------
+        step : list of decision records
+            The decision records for a step of resampling for each walker.
+
+        Returns
+        -------
+        walker_step_parents : list of int
+            For each element, the index of it in the list corresponds
+            to the child index and the value of the element is the
+            index of it's parent before the decision action.
+
+        """
+
+        # initialize a list for the parents of this stages walkers
+        step_parents = [None for i in range(len(step))]
+
+        # the rest of the stages parents are based on the previous stage
+        for parent_idx, parent_rec in enumerate(step):
+            # if the decision is an ancestor then the instruction
+            # values will be the children
+            if parent_rec.decision_id in cls.ANCESTOR_DECISION_IDS:
+                # the first value of the parent record is the target
+                # idxs
+                child_idxs = parent_rec.target_idxs
+                for child_idx in child_idxs:
+                    step_parents[child_idx] = parent_idx
+
+        return step_parents

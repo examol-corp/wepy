@@ -1,0 +1,13 @@
+# Credits
+
+## Development Lead
+
+Samuel D. Lotz <samuel.lotz@salotz.info>
+
+## Contributors
+
+Alex Dickson
+Nazanin Donyapour
+Tom Dixon
+Robert Hall
+Nicole Roussey

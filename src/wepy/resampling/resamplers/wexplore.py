@@ -1,21 +1,27 @@
 # Standard Library
 import itertools as it
 import logging
-
-logger = logging.getLogger(__name__)
-# Standard Library
 import math
 import random as rand
 from collections import defaultdict
 from copy import copy, deepcopy
+from typing import Generic, TypeVar
 
 # Third Party Library
+import attrs
 import networkx as nx
 import numpy as np
 
 # First Party Library
+from wepy.resampling.distances.base import Distance
 from wepy.resampling.resamplers.clone_merge import CloneMergeResampler
 from wepy.resampling.resamplers.resampler import ResamplerError
+from wepy.walker import WalkerState
+
+logger = logging.getLogger(__name__)
+
+DistanceMetric_ = TypeVar("DistanceMetric_", bound=Distance)
+WalkerState_ = TypeVar("WalkerState_", bound=WalkerState)
 
 
 class RegionTreeError(Exception):
@@ -47,7 +53,6 @@ def calc_squashable_walkers_single_method(walker_weights, max_weight):
 
     Returns
     -------
-
     n_squashable : int
         The maximum number of squashable walkers.
 
@@ -125,7 +130,6 @@ def decide_merge_groups_single_method(walker_weights, balance, max_weight):
 
     Returns
     -------
-
     merge_groups : list of list of int
         The merge group solution.
 
@@ -156,9 +160,7 @@ def decide_merge_groups_single_method(walker_weights, balance, max_weight):
 
 ## Clone methods
 def calc_max_num_clones(walker_weight, min_weight, max_num_walkers):
-    """
-
-    Parameters
+    """Parameters
     ----------
     walker_weight :
 
@@ -196,7 +198,8 @@ def calc_max_num_clones(walker_weight, min_weight, max_num_walkers):
 
 class RegionTree(nx.DiGraph):
     """Used internally in the WExploreResampler module. Not really
-    intended to be used outside this module."""
+    intended to be used outside this module.
+    """
 
     # the strings for choosing a method of solving how deciding how
     # many walkers can be merged together given a group of walkers and
@@ -356,9 +359,7 @@ class RegionTree(nx.DiGraph):
         return self._regions
 
     def add_child(self, parent_id, image_idx):
-        """
-
-        Parameters
+        """Parameters
         ----------
         parent_id :
 
@@ -390,9 +391,7 @@ class RegionTree(nx.DiGraph):
         return child_id
 
     def children(self, parent_id):
-        """
-
-        Parameters
+        """Parameters
         ----------
         parent_id :
 
@@ -429,9 +428,7 @@ class RegionTree(nx.DiGraph):
         return self.level_nodes(self.n_levels)
 
     def branch_tree(self, parent_id, image):
-        """
-
-        Parameters
+        """Parameters
         ----------
         parent_id :
 
@@ -532,9 +529,7 @@ class RegionTree(nx.DiGraph):
         self._min_num_walkers = None
 
     def assign(self, state):
-        """
-
-        Parameters
+        """Parameters
         ----------
         state :
 
@@ -625,9 +620,7 @@ class RegionTree(nx.DiGraph):
             self.nodes[node_id]["balance"] = 0
 
     def place_walkers(self, walkers):
-        """
-
-        Parameters
+        """Parameters
         ----------
         walkers :
 
@@ -737,9 +730,7 @@ class RegionTree(nx.DiGraph):
 
     @classmethod
     def _max_n_merges(cls, pmax, root, weights):
-        """
-
-        Parameters
+        """Parameters
         ----------
         pmax :
 
@@ -809,9 +800,7 @@ class RegionTree(nx.DiGraph):
         return max_n_merges
 
     def _calc_squashable_walkers(self, walker_weights):
-        """
-
-        Parameters
+        """Parameters
         ----------
         walker_weights :
 
@@ -831,9 +820,7 @@ class RegionTree(nx.DiGraph):
         return n_squashable
 
     def _calc_max_num_clones(self, walker_weight):
-        """
-
-        Parameters
+        """Parameters
         ----------
         walker_weight :
 
@@ -846,9 +833,7 @@ class RegionTree(nx.DiGraph):
         return calc_max_num_clones(walker_weight, self.pmin, self.max_num_walkers)
 
     def _propagate_and_balance_shares(self, parental_balance, children_node_ids):
-        """
-
-        Parameters
+        """Parameters
         ----------
         parental_balance :
 
@@ -1079,9 +1064,7 @@ class RegionTree(nx.DiGraph):
     def _dispense_credit_shares(
         self, parental_balance, children_shares, children_receivable_shares
     ):
-        """
-
-        Parameters
+        """Parameters
         ----------
         parental_balance :
 
@@ -1484,9 +1467,7 @@ class RegionTree(nx.DiGraph):
         donor_donatable_shares,
         acceptor_receivable_shares,
     ):
-        """
-
-        Parameters
+        """Parameters
         ----------
         donor_n_shares :
 
@@ -1521,9 +1502,7 @@ class RegionTree(nx.DiGraph):
         return actual_donation
 
     def _decide_merge_leaf(self, leaf, merge_groups):
-        """
-
-        Parameters
+        """Parameters
         ----------
         leaf :
 
@@ -1605,7 +1584,7 @@ class RegionTree(nx.DiGraph):
             ]
 
             # choose the one to keep the state of (e.g. KEEP_MERGE
-            # in the Decision) based on their weights
+            # in the BaseDecisionABC) based on their weights
 
             # normalize weights to the sum of all the chosen weights
             chosen_pdist = np.array(chosen_weights) / sum(chosen_weights)
@@ -1627,9 +1606,7 @@ class RegionTree(nx.DiGraph):
         return merge_groups
 
     def _solve_merge_groupings(self, walker_weights, balance):
-        """
-
-        Parameters
+        """Parameters
         ----------
         walker_weights :
 
@@ -1671,9 +1648,7 @@ class RegionTree(nx.DiGraph):
             return full_merge_groups
 
     def _decide_clone_leaf(self, leaf, merge_groups, walkers_num_clones):
-        """
-
-        Parameters
+        """Parameters
         ----------
         leaf :
 
@@ -2108,7 +2083,10 @@ class RegionTree(nx.DiGraph):
         return merge_groups, walkers_num_clones
 
 
-class WExploreResampler(CloneMergeResampler):
+class WExploreResampler(
+    CloneMergeResampler,
+    Generic[DistanceMetric_, WalkerState_],
+):
     """Resampler implementing the WExplore algorithm.
 
     See the paper for a full description of the algorithm, but
@@ -2319,20 +2297,19 @@ class WExploreResampler(CloneMergeResampler):
 
     def __init__(
         self,
-        seed=None,
-        distance=None,
-        max_region_sizes=None,
-        init_state=None,
-        pmin=1e-12,
-        pmax=0.1,
-        max_n_regions=(10, 10, 10, 10),
+        distance: Distance,
+        max_region_sizes: tuple[float, ...],
+        init_state: WalkerState_,
+        pmin: float = 1e-12,
+        pmax: float = 0.1,
+        max_n_regions: tuple[int, ...] = (10, 10, 10, 10),
+        seed: int | None = None,
         **kwargs,
     ):
         """Constructor for the WExploreResampler.
 
         Parameters
         ----------
-
         seed : None or int
             The random seed. If None the system (random) one will be used.
 
@@ -2421,7 +2398,6 @@ class WExploreResampler(CloneMergeResampler):
 
         Returns
         -------
-
         assignments : list of tuple of int
             The leaf_id for each walker that it was assigned to.
 
@@ -2446,7 +2422,7 @@ class WExploreResampler(CloneMergeResampler):
         # resampler state, which is addition of new regions
         return assignments, resampler_data
 
-    def decide(self, delta_walkers=0):
+    def decide(self, delta_walkers: int = 0):
         """Make decisions for resampling for a single step.
 
         Parameters
@@ -2457,7 +2433,6 @@ class WExploreResampler(CloneMergeResampler):
 
         Returns
         -------
-
         resampling_data : list of dict of str: value
             The resampling records resulting from the decisions.
 
@@ -2504,9 +2479,7 @@ class WExploreResampler(CloneMergeResampler):
 
     @staticmethod
     def _check_resampling_data(resampling_data):
-        """
-
-        Parameters
+        """Parameters
         ----------
         resampling_data :
 
@@ -2560,9 +2533,7 @@ class WExploreResampler(CloneMergeResampler):
             raise ResamplerError("Not all squashes are assigned to keep_merge slots")
 
     def _resample_init(self, walkers=None):
-        """
-
-        Parameters
+        """Parameters
         ----------
         walkers :
 
@@ -2590,9 +2561,7 @@ class WExploreResampler(CloneMergeResampler):
     def _resample_cleanup(
         self, resampling_data=None, resampler_data=None, resampled_walkers=None
     ):
-        """
-
-        Parameters
+        """Parameters
         ----------
         resampling_data :
 
@@ -2688,3 +2657,44 @@ class WExploreResampler(CloneMergeResampler):
         )
 
         return resampled_walkers, resampling_data, resampler_data
+
+
+@attrs.define
+class WExploreResamplerFactory(Generic[DistanceMetric_, WalkerState_]):
+
+    distance_metric: DistanceMetric_
+    init_state: WalkerState_
+    max_region_sizes: tuple[float, ...]
+    max_n_regions: tuple[int, ...]
+    pmin: float = 1e-12
+    pmax: float = 0.1
+    seed: int | None = None
+
+    def __attrs_post_init__(self) -> None:
+
+        if len(self.max_region_sizes) != len(self.max_n_regions):
+
+            raise ValueError(
+                "The number of levels must be the same. Received: "
+                f"max_region_sizes={len(self.max_region_sizes)} "
+                f"max_n_regions={len(self.max_n_regions)}"
+            )
+
+    @classmethod
+    def type(cls) -> type[WExploreResampler]:
+        return WExploreResampler
+
+    def __call__(
+        self,
+        num_cores: int | None = None,
+    ) -> WExploreResampler:
+
+        return WExploreResampler(
+            distance=self.distance_metric,
+            init_state=self.init_state,
+            max_n_regions=self.max_n_regions,
+            max_region_sizes=self.max_region_sizes,
+            pmin=self.pmin,
+            pmax=self.pmax,
+            seed=self.seed,
+        )

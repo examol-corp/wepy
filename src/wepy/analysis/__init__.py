@@ -38,7 +38,6 @@ the data storage API in the `wepy.hdf5.WepyHDF5` module using the
 
 See Also
 --------
-
 `wepy.hdf5.WepyHDF5.compute_observable`
 
 Notes
